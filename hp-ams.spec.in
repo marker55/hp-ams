@@ -1,0 +1,222 @@
+#Do not change the string "Insight Management Agents" in Summary field. This
+#is used by HPSIM to check if agents are present.
+summary         : Agentless Monitoring Service for HP ProLiant Gen8 Systems
+name            : hp-ams
+Version         : %VERSION%
+Release         : %RELEASE%
+group           : System Environment/Daemons
+source          : %{tardir}-%RELEASE%.tar.gz
+license         : Proprietary
+packager        : Hewlett-Packard Company
+vendor          : Hewlett-Packard Company
+url             : http://www.hp.com/go/proliantlinux
+buildroot       : %{_tmppath}/%{name}-%{version}-%{release}-%(%{__id} -un)
+autoreqprov     : yes 
+Requires(post)  : coreutils, pciutils, bash, lsof
+%if 0%{?_rhel}
+BuildRequires   : rpm-build, make, gcc
+BuildRequires   : glibc-devel
+%if %{_rhel} < 5
+BuildRequires   : bzip2-devel
+%endif
+%endif
+%if 0%{?suse_version}
+%if %{suse_version} > 1100
+%define _rpmfilename %{name}-%{version}-%{release}.%{_arch}.rpm
+%if %(%{__id} -un) == abuild
+BuildRequires   : -post-build-checks -rpmlint-Factorys -brp-check-suse
+%endif
+%else
+%if %{suse_version} > 1000
+%define _rpmfilename %{name}-%{version}-%{release}.%{_arch}.rpm
+%endif
+%endif
+%endif
+
+# RHEL6 defines this to make sure that binaries can be associated with their
+# debuginfo (and not, e.g., debuginfo from a newer version of that binary)
+# /usr/lib/rpm/debugedit doesn't like libcpqimgr.so for some reason, so we
+# have to override it. I suspect it is built with too old of a toolchain
+%undefine _missing_build_ids_terminate_build
+
+%description
+This package contains the helper daemon that provides information for iLO4 
+embedded health and alerting.
+
+%define tardir %{name}-%{version}
+
+%prep
+##########################################################################
+%setup -n %{tardir}
+##########################################################################
+
+%build
+##########################################################################
+#set up some variables
+if [ $RPM_BUILD_ROOT != "/" ]; then
+    rm -rf $RPM_BUILD_ROOT
+fi
+
+EFS_VER=%{version}\-%{release}
+
+#export some variables
+export RPM_BUILD_ROOT
+export RPM_MAKE_ROOT=.
+export RPM_NAME=%{name}   
+
+#master make step
+    export DEBUGFLAGS="-O2"
+if [ -f /etc/debian_version ]; then
+    export SPECIFIC_LINUX="-DDEBIAN"
+    export OS=debian
+elif [ -d /etc/vmware ]; then
+    export SPECIFIC_LINUX="-DVMWARE"
+    export OS=vmware
+else 
+    export OS=linux
+fi
+
+make ARCH=%{_arch} EFS_VER="$EFS_VER" OS="$OS" all
+##########################################################################
+
+%install
+##########################################################################
+
+#export some variables
+export FILELIST=$RPM_BUILD_DIR/%{tardir}/filelist-%{tardir}
+
+#master install step
+make  ARCH=%{_arch} PREFIX="/" install
+
+#distro specific step(s)
+touch $FILELIST
+# On SuSE systems add a convenience link
+echo %(%{__id} -un)
+
+
+##########################################################################
+
+%pre
+##########################################################################
+
+#Upgrade - stop everything
+if [ "$1" = "2" ]; then
+   echo "Upgrade"
+   if [ -f /var/lock/subsys/hp-ams ]; then
+        if [ -f /etc/init.d/hp-ams ]; then
+            /etc/init.d/hp-ams stop
+        fi
+   fi
+   exit 0
+fi
+exit 0
+
+%post
+##########################################################################
+sync
+
+#
+# Display EULA for Source Modules
+#
+echo "Please read the Licence Agreement for this software at"
+echo
+echo "         /opt/hp/hp-ams/hp-ams.license"
+echo
+echo "By not removing this package, you are accepting the terms"
+echo "of the \"HP Proliant Essentials Software End User License Agreement\"."
+
+#install the init scripts
+if [ -x /sbin/insserv ]; then
+   /sbin/insserv -f hp-ams 2>/dev/null
+elif [ -x /sbin/chkconfig ]; then
+   /sbin/chkconfig --add hp-ams
+fi
+
+#This gives us a chance to override EVs etc.
+if [ -f /etc/hp-ams.conf.rpmorig ]; then
+    source /etc/hp-ams.conf.rpmorig
+elif [ -f /etc/hp-ams.conf ]; then
+    source /etc/hp-ams.conf
+fi
+
+STARTUP=""
+CMASILENT=$(echo $CMASILENT | tr '[:lower:]' '[:upper:]')
+CMAFDTNSILENT=$(echo $CMAFDTNSILENT | tr '[:lower:]' '[:upper:]')
+if [ "$CMASILENT" = "YES" -o "$CMAFDTNSILENT" = "YES" ]; then
+    STARTUP=`uname -r | egrep "$CMAKERNELVERSION"`
+fi
+
+# `who -r` returns "" if run from installer and no runlevel if run from chroot
+INITLEVEL=`/usr/bin/who -r`
+if [ -n "$INITLEVEL" ]; then
+    INITLEVEL=`echo $INITLEVEL|cut -f2 -d\ `
+fi
+RC=0
+if [ "${#INITLEVEL}" = "1" ] || [ -n "$STARTUP" ]; then
+    /etc/init.d/hp-ams start
+fi
+exit 0
+##########################################################################
+
+%preun
+##########################################################################
+sync
+#
+# We might be upgrading which in that case, we really do
+# not want to do this.
+#
+if [ $1 -ne 0 -a $1 != "remove" ]; then
+   exit 0
+fi
+
+#disable
+if [ -f /var/lock/subsys/hp-ams ]; then
+    /etc/init.d/hp-ams stop
+fi
+
+#remove the init scripts
+if [ -x /sbin/insserv ]; then
+   /sbin/insserv -f -r hp-ams 2>/dev/null
+elif [ -x /sbin/chkconfig ]; then
+   /sbin/chkconfig --del hp-ams
+fi
+
+# un-install any SELinux files we installed
+selinux_policy_module=/opt/hp/hp-ams/nic/etc/HPcmanic.pp
+selinux_policy_cmd=/usr/sbin/semodule
+if [ -f $selinux_policy_module ] && [ -f $selinux_policy_cmd ]
+then
+  policy_module_name=`basename $selinux_policy_module .pp`
+  echo "Un-installing $policy_module_name SELinux policy module"
+  $selinux_policy_cmd -r $policy_module_name
+fi
+
+exit 0
+##########################################################################
+
+%postun
+##########################################################################
+exit 0
+##########################################################################
+
+%clean
+##########################################################################
+if [ $RPM_BUILD_ROOT != "/" ]; then
+   rm -rf $RPM_BUILD_ROOT
+fi
+##########################################################################
+
+%files -f filelist-%{tardir}
+%defattr(755,root,root)
+# some libraries build 32 and 64 bit versions, 
+# use wildcards to account for this.
+%defattr(755,root,root)
+/sbin/hpHelper
+/etc/init.d/hp-ams
+
+%defattr(644,root,root)
+/usr/share/man/man8/hpHelper.8.gz
+
+%changelog
+* Wed Jul 28 2010 HP Linux Development <Linux_SWdeliverables@external.groups.hp.com> %VERSION%-%RELEASE%
+- ENHANCEMENTS
