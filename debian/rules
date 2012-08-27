@@ -1,0 +1,120 @@
+#!/usr/bin/make -f
+# debian/rules for hp-ams
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+export EFS_VER=$(shell dpkg-parsechangelog | grep ^Version: | cut -d' ' -f2)
+export SPECIFIC_LINUX= -DDEBIAN
+
+export RPM_MAKE_ROOT=.
+export RPM_BUILD_ROOT=$(CURDIR)/debian/hp-ams
+export RPM_NAME=$(shell dpkg-parsechangelog | grep ^Source: | cut -d' ' -f2)
+
+DEBUGFLAGS = -O
+ifeq ($(shell dpkg --print-architecture),amd64)
+  DEBUGFLAGS+= -m32
+  LINUX32 =
+else
+  LINUX32 = "linux32"
+endif
+
+HPAMS_MANPAGES = ./doc/hpHelper.8 
+
+export DEBUGFLAGS
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	# Add here commands to configure the package.
+
+        # Move everything to a build directory instead of building it
+        # in place - this is a remnent of when we needed to hoist files
+	mkdir -p debian/build
+	tar -c * --exclude=debian | (cd debian/build && tar x)
+	touch configure-stamp
+
+build: build-stamp
+
+build-stamp: configure-stamp
+	dh_testdir
+
+        # Add here commands to compile the package.
+        # The 'clean' here is intentional - files are copied about during
+        # this stage
+	cd debian/build && \
+          $(LINUX32) make EFS_VER="$(EFS_VER)" clean all
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp configure-stamp
+
+	# Add here commands to clean up after the build process.
+	rm -f build-stamp configure-stamp
+
+	# Add here commands to clean up after the build process.
+	rm -rf debian/build
+
+	# Only remove it if its a symlink, just in case that changes
+	[ ! -h debian/hp-ams.init ] && rm -f debian/hp-ams.init
+
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+
+	cd debian/build && $(LINUX32) make install
+
+	## Cleanup permissions
+	find $(RPM_BUILD_ROOT) -type d -exec chmod 755 {} \;
+	find $(RPM_BUILD_ROOT) -type f -exec chmod 644 {} \;
+
+	find $(RPM_BUILD_ROOT)/sbin  -type f -exec chmod 755 {} \;
+
+	## let debhelper handle these
+	rm -rf $(RPM_BUILD_ROOT)/usr/share/man
+	rm -rf $(RPM_BUILD_ROOT)/etc
+
+# Build architecture-independent files here.
+binary-indep: build install
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs
+	dh_installdocs
+	dh_installexamples
+#       dh_install
+#       dh_installmenu
+	dh_installdebconf
+	dh_installlogrotate
+#       dh_installemacsen
+#       dh_installpam
+#       dh_installmime
+#       dh_installcron
+#       dh_installinfo
+	dh_installman $(HPAMS_MANPAGES)
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+#       dh_perl
+#       dh_python
+	dh_makeshlibs
+	cp hp-ams.sh debian/hp-ams.init
+	dh_installinit
+	dh_installdeb
+	dh_shlibdeps -L libgcc_s
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install configure
+

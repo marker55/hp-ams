@@ -1,0 +1,5 @@
+hp-ams (%VERSION%-%RELEASE%) debian-proliant; urgency=low
+
+  * Initial release 
+
+ -- lxdev <mark.rusk@hp.com>  Tue, 17 Apr 2012 12:16:04 -0500

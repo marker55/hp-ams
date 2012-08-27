@@ -1,0 +1,14 @@
+Source: hp-ams
+Section: admin
+Priority: optional
+Maintainer: mark rusk <mark.rusk@hp.com>
+Build-Depends: debhelper (>= 7.4.1)
+Standards-Version: 3.9.2
+Homepage: http://linux.hp.com
+#Vcs-Git: git://git.debian.org/collab-maint/hp-ams.git
+#Vcs-Browser: http://git.debian.org/?p=collab-maint/hp-ams.git;a=summary
+
+Package: hp-ams
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description:  Agentless Monitoring Service for HP ProLiant Gen8 Systems 

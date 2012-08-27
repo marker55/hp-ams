@@ -1,0 +1,39 @@
+.\" /**************************************************************************
+.\"    Copyright 2011 Hewlett-Packard Development Company, L.P.
+.\" ***************************************************************************/
+.TH HPHELPER 1m "March 1 2011"
+.UC 4
+.SH NAME
+hpHelper - HP Agentless Management Service daemon for ProLiant.
+.SH SYNOPSIS
+hpHelper [-f] [-D<string>] -I<interval> -P<interval> -L
+.SH DESCRIPTION
+The hpHelper enables the iLO4 Agentless Management Service (AMS) to respond to
+SNMP queries that it would otherwise not be able to, without hpHelper running.
+.SH COMMAND LINE ARGUMENTS
+.IP "-f"
+Run in the foreground.  
+.IP "-D<string>"
+Generate Debug messages.  the <string> parameter contains a series of net-snmp debug enable strings delemineted by ','.
+.IP "-I<interval>"
+The interval parameter indicates how often performance data will be logged to Black Box:
+.PD 0
+.IP
+0 = do not log any performance counters (default)
+.IP
+1 = log performance counters every minute
+.IP
+2 = log performance counters every 10 minutes
+.IP 
+3 = log performance counters every hour
+.IP "-P<interval>"
+The <interval> parameter specifies the number of seconds between RFC 2741 (AgentX) PING requests
+.PD 0
+.IP
+0 = PING Request packets are not sent
+.IP
+15 = PING Request packets are sent every 15 seconds (default)
+.IP "-L"
+Do not open a log file; print all messages to stderr.
+.PD 1
+
