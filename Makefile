@@ -44,8 +44,12 @@ DISTROLIBS ?= $(shell if [ -f /etc/redhat-release ] ; then \
 #
 export SHELL=/bin/bash
 
+NETSNMP_VERSION ?= 5.7.1
+NETSNMP = net-snmp-$(NETSNMP_VERSION)
+NETSNMP_TARBALL=$(NETSNMP).tar.gz
+DOWNLOAD=http://downloads.sourceforge.net/project/net-snmp/net-snmp/$(NETSNMP_VERSION)/$(NETSNMP_TARBALL)
+
 OS = linux
-NETSNMP ?= net-snmp-5.7.1
 NETSNMPCONFIG = $(NETSNMP)/net-snmp-config
 export OS NETSNMP VERSION
 NETSNMPVERSIONMIN = $(shell echo $(NETSNMP)| cut -f2 -d\.  )
@@ -103,8 +107,13 @@ net-snmp-patch-stamp: net-snmp-untar-stamp
 	    done  
 	touch $@
 
+net-snmp-tarball: net-snmp-tarball-stamp
+net-snmp-tarball-stamp: 
+	wget $(DOWNLOAD)
+	touch $@
+
 net-snmp-untar: net-snmp-untar-stamp
-net-snmp-untar-stamp: $(NETSNMPTAR)
+net-snmp-untar-stamp: net-snmp-tarball-stamp
 	tar xovfz $(NETSNMPTAR) 
 	touch $@
 
