@@ -54,11 +54,6 @@ void rec_log_memory_usage(int regNo, void* unUsed)
                                         (UINT64)mem_info->units;
         MemoryUsageData.PhysicalFree = (UINT64)mem_info->free * 
                                        (UINT64)mem_info->units;
-        //MemoryUsageData.PhysicalTotal = mem_info->size;
-        //MemoryUsageData.PhysicalTotal *= mem_info->units;
-
-        //MemoryUsageData.PhysicalFree = mem_info->free;
-        //MemoryUsageData.PhysicalFree *= mem_info->units;
     }
 
     mem_info = netsnmp_memory_get_byIdx(NETSNMP_MEM_TYPE_SWAP, 0);
@@ -68,8 +63,6 @@ void rec_log_memory_usage(int regNo, void* unUsed)
         MemoryUsageData.VirtualFree = (UINT64)mem_info->free * 
                                       (UINT64)mem_info->units;
 
-        //MemoryUsageData.VirtualFree = mem_info->free;
-        //MemoryUsageData.VirtualFree *= mem_info->units;
     }
 
     // Log the record
@@ -99,7 +92,7 @@ void rec_log_proc_usage(unsigned int regNo, void *cpucount)
     count = *pcount;
 
     DEBUGMSGTL(("recordtimer:log", "Processor Usage Called %d\n", regNo));
-    blob_sz = sizeof(REC_AMS_ProcessorUsageData)*count;
+    blob_sz = sizeof(REC_AMS_ProcessorUsageData) * count;
     
     if (proc_usage_reinit) 
         LOG_PROCESSOR_USAGE();
@@ -121,17 +114,16 @@ void rec_log_proc_usage(unsigned int regNo, void *cpucount)
         }
     memset(blob, 0, blob_sz);
 
-    ProcessorUsageData = blob;
     netsnmp_cpu_load();
     pInfo = netsnmp_cpu_get_first();
     for (i = 0; i <  count && pInfo; ++i) {
-	if (pInfo->user_ticks != 0)
-            ProcessorUsageData->User = 
-                    pInfo->total_ticks * 100 / pInfo->user_ticks;
-	if (pInfo->kern_ticks != 0)
-            ProcessorUsageData->Kernel = 
-                    pInfo->total_ticks * 100 / pInfo->kern_ticks;
-        ProcessorUsageData += sizeof(ProcessorUsageData);
+
+        ProcessorUsageData = blob + (2 * i);
+
+        ProcessorUsageData->User = 
+                    ((pInfo->user_ticks + pInfo->nice_ticks) * 100) / pInfo->total_ticks;
+        ProcessorUsageData->Kernel = 
+                    ((pInfo->kern_ticks + pInfo->sys_ticks) * 100) / pInfo->total_ticks;
         pInfo = netsnmp_cpu_get_next(pInfo);
     }
 
