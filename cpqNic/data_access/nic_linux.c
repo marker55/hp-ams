@@ -57,8 +57,6 @@ extern oid       cpqHoFwVerTable_oid[];
 extern size_t    cpqHoFwVerTable_oid_len;
 extern int       FWidx;
 
-extern nic_hw_db * get_nic_hw_info(ushort, ushort, ushort, ushort);
-
 #define SYSBUSPCISLOTS "/sys/bus/pci/slots/"
 
 char *nic_names[] = {"eth",

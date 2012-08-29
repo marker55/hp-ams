@@ -241,3 +241,4 @@ typedef struct _nic_hw_db{
    int32_t inf_name_len;
    char *pname;
 } nic_hw_db;
+extern nic_hw_db * get_nic_hw_info(ushort, ushort, ushort, ushort);
