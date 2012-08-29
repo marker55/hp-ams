@@ -55,36 +55,6 @@ void init_cpqNic(void)
 
     cpqHoMibHealthStatusArray[CPQMIBHEALTHINDEX] = MIB_CONDITION_OK;
 
-    //netsnmp_access_interface_init();
-    /* initialize MIBII/interfaces */
-    //init_sysORTable();
-    //init_ifTable();
-
-    //init_at();
-
-    //init_icmp();
-
-    //init_ip_scalars();
-    //init_inetNetToMediaTable();
-    //init_ipAddressPrefixTable();
-    //init_ipAddressTable();
-    //init_ipDefaultRouterTable();
-    //init_ipIfStatsTable();
-    //init_ipSystemStatsTable();
-    //init_ipv6ScopeZoneIndexTable();
-    //init_ip();
-
-    //init_ipv6();
-
-    //init_tcp();
-    //init_tcpListenerTable();
-    //init_tcpConnectionTable();
-    //init_tcpTable();
-
-    //init_udp();
-    //init_udpEndpointTable();
-    //init_udpTable();
-
     initialize_table_cpqNicIfPhysAdapterTable();
     initialize_table_cpqNicIfLogMapTable();
 

@@ -26,24 +26,8 @@
 extern  int InitLibCpqHost(void);
 extern void init_cpqHoFileSysTable(void);
 extern void init_cpqHoSwVer(void);
-#if NETSNMPVERSMINOR == 7
-extern void init_hr_system(void);
-extern void init_hrh_storage(void);
-extern void init_hr_device(void);
-extern void  init_hr_network(void);
-extern void  init_hr_disk(void);
-extern void  init_hw_fsys(void);
-extern void  init_hr_proc(void);
-extern void init_hrSWRunTable(void);
-extern void init_hrSWRunPerfTable(void);
-extern void init_hrSWInstalledTable(void);
-#else
-extern void init_hr_swrun(void);
-#endif
 extern void init_cpqHostOsMem(void);
 extern void initialize_table_cpqHoSWRunningTable(void);
-extern void init_swrun(void);
-extern void init_swinst(void);
 extern void init_cpqHoSwVerTable(void);
 extern void init_cpqHoSWRunningTable(void);
 extern void init_cpqHoFwVerTable(void);
@@ -195,22 +179,6 @@ init_cpqHost(void)
                                             OID_LENGTH(cpqHostInfo_oid),
                                             HANDLER_CAN_RONLY),
         CPQHOSTNAME, CPQHOSTSYSDESCR);
-#if NETSNMPVERSMINOR == 7
-    //init_hr_system();
-    //init_hrh_storage();
-    //init_hr_device();
-    //init_hr_network();
-    //init_hr_proc();
-    //init_hr_disk();
-    //init_hw_fsys();
-    //init_swrun();
-    //init_hrSWRunTable(); 
-    //init_hrSWRunPerfTable();
-    //init_swinst();
-    //init_hrSWInstalledTable();
-#else
-    //init_hr_swrun();
-#endif
 
     init_cpqHoFileSysTable();
     init_cpqHoSwVerTable();

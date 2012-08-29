@@ -12,6 +12,7 @@
 #include <net-snmp/agent/net-snmp-agent-includes.h>
 #include <net-snmp/data_access/interface.h>
 #include <net-snmp/library/large_fd_set.h>
+#include <net-snmp/agent/mib_modules.h>
 #include <errno.h>
 #include <string.h>
 #include <strings.h>
