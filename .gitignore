@@ -1,13 +1,17 @@
-# http://www.gnu.org/software/automake
-
-Makefile.in
-
-# http://www.gnu.org/software/autoconf
-
-/autom4te.cache
-/aclocal.m4
-/compile
-/configure
-/depcomp
-/install-sh
-/missing
+*.bak
+*.bs
+*.la
+*.lo
+*.ft
+*.ft.1
+*.made
+*.o
+*.obj
+*.old
+*.orig
+*.out
+*.pdb
+*.rej
+hpHelper
+*-stamp
+net-snmp-*
