@@ -124,6 +124,8 @@ net-snmp-configure-stamp: net-snmp-patch-stamp
             --with-sys-location=Unknown \
             --with-sys-contact=root@localhost \
             --with-logfile=/var/log/snmpd.log \
+            --enable-minimalist \
+            --with-features="logging_enable_calllog enable_stderrlog fd_event_manager ctime_to_timet date_n_time check_storage_transition file_utils text_utils stash_to_next oid_stash oid_stash_add_data oid_stash_get_data oid_stash_iterate unregister_app_config_handler data_list_get_list_node statistics" \
             --enable-ipv6 \
             --with-nl \
             --with-persistent-directory=/var/net-snmp \
