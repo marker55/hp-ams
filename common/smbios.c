@@ -385,11 +385,17 @@ int SmbGetSysGen() {
     if (strncmp("ProLiant", ProductName, 8) != 0 )
         return 0;
     len = strlen(ProductName);
-    while (ProductName[len-1] == ' ')
-        len--;
-    if ((ProductName[len-1]  >= '0') && (ProductName[len-1]  <= '9'))
-        GenStr = &ProductName[len-1];
-    if ((ProductName[len-2]  >= '0') && (ProductName[len-2]  <= '9'))
-        GenStr = &ProductName[len-2];
+    while (len ) {
+        if (isdigit(ProductName[len-1])) 
+            if ((len - 1) &&  ! (
+                 (ProductName[len - 2] == 'v') || (ProductName[len - 2] == 'v')
+                )) {
+                if ((len - 1) && isdigit(ProductName[len - 2]))
+                    GenStr = &ProductName[len - 2];
+                else
+                    GenStr = &ProductName[len - 1];
     return atoi(GenStr);
+            } 
+        len--;
+    } 
 }

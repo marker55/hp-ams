@@ -48,7 +48,7 @@ void LOG_OS_BOOT()
     }
 
     // Log the record
-    if ((rc = rec_api6(s_ams_rec_handle, (const char*)0, 0)) != 
+    if ((rc = rec_log(s_ams_rec_handle, (const char*)0, 0)) != 
              RECORDER_OK) {
         DEBUGMSGTL(("rec:log", "OS Boot rec_log failed (%d)\n",rc));
     }
@@ -87,7 +87,7 @@ void LOG_OS_SHUTDOWN()
     }
 
     // Log the record
-    if ((rc = rec_api6(s_ams_rec_handle, (const char*)0, 0)) != 
+    if ((rc = rec_log(s_ams_rec_handle, (const char*)0, 0)) != 
              RECORDER_OK) {
         DEBUGMSGTL(("rec:log", "OS Shutdown LogRecorderData failed (%d)\n",rc));
     }

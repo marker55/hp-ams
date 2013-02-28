@@ -24,7 +24,6 @@
 #include "cpqIde.h"
 #include "cpqIdeControllerTable.h"
 #include "cpqIdeAtaDiskTable.h"
-#include "cpqHoFwVerTable.h"
 
 #include "idecntlr.h"
 #include "idedisk.h"
@@ -34,9 +33,6 @@
 #include "ide_linux.h"
 
 extern unsigned char     cpqHoMibHealthStatusArray[];
-extern oid       cpqHoFwVerTable_oid[];
-extern size_t    cpqHoFwVerTable_oid_len;
-extern int       FWidx;
 
 extern int file_select(const struct dirent *);
 void SendIdeTrap(int, cpqIdeAtaDiskTable_entry *);
@@ -183,15 +179,6 @@ int netsnmp_arch_idedisk_container_load(netsnmp_container* container)
 
     DEBUGMSGTL(("idedisk:container:load", "loading\n"));
     /*
-     * find  the cpqHoFwVerTable  container.
-     */
-
-    fw_cache = netsnmp_cache_find_by_oid(cpqHoFwVerTable_oid,
-                                            cpqHoFwVerTable_oid_len);
-    if (fw_cache != NULL) 
-        fw_container = fw_cache->magic;
-
-    /*
      * find  the HBa container.
      */
     SataDiskCondition = CPQ_REG_OK;
@@ -214,8 +201,10 @@ int netsnmp_arch_idedisk_container_load(netsnmp_container* container)
                     "Starting Loop i%s\n", current_Cntlr));
         /* Now chack for those HBA's in  the SCSI diskss */
         if ((NumScsiDisk = scandir(ScsiDiskDir, &ScsiDisklist, 
-                                   disk_select, alphasort)) <= 0)
+                                   disk_select, alphasort)) <= 0) {
+            ITERATOR_RELEASE( it );
             return -1;
+        }	
 
         for (j= 0; j< NumScsiDisk; j++) {
             memset(&buffer, 0, sizeof(buffer));
@@ -253,47 +242,6 @@ int netsnmp_arch_idedisk_container_load(netsnmp_container* container)
                 strcpy(attribute,buffer);
                 strcat(attribute, sysfs_attr[DEVICE_REV]);
                 if ((value = get_sysfs_str(attribute)) != NULL) {
-                    cpqHoFwVerTable_entry *fw_entry;
-                    int idx = 0;
-                    if (FWidx != -1)
-                        idx = unregister_int_index(cpqHoFwVerTable_oid,
-                                                   cpqHoFwVerTable_oid_len,
-                                                   FWidx);
-                    DEBUGMSGTL(("cpqHoFwVerTable:init",
-                                "cpqHoFwVerTable Unregister disk idx %d = %d\n",
-                                FWidx, idx));
-                    idx = register_int_index(cpqHoFwVerTable_oid,
-                                             cpqHoFwVerTable_oid_len,
-                                             FWidx);
-                    DEBUGMSGTL(("cpqHoFwVerTable:init",
-                                "cpqHoFwVerTable Register disk idx %d = %d\n",
-                                FWidx, idx));
-                    if (idx != -1)
-                        FWidx = idx;
-                    DEBUGMSGTL(("cpqHoFwVerTable:init",
-                            "cpqHoFwVerTable disk FWidx = %d before\n", FWidx));
-
-                    if (fw_container != NULL) {
-                        fw_entry =
-                            cpqHoFwVerTable_createEntry(fw_container, (oid)FWidx++);
-			if (fw_entry) {
-				DEBUGMSGTL(("cpqHoFwVerTable:init",
-				"cpqHoFwVerTable entry = %p\n", fw_entry));
-	
-				DEBUGMSGTL(("cpqHoFwVerTable:init",
-					"cpqHoFwVerTable FWidx = %d after\n",
-					FWidx));
-
-				fw_entry->cpqHoFwVerCategory = 2;
-				fw_entry->cpqHoFwVerDeviceType = 10;
-	
-				strcpy(fw_entry->cpqHoFwVerVersion, value);
-				fw_entry->cpqHoFwVerVersion_len =
-				strlen(fw_entry->cpqHoFwVerVersion);
-
-				CONTAINER_INSERT(fw_container, fw_entry);
-                        }
-		    }
                     strcpy(disk->cpqIdeAtaDiskFwRev, value);
                     disk->cpqIdeAtaDiskFwRev_len = 
                                                strlen(disk->cpqIdeAtaDiskFwRev);

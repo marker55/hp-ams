@@ -50,7 +50,7 @@
  	return;
  
      snprintf(buf, sizeof(buf),
-@@ -333,19 +346,12 @@
+@@ -333,19 +346,15 @@
      if (!sysfs_get_id(buf, &device_id))
  	return;
  
@@ -68,8 +68,11 @@
 +    /* get model name and part number from database created struct */
 +    if ((pnic_hw_db = get_nic_hw_info(vendor_id, device_id,
 +                            subsystem_vendor_id, subsystem_device_id))
-+                    != NULL) 
++                    != NULL) {
++        if (entry->descr != NULL)
++            free(entry->descr);
 +	entry->descr = strdup( pnic_hw_db->pname);
++    }
  }
 -#endif
  

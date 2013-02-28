@@ -48,7 +48,7 @@ void LOG_PACKAGE(
     int rc;
     int num_descript;
     size_t toc_sz = 0;
-    size_t blob_sz = 5;
+    size_t blob_sz = 0;
     REC_AMS_PackageData *PackageData;
 
     char *blob;
@@ -123,7 +123,7 @@ void LOG_PACKAGE(
     for (j = 0; j < pkgcount; j++ ) {
         char *end;
         DEBUGMSGTL(("rec:log_package","Iter = %d\n", j));
-        blob_sz += sizeof(REC_AMS_PackageData);
+        blob_sz = sizeof(REC_AMS_PackageData) + 5; /* account for null bytes */
 	if (packages[j]->vendor != NULL)
             blob_sz += strlen(packages[j]->vendor);
 	if (packages[j]->sname != NULL)
@@ -155,7 +155,7 @@ void LOG_PACKAGE(
 
         end = blob + sizeof(REC_AMS_PackageData);
 	if (packages[j]->vendor != NULL) {
-            DEBUGMSGTL(("rec:log:package","Package vendor %s\n", packages[j]->vendor));
+            DEBUGMSGTL(("rec:logpackage","Package vendor %s\n", packages[j]->vendor));
             strcpy(end, packages[j]->vendor);
             end += strlen(packages[j]->vendor) + 1;
             free(packages[j]->vendor);
@@ -184,14 +184,14 @@ void LOG_PACKAGE(
             end++;
 
 	if (packages[j]->name != NULL) {
-            DEBUGMSGTL(("rec:log:package","Package name %s\n", packages[j]->name));
+            DEBUGMSGTL(("rec:logpackage","Package name %s\n", packages[j]->name));
             strcpy(end, packages[j]->name);
             free(packages[j]->name);
 	}
 
 
         // Log the record
-        if ((rc = rec_api6(s_ams_rec_handle, (const char*)blob, blob_sz)) !=
+        if ((rc = rec_log(s_ams_rec_handle, (const char*)blob, blob_sz)) !=
                             RECORDER_OK) {
             DEBUGMSGTL(("rec:log", "LogRecorderData failed (%d)\n",rc));
         }

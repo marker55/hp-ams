@@ -43,7 +43,6 @@ typedef __u8 u8;
 
 #include "cpqNicIfLogMapTable.h"
 #include "cpqNicIfPhysAdapterTable.h"
-#include "cpqHoFwVerTable.h"
 
 #include "hpHelper.h"
 #include "cpqNic.h"
@@ -53,9 +52,6 @@ typedef __u8 u8;
 #include "utils.h"
 
 extern unsigned char cpqHoMibHealthStatusArray[];
-extern oid       cpqHoFwVerTable_oid[];
-extern size_t    cpqHoFwVerTable_oid_len;
-extern int       FWidx;
 
 #define SYSBUSPCISLOTS "/sys/bus/pci/slots/"
 
@@ -264,6 +260,7 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
     int     domain,bus,device,function;
     char    sysfsDir[1024];
     char    linkBuf[1024];
+    char    mibStatus =  MIB_CONDITION_OK;
     ssize_t link_sz;
     cpqNicIfPhysAdapterTable_entry* entry;
     cpqNicIfPhysAdapterTable_entry* old;
@@ -272,22 +269,6 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
     int rc;
 
     DEBUGMSGTL(("cpqnic:arch","netsnmp_arch_ifphys_container_load entry\n"));
-
-    /*
-     * find  the cpqHoFwVerTable  container.
-     */
-
-    fw_cache = netsnmp_cache_find_by_oid(cpqHoFwVerTable_oid,
-                                            cpqHoFwVerTable_oid_len);
-    if (fw_cache != NULL) {
-        fw_container = fw_cache->magic;
-    }
-    DEBUGMSGTL(("cpqHoFwVerTable:init",
-                "cpqHoFwVerTable cache = %p\n", fw_cache));
-
-    DEBUGMSGTL(("cpqHoFwVerTable:init",
-                "cpqHoFwVerTable container = %p\n", fw_container));
-
 
     if ((devcount = scandir("/sys/class/net/",
                     &devlist, file_select, alphasort)) > 0) {
@@ -337,7 +318,6 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
                 strcpy(entry->cpqNicIfPhysAdapterPartNumber, "UNKNOWN");
                 /* default "empty" per mib */
                 strcpy(entry->cpqNicIfPhysAdapterName, "EMPTY"); 
-                entry->cpqHoFwVerIndex = 0;
             }
 
             if (entry->cpqNicIfPhysAdapterPort != -1) {
@@ -419,10 +399,13 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
             if (get_ethtool_info(devlist[i]->d_name, &einfo) == 0) {
                 DEBUGMSGTL(("cpqNic", "Got ethtool info for %s\n", 
                             devlist[i]->d_name));  
+		DEBUGMSGTL(("cpqNic", "ethtool Duplex info for %s = %d\n",
+                            devlist[i]->d_name, einfo.duplex));
                 entry->AdapterAutoNegotiate =  einfo.autoneg; 
+                    entry->cpqNicIfPhysAdapterDuplexState =  UNKNOWN_DUPLEX; 
                 if (einfo.duplex == DUPLEX_FULL)  
                     entry->cpqNicIfPhysAdapterDuplexState =  FULL_DUPLEX; 
-                else
+                if (einfo.duplex == DUPLEX_HALF)  
                     entry->cpqNicIfPhysAdapterDuplexState =  HALF_DUPLEX; 
 
                 /*
@@ -444,57 +427,10 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
                             entry->cpqNicIfPhysAdapterSlot));  
 
                 if ( einfo.firmware_version ) {
-                    int idx = 0;
-                    cpqHoFwVerTable_entry *fw_entry;
-
                     strcpy(entry->cpqNicIfPhysAdapterFWVersion, 
                             einfo.firmware_version);
                     entry->cpqNicIfPhysAdapterFWVersion_len = 
                         strlen(entry->cpqNicIfPhysAdapterFWVersion);
-                    if (FWidx != -1) 
-                        idx = unregister_int_index(cpqHoFwVerTable_oid, 
-                                                   cpqHoFwVerTable_oid_len,
-                                                   FWidx);
-
-                    DEBUGMSGTL(("cpqHoFwVerTable:init",
-                                "cpqHoFwVerTable Unregister NIC idx %d = %d\n",
-                                FWidx, idx));
-                    idx = register_int_index(cpqHoFwVerTable_oid, 
-                                             cpqHoFwVerTable_oid_len,
-                                             FWidx);
-                    DEBUGMSGTL(("cpqHoFwVerTable:init",
-                                "cpqHoFwVerTable Register NIC idx %d = %d\n", 
-                                FWidx, idx));
-                    if (idx != -1)
-                        FWidx = idx;
-                    DEBUGMSGTL(("cpqHoFwVerTable:init",
-                        "cpqHoFwVerTable NIC FWidx = %d before\n", FWidx));
-		    if (fw_container != NULL) {
-			fw_entry = 
-				cpqHoFwVerTable_createEntry(fw_container, (oid)FWidx++);
-			if (fw_entry) {
-				DEBUGMSGTL(("cpqHoFwVerTable:init",
-				"cpqHoFwVerTable entry = %p\n", fw_entry));
-	
-				DEBUGMSGTL(("cpqHoFwVerTable:init",
-					"cpqHoFwVerTable FWidx = %d after\n", 
-					FWidx));
-				fw_entry->cpqHoFwVerCategory = 3;
-				fw_entry->cpqHoFwVerDeviceType = 24;
-	
-				strcpy(fw_entry->cpqHoFwVerVersion, 
-				einfo.firmware_version);
-				fw_entry->cpqHoFwVerVersion_len = 
-				strlen(fw_entry->cpqHoFwVerVersion);
-	
-	
-				strcpy(fw_entry->cpqHoFwVerDisplayName,
-					entry->cpqNicIfPhysAdapterName);
-				fw_entry->cpqHoFwVerDisplayName_len = 
-					entry->cpqNicIfPhysAdapterName_len;
-				CONTAINER_INSERT(fw_container, fw_entry);
-			}
-		    }
                 }
 
                 if (entry->cpqNicIfPhysAdapterSpeedMbps == UNKNOWN_SPEED) {
@@ -520,34 +456,39 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
             } 
 
             GetConfSpeedDuplex(entry);
-            sprintf(achTemp, "/sys/class/net/%s/operstate", devlist[i]->d_name);
+	    entry->cpqNicIfPhysAdapterCondition = ADAPTER_CONDITION_OTHER;
+	    entry->cpqNicIfPhysAdapterStatus = STATUS_UNKNOWN;
+            sprintf(achTemp, "/sys/class/net/%s/flags", devlist[i]->d_name);
+            DEBUGMSGTL(("cpqNic", "%s = %x\n", achTemp, get_sysfs_shex(achTemp)));
+	    if (get_sysfs_shex(achTemp) & 0x0001) {
+		sprintf(achTemp, "/sys/class/net/%s/operstate", 
+				 devlist[i]->d_name);
             pchTemp = get_sysfs_str(achTemp);
             if (pchTemp != NULL) {
+		    DEBUGMSGTL(("cpqNic", "%s = %s\n", achTemp, pchTemp));
                 if (strcmp(pchTemp, "up") == 0) {
-                    entry->cpqNicIfPhysAdapterCondition = ADAPTER_CONDITION_OK;
+			    entry->cpqNicIfPhysAdapterCondition = 
+							ADAPTER_CONDITION_OK;
                     entry->cpqNicIfPhysAdapterStatus = STATUS_OK;
                 } else if (strcmp(pchTemp, "down") == 0) {
-                    cpqHoMibHealthStatusArray[CPQMIBHEALTHINDEX] =
-                                                MIB_CONDITION_FAILED;
-                    cpqHostMibStatusArray[CPQMIB].cond = 
-                                                MIB_CONDITION_FAILED;
+			mibStatus = MIB_CONDITION_FAILED;
                     entry->cpqNicIfPhysAdapterCondition = 
                         ADAPTER_CONDITION_FAILED;
-                    entry->cpqNicIfPhysAdapterStatus = STATUS_LINK_FAILURE;
+			entry->cpqNicIfPhysAdapterStatus = 
+						STATUS_LINK_FAILURE;
                 } else {
-                    if (cpqHoMibHealthStatusArray[CPQMIBHEALTHINDEX] !=
-                                                MIB_CONDITION_FAILED ) {
-                        cpqHoMibHealthStatusArray[CPQMIBHEALTHINDEX] =
-                                                MIB_CONDITION_DEGRADED;  
-                        cpqHostMibStatusArray[CPQMIB].cond = 
-                                                MIB_CONDITION_DEGRADED;  
-                    }
+		        if (mibStatus != MIB_CONDITION_FAILED)
+				mibStatus = MIB_CONDITION_DEGRADED;
+	    	        
                     entry->cpqNicIfPhysAdapterCondition =
-                        ADAPTER_CONDITION_OTHER;
-                    entry->cpqNicIfPhysAdapterStatus = STATUS_UNKNOWN;
+					ADAPTER_CONDITION_DEGRADED;
+			entry->cpqNicIfPhysAdapterStatus = STATUS_GENERAL_FAILURE;
                 }
                 free(pchTemp);
             }
+            } else 
+		if (mibStatus == MIB_CONDITION_OK)
+			mibStatus = MIB_CONDITION_UNKNOWN;
 
             if (entry->cpqNicIfPhysAdapterStatus == STATUS_OK)
                 entry->cpqNicIfPhysAdapterState = ADAPTER_STATE_ACTIVE;
@@ -601,6 +542,8 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
         DEBUGMSGTL(("cpqnic:arch"," loaded %d entries\n", numIfPhys));
         free(devlist);
     }
+    cpqHoMibHealthStatusArray[CPQMIBHEALTHINDEX] = mibStatus;
+    cpqHostMibStatusArray[CPQMIB].cond = mibStatus;
     return(0);
 }
 

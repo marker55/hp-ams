@@ -10,7 +10,7 @@
  *  that have been processed are marked by touching a file in its (the
  *  crash's) directory named SUCCESSFULLY_PROCESSED_TAGFILE.
  *
- *  The code starts at REC_PROCESS_CRASHES at the bottom.
+ *  The code starts at LOG_PROCESS_CRASHES at the bottom.
  *
  *  Copyright (C) 2011, Hewlett-Packard Development Company, L.P.
  *
@@ -45,7 +45,7 @@
 
 #define SUCCESSFULLY_PROCESSED_TAGFILE ".hp-ams"
 #define DEBUG_TRIGGER_FILE "/tmp/.hp-ams"
-#define DEBUG_LOG_FILE "/tmp/hp-ams.log"
+#define DEBUG_6_FILE "/tmp/hp-ams.log"
 
 #define LINVER_UNK         0x0
 #define LINVER_RHEL_UNK    0x1
@@ -129,7 +129,7 @@ static void debug_log(const char *fmt, ...) {
 
     if (debug) {
         if (NULL == debug_output) {
-            debug_output = fopen(DEBUG_LOG_FILE, "a");
+            debug_output = fopen(DEBUG_6_FILE, "a");
             assert(NULL != debug_output);
         }
         //fprintf(debug_output, "[%s]: ", ctime(&t));
@@ -195,7 +195,7 @@ static void get_os_deps(os_dep_config* dep) {
         dep->debug_sym_dir_pattern = "/usr/lib/debug/lib/modules/%s";
         dep->vmlinux_pattern = "/usr/lib/debug/lib/modules/%s/vmlinux";
         dep->crash_core = "/vmcore";
-        dep->output_template = "/tmp.reckdwXXXXXX";
+        dep->output_template = "/tmp/reckdwXXXXXX";
     }
 }
 
@@ -520,7 +520,7 @@ static int log_buffer_contents_rec(char *msg) {
         memset(blob, 0, blob_sz);
         strncpy(blob, msg, blob_sz);
         blob_sz = strlen(blob);
-        if ((rc = rec_api6(s_ams_rec_handle, (const char*)blob, blob_sz))
+        if ((rc = rec_log(s_ams_rec_handle, (const char*)blob, blob_sz))
             != RECORDER_OK) {
             DEBUGMSGTL(("rec:log", "KDump log to recorder data failed (%d)\n", rc));
             return -1;

@@ -184,7 +184,6 @@ init_cpqHost(void)
     init_cpqHoSwVerTable();
     init_cpqHostOsMem();
     init_cpqHoSWRunningTable();
-    init_cpqHoFwVerTable();
 
     /*
      * register ourselves with the agent to handle our mib tree 

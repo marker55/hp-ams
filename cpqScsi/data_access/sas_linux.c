@@ -24,7 +24,6 @@
 #include "cpqScsi.h"
 #include "cpqSasHbaTable.h"
 #include "cpqSasPhyDrvTable.h"
-#include "cpqHoFwVerTable.h"
 
 #include "sashba.h"
 #include "sasphydrv.h"
@@ -35,9 +34,6 @@
 #include "sas_linux.h"
 
 extern unsigned char     cpqHoMibHealthStatusArray[];
-extern oid       cpqHoFwVerTable_oid[];
-extern size_t    cpqHoFwVerTable_oid_len;
-extern int       FWidx;
 
 extern int file_select(const struct dirent *);
 void SendSasTrap(int, cpqSasHbaTable_entry *, cpqSasPhyDrvTable_entry *);
@@ -118,14 +114,6 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
     int i,len;
 
     DEBUGMSGTL(("sashba:container:load", "loading\n"));
-    /*
-     * find  the cpqHoFwVerTable  container.
-     */
-
-    fw_cache = netsnmp_cache_find_by_oid(cpqHoFwVerTable_oid,
-            cpqHoFwVerTable_oid_len);
-    if (fw_cache != NULL) 
-        fw_container = fw_cache->magic;
 
     DEBUGMSGTL(("sashba:container:load", "Container=%p\n",container));
 
@@ -230,46 +218,6 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
         strcpy(attribute,buffer);
         strcat(attribute, sysfs_attr[CLASS_VERSION_FW]);
         if ((value = get_sysfs_str(attribute)) != NULL) {
-            int idx = 0;
-            cpqHoFwVerTable_entry *fw_entry;
-
-            if (FWidx != -1) 
-                idx = unregister_int_index(cpqHoFwVerTable_oid,
-                                           cpqHoFwVerTable_oid_len,
-                                           FWidx);
-
-            DEBUGMSGTL(("cpqHoFwVerTable:init",
-                        "cpqHoFwVerTable unregister HBA idx %d = %d\n", 
-                        FWidx, idx));
-            idx = register_int_index(cpqHoFwVerTable_oid,
-                                     cpqHoFwVerTable_oid_len,
-                                     FWidx);
-            DEBUGMSGTL(("cpqHoFwVerTable:init",
-                        "cpqHoFwVerTable register HBA idx %d = %d\n", 
-                        FWidx, idx));
-            if (idx != -1)
-                FWidx = idx;
-            DEBUGMSGTL(("cpqHoFwVerTable:init",
-                        "cpqHoFwVerTable HBA FWidx = %d before\n", FWidx));
-
-	    if (fw_container != NULL) {
-                fw_entry = cpqHoFwVerTable_createEntry(fw_container, (oid)FWidx++);
-                if (fw_entry) {
-                    DEBUGMSGTL(("cpqHoFwVerTable:init",
-                    "cpqHoFwVerTable entry = %p\n", fw_entry));
-    
-                    DEBUGMSGTL(("cpqHoFwVerTable:init",
-                            "cpqHoFwVerTable FWidx = %d after\n", FWidx));
-                    fw_entry->cpqHoFwVerCategory = 2;
-                    fw_entry->cpqHoFwVerDeviceType = 4;
-
-                    strcpy(fw_entry->cpqHoFwVerVersion, value);
-                    fw_entry->cpqHoFwVerVersion_len =
-                          strlen(fw_entry->cpqHoFwVerVersion);
-
-                    CONTAINER_INSERT(fw_container, fw_entry);
-                }
-            }
             strcpy(entry->cpqSasHbaFwVersion, value);    
             entry->cpqSasHbaFwVersion_len = strlen(entry->cpqSasHbaFwVersion);
             free(value);
@@ -289,6 +237,7 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
         if ((value = get_sysfs_str(attribute)) != NULL) {
             if (strcmp(value, "running") == 0)
                 entry->cpqSasHbaStatus = SAS_HOST_STATUS_OK;
+	    free(value);
         }
 
         entry->cpqSasHbaCondition = 
@@ -357,14 +306,6 @@ int netsnmp_arch_sasphydrv_container_load(netsnmp_container* container)
     oid oid_index[2];
 
     DEBUGMSGTL(("sasphydrv:container:load", "loading\n"));
-    /*
-     * find  the cpqHoFwVerTable  container.
-     */
-
-    fw_cache = netsnmp_cache_find_by_oid(cpqHoFwVerTable_oid,
-            cpqHoFwVerTable_oid_len);
-    if (fw_cache != NULL) 
-        fw_container = fw_cache->magic;
 
     /*
      * find  the HBa container.
@@ -428,46 +369,6 @@ int netsnmp_arch_sasphydrv_container_load(netsnmp_container* container)
                 strcpy(attribute,buffer);
                 strcat(attribute, sysfs_attr[DEVICE_REV]);
                 if ((value = get_sysfs_str(attribute)) != NULL) {
-                    cpqHoFwVerTable_entry *fw_entry;
-                    int idx = 0;
-                    if (FWidx != -1)
-                        idx = unregister_int_index(cpqHoFwVerTable_oid,
-                                                   cpqHoFwVerTable_oid_len,
-                                                   FWidx);
-                    DEBUGMSGTL(("cpqHoFwVerTable:init",
-                                "cpqHoFwVerTable Unregister disk idx %d = %d\n",
-                                FWidx, idx));
-                    idx = register_int_index(cpqHoFwVerTable_oid,
-                                             cpqHoFwVerTable_oid_len,
-                                             FWidx);
-                    DEBUGMSGTL(("cpqHoFwVerTable:init",
-                                "cpqHoFwVerTable Register disk idx %d = %d\n",
-                                FWidx, idx));
-                    if (idx != -1)
-                        FWidx = idx;
-                    DEBUGMSGTL(("cpqHoFwVerTable:init",
-                            "cpqHoFwVerTable disk FWidx = %d before\n", FWidx));
-
-                    fw_entry =
-                        cpqHoFwVerTable_createEntry(fw_container, (oid)FWidx++);
-                    if (fw_entry) {
-                        DEBUGMSGTL(("cpqHoFwVerTable:init",
-                        "cpqHoFwVerTable entry = %p\n", fw_entry));
-
-                        DEBUGMSGTL(("cpqHoFwVerTable:init",
-                                    "cpqHoFwVerTable FWidx = %d after\n",
-                                    FWidx));
-
-                        fw_entry->cpqHoFwVerCategory = 2;
-                        fw_entry->cpqHoFwVerDeviceType = 10;
-        
-                        strcpy(fw_entry->cpqHoFwVerVersion, value);
-                        fw_entry->cpqHoFwVerVersion_len =
-                            strlen(fw_entry->cpqHoFwVerVersion);
-        
-                        CONTAINER_INSERT(fw_container, fw_entry);
-                    }
-
                     strcpy(disk->cpqSasPhyDrvFWRev, value);
                     disk->cpqSasPhyDrvFWRev_len = 
                                                 strlen(disk->cpqSasPhyDrvFWRev);

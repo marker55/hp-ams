@@ -7,7 +7,9 @@
 #include <unistd.h>
 #include <errno.h>
 
+#include "ams_rec.h"
 #include "recorder.h"
+#include "data.h"
 
 #include "net-snmp/net-snmp-config.h"
 #include "net-snmp/library/snmp_impl.h"
@@ -15,19 +17,15 @@
 #include <net-snmp/output_api.h>
 #include "net-snmp/library/tools.h"
 
-extern int s_class;
-extern int s_handle;
-
-int recorder_init();
+int rec_init();
 int doCodeDescriptor(unsigned int, unsigned int, unsigned char, unsigned char,
                      unsigned char, unsigned char, unsigned char, char *);
 
 static field fld[] = {
-    {BINARY_DATA, TYP_TEXT,    "Server Name"},
-    {BINARY_DATA, TYP_TEXT,    "Fully Qualified Domain Name"},
+    {REC_BINARY_DATA, REC_TYP_TEXT,    "Server Name"},
 };
 
-void record_hostname()
+void LOG_HOST_NAME()
 {
     int i = 0;
     int rc;
@@ -38,74 +36,74 @@ void record_hostname()
     char * string2;
 
     char *blob;
-    DESCRIPTOR_RECORD *toc;
+    descript *toc;
 
-    if (!recorder_init() ) {
+    if (!rec_init() ) {
         return;
     }
         
    /* do Code Descriptor */
-    if ((rc = doCodeDescriptor(s_handle,
-                               s_class,
-                               4,
+    if ((rc = doCodeDescriptor(s_ams_rec_handle,
+                               s_ams_rec_class,
+                               REC_CODE_AMS_HOST_NAME,
                                0,
-                               2,
-                               0,
-                               1,
-                               "Host Name")) != OK) {
-        DEBUGMSGTL(("recorder:log_hostname","Host Name register descriptor failed %d\n", rc));
+                               REC_SEV_NONCRIT,
+                               REC_BINARY_DATA,
+                               REC_VIS_CUSTOMER,
+                               REC_CODE_AMS_HOST_NAME_STR)) != RECORDER_OK) {
+        DEBUGMSGTL(("rec:rec_api6_hostname","Host Name register descriptor failed %d\n", rc));
         return;
     }
 
     /* build descriptor toc */
     num_descript = sizeof(fld)/sizeof(field);
-    DEBUGMSGTL(("recorder:log","Host Name num_descript = %d\n", num_descript));
-    if ((toc_sz = sizeof(DESCRIPTOR_RECORD) * num_descript) 
-            > MAX_BLOB_SIZE) {
-        DEBUGMSGTL(("recorder:log","Host Name Descriptor too large %ld\n", toc_sz));
+    DEBUGMSGTL(("rec:log","Host Name num_descript = %d\n", num_descript));
+    if ((toc_sz = sizeof(descript) * num_descript) 
+            > RECORDER_MAX_BLOB_SIZE) {
+        DEBUGMSGTL(("rec:log","Host Name Descriptor too large %ld\n", toc_sz));
         return;
     }
-    DEBUGMSGTL(("recorder:log","Host Naqme toc_sz = %ld\n", toc_sz));
+    DEBUGMSGTL(("rec:log","Host Naqme toc_sz = %ld\n", toc_sz));
     if ((toc = malloc(toc_sz)) == NULL) {
-        DEBUGMSGTL(("recorder:log","Host Name Unable to malloc %ld bytes\n", toc_sz));
+        DEBUGMSGTL(("rec:log","Host Name Unable to malloc %ld bytes\n", toc_sz));
         return;
     }
     memset(toc, 0, toc_sz);
     /* now do the field descriptor */
     for ( i = 0; i < num_descript; i++) {
-        toc[i].flags = 0x8c;
-        toc[i].classs = s_class;
-        toc[i].code = 4;
+        toc[i].flags = REC_FLAGS_DESCRIPTOR | REC_FLAGS_DESC_FIELD;
+        toc[i].classs = s_ams_rec_class;
+        toc[i].code = REC_CODE_AMS_HOST_NAME;
         toc[i].field = i;
-        toc[i].severity_type = 2 | ( fld[i].tp << 4);
+        toc[i].severity_type = REC_DESC_SEVERITY_NON_CRITICAL | fld[i].tp;
         toc[i].format = fld[i].sz;
-        toc[i].visibility = 1;
+        toc[i].visibility =  REC_DESC_VISIBILITY_CUSTOMER;
         strncpy(toc[i].desc, fld[i].nm, strlen(fld[i].nm));
-        DEBUGMSGTL(("recorder:log", "toc[i] = %p\n", &toc[i]));
-        dump_chunk("recorder:log","descriptor", (const u_char *)&toc[i], 96);
+        DEBUGMSGTL(("rec:log", "toc[i] = %p\n", &toc[i]));
+        dump_chunk("rec:rec_api6","descriptor", (const u_char *)&toc[i], 96);
     }
        
-    dump_chunk("recorder:log","toc", (const u_char *)toc, toc_sz);
+    dump_chunk("rec:rec_api6","toc", (const u_char *)toc, toc_sz);
 
-    if ((rc = recorder4_field(s_handle, toc_sz, toc)) 
-            != OK) {
-        DEBUGMSGTL(("recorder:log","Host Name register descriptor failed %d\n", rc));
+    if ((rc = rec_api4_field(s_ams_rec_handle, toc_sz, toc)) 
+            != RECORDER_OK) {
+        DEBUGMSGTL(("rec:log","Host Name register descriptor failed %d\n", rc));
         free(toc);
         return;
     }
     free(toc);
 
     /* Let's go ahead and set the code for */
-    if ((rc = recorder3(s_handle, 4)) 
-                != OK) {
-        DEBUGMSGTL(("recorder:log", "recorder3 failed (%d)\n", rc));
+    if ((rc = rec_api3(s_ams_rec_handle, REC_CODE_AMS_HOST_NAME)) 
+                != RECORDER_OK) {
+        DEBUGMSGTL(("rec:log", "SetRecorderFeederCode failed (%d)\n", rc));
         return;
     }
 
     /* Let's get our blob */
-    blob_sz = MAX_BLOB_SIZE;
+    blob_sz = RECORDER_MAX_BLOB_SIZE;
     if ((blob = malloc(blob_sz)) == NULL ) {
-        DEBUGMSGTL(("recorder:log","OS Info Unable to malloc() %ld blob\n", blob_sz));
+        DEBUGMSGTL(("rec:log","OS Info Unable to malloc() %ld blob\n", blob_sz));
         return;
     }
     memset(blob, 0, blob_sz);
@@ -113,28 +111,21 @@ void record_hostname()
     /* Got the Blob, so let's stuff in the data */
     if (gethostname(blob, blob_sz)) {
         free(blob);
-        DEBUGMSGTL(("recorder:log","gethostname failed - errno = %d\n", errno));
+        DEBUGMSGTL(("rec:log","gethostname failed - errno = %d\n", errno));
         return;
     }
-    string1 = blob + strlen(blob) + 1;
-    strncpy(string1, blob, strlen(blob));
-    string2 = string1 + strlen(string1) + 1;
-    if (getdomainname(string2, SPRINT_MAX_LEN)) 
-        DEBUGMSGTL(("recorder:log","getdomainname failed - errno = %d\n", errno));
-    else 
-        *(string2 -1 ) = '.';
 
-    DEBUGMSGTL(("recorder:log","Host Name %s, FQDN %s\n",
-                blob, string1));
+    DEBUGMSGTL(("rec:log","Host Name %s\n", blob));
 
-    blob_sz = strlen(blob) + strlen(string1) + 3;
+    blob_sz = strlen(blob) + 1;
     // Log the record
-    if ((rc = record(s_handle, (const char*)blob, blob_sz)) != 
-             OK) {
-        DEBUGMSGTL(("recorder:log", "hostname record failed (%d)\n",rc));
+    if ((rc = rec_api6(s_ams_rec_handle, (const char*)blob, blob_sz)) != 
+             RECORDER_OK) {
+        DEBUGMSGTL(("rec:log", "LogRecorderData failed (%d)\n",rc));
     }
 
-    DEBUGMSGTL(("recorder:log", "Logged record for code %d\n", 4));
+    DEBUGMSGTL(("rec:log", "Logged record for code %d\n", 
+                REC_CODE_AMS_HOST_NAME));
     return;
 
 }

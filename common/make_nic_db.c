@@ -1,3 +1,11 @@
+/* create nic_db.h from hw.csv
+ * To Compile:
+ *      cc -o make_nicdb make_nic_db.c  ../common/utils.c
+ *
+ * To run:
+ *      ./make_nic_db > nic_db.h
+ *
+ */
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -38,12 +46,15 @@ int main(int argc, char** argv) {
 
     int nic_db_rows = 0;
     nicdb **nic_db;
+    int nic_db_size;
 
     read_line_t *nicdblines = NULL;
 
     if ((nicdblines = ReadFileLines(HW_CSV)) != NULL) {
-        if ((nic_db = malloc(sizeof(char *) * nicdblines->count)) == NULL) 
+        nic_db_size = sizeof(char *) * (nicdblines->count + 1);
+        if ((nic_db = malloc(nic_db_size)) == NULL) 
             return;
+        memset(nic_db,0, nic_db_size);
         int i = 0;
         nic_db_rows = nicdblines->count;
 
@@ -53,11 +64,12 @@ int main(int argc, char** argv) {
         printf("#define NIC_DB_ROWS %d\n", nic_db_rows);
         printf("static nic_hw_db nic_hw[NIC_DB_ROWS] = {\n");
 
-        while (i < nic_db_rows) {
+        i = nic_db_rows;
+        while (i--)  {
             char *str = NULL;
             char *tokens[64];
             int tidx = 0;
-            for (str = nicdblines->buf[i]; str < nicdblines->buf[i + 1]; tidx++) {
+            for (str = nicdblines->buf[i]; ; tidx++) {
                 tokens[tidx] = str;
                 str = index(tokens[tidx],',');
                 if (str == NULL)
@@ -131,8 +143,6 @@ int main(int argc, char** argv) {
 
                 printf("            },\n");
             }
-            i++;
-            
         }
         printf("};\n");
         printf("#endif /* NIC_DB_H */\n");

@@ -523,6 +523,9 @@ int pci_node_scan(pci_node * node, char * dirname)
                         node->pci_sub = new_node;
                         pci_node_scan(new_node, newdir);
                     }
+		    for (;j > 0; j--) 
+			free(newdevices[j-1]);
+		    free(newdevices);
                 }
 
                 free(newdir);
@@ -534,7 +537,9 @@ int pci_node_scan(pci_node * node, char * dirname)
                         node = new_node;
                     }
                 }
+	        free(devices[i]);
             }
+            free(devices);		
         }
     }
     return n;

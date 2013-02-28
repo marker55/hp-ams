@@ -8,29 +8,24 @@
 #
 
 OS ?= linux
-NETSNMP ?= net-snmp-5.7.1
+NETSNMP ?= net-snmp-5.5
 CC=gcc
-MIB=Ide
-
-OPT ?= -O2
 
 PWD = `pwd`
+BUILDAGENTLIBS =$(shell ../$(NETSNMP)/net-snmp-config --agent-libs) -lpci -lsysfs
+BUILDNETSNMPDEPS =$(shell ../$(NETSNMP)/net-snmp-config --build-lib-deps $(NETSNMP))
+BUILDNETSNMPCMD = $(shell ../$(NETSNMP)/net-snmp-config --build-ommand)
+BUILDLIBS = $(BUILDNETSNMPDEPS) -lpci -lsysfs -lcrypto -lm -lpthread
+
 
 # shared library flags (assumes gcc)
 DLFLAGS=-fPIC -shared 
-CFLAGS = -fno-strict-aliasing $(OPT) -g -pipe -Werror -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux 
-CPPFLAGS = -I. -I..  $(shell if [ -f ../$(NETSNMP)/net-snmp-config ] ; then ../$(NETSNMP)/net-snmp-config --build-includes ../$(NETSNMP); fi)
-
+CFLAGS   ?= -fno-strict-aliasing -O2 -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux 
+CPPFLAGS = -I. -I.. $(shell ../$(NETSNMP)/net-snmp-config --build-includes ../$(NETSNMP))
 OBJS=cpqIde.o cpqIdeControllerTable.o cpqIdeAtaDiskTable.o
 TARGETS=cpqIde.o cpqIdeControllerTable.o cpqIdeAtaDiskTable.o
-PROVIDES=$(shell make provides)
+
 SUBDIRS = data_access
-NETSNMPCONFIG = ../$(NETSNMP)/net-snmp-config
-BUILDAGENTLIBS = $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --agent-libs ; fi)
-BUILDNETSNMPDEPS = $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --build-lib-deps ../$(NETSNMP) ; fi)
-BUILDNETSNMPCMD =  $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --build-command ;fi)
-BUILDLIBS = $(BUILDNETSNMPDEPS)  -lm -lresolv -lcrypt $(DISTROLIBS)
-EXTRAS = ../common/utils.o ../common/scsi_info.o ../cpqHost/cpqHoFwVerTable.o
 
 .PHONY: subdirs $(SUBDIRS)
 .PHONY: all clean install source_tarball
@@ -45,18 +40,10 @@ $(SUBDIRS):
 	cd $@ && ${MAKE} all;
 
 clean:
-	rm -f $(TARGETS) $(OBJS) test_cpq$(MIB)
+	rm -f $(TARGETS) $(OBJS)
 	for d in $(SUBDIRS); do ${MAKE} -C $$d clean; done
 
 provides:
-	@echo $(addprefix $(DIR), $(OBJS) $(shell for d in $(SUBDIRS); do ${MAKE} -C $$d provides OS=$(OS) DIR=$$d/ |grep -v ^make; done))
-
-test: test_cpq$(MIB)
-
-test_cpq$(MIB): test_cpq$(MIB).o
-	$(CC) -o test_cpq$(MIB) $(OBJS) */*.o  test_cpq$(MIB).o $(EXTRAS)  $(BUILDLIBS)  -lc -lrt
-
-test_cpq$(MIB).o: test_cpq$(MIB).c
-	$(CC) $(CPPFLAGS) -I../net-snmp-5.7.2.pre1/include  -c test_cpq$(MIB).c
+	@echo $(addprefix $(DIR), $(OBJS) $(shell for d in $(SUBDIRS); do ${MAKE} -s -C $$d provides OS=$(OS) DIR=$$d/; done))
 
 
