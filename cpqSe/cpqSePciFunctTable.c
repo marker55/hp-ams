@@ -38,6 +38,8 @@ initialize_table_cpqSePciFunctTable(void)
     netsnmp_table_registration_info *table_info = NULL;
     netsnmp_cache  *cache = NULL;
 
+    int reg_tbl_ret = SNMPERR_SUCCESS;
+
     DEBUGMSGTL(("cpqSePciFunctTable:init",
                 "initializing table cpqSePciFunctTable\n"));
 
@@ -126,7 +128,8 @@ initialize_table_cpqSePciFunctTable(void)
     /*
      * register the table
      */
-    if (SNMPERR_SUCCESS != netsnmp_register_table(reg, table_info)) {
+    reg_tbl_ret = netsnmp_register_table(reg, table_info);
+    if (reg_tbl_ret != SNMPERR_SUCCESS) {
         snmp_log(LOG_ERR,
                  "error registering table handler for cpqSePciFunctTable\n");
         goto bail;
@@ -155,8 +158,9 @@ initialize_table_cpqSePciFunctTable(void)
     if (container)
         CONTAINER_FREE(container);
 
-    if (reg)
-        netsnmp_handler_registration_free(reg);
+    if (reg_tbl_ret == SNMPERR_SUCCESS)
+        if (reg)
+            netsnmp_handler_registration_free(reg);
 }
 
 /** create a new row in the table */

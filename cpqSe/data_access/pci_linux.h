@@ -25,6 +25,7 @@ typedef struct _class_node {
     unsigned int device_class;
     unsigned char *prog_if_name;
     unsigned char *name;
+    unsigned char *super;
     void *  next;
 } class_node;
 
