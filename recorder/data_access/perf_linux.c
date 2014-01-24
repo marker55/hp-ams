@@ -11,8 +11,6 @@
 #include "recorder.h"
 #include "data.h"
 
-#include "net-snmp/net-snmp-config.h"
-#include "net-snmp/library/snmp_impl.h"
 #include <net-snmp/net-snmp-config.h>
 #include <net-snmp/output_api.h>
 
@@ -30,11 +28,11 @@ REC_AMS_OsUsageData OsUsageData;
 
 void rec_log_os_usage(int regNo, void *unUsed)
 {
-    float LoadAverage[3];
+    float LoadAverage[3] = {0.0, 0.0, 0.0};
     int rc;
     int cur, nextpid;
     struct dirent **proclist;
-    int i, count, tcount;
+    int i, count, tcount = 0;
     FILE *proc_loadavg;
 
     DEBUGMSGTL(("rectimer:log", "OS Usage Called %d\n", regNo));
@@ -87,12 +85,12 @@ void rec_log_os_usage(int regNo, void *unUsed)
                 LoadAverage[0], LoadAverage[1], LoadAverage[2]));
 
     // Log the record
-    if ((rc = rec_log(s_ams_rec_handle, (const char*)&OsUsageData, 
+    if ((rc = rec_api6(s_ams_rec_handle, (const char*)&OsUsageData, 
                         sizeof(OsUsageData))) != RECORDER_OK) {
-        DEBUGMSGTL(("rec:log", "LogRecorderData failed (%d)\n",rc));
+        DEBUGMSGTL(("record:log", "LogRecorderData failed (%d)\n",rc));
     }
 
-    DEBUGMSGTL(("rec:log", "Logged record for code %d\n",
+    DEBUGMSGTL(("record:log", "Logged record for code %d\n",
                 REC_CODE_AMS_OS_USAGE));
     close_rec(0);
     return;

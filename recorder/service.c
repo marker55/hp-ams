@@ -153,7 +153,7 @@ void LOG_SERVICE(
            services[j]->name, services[j]->filename));
 
         // Log the record
-        if ((rc = rec_log(s_ams_rec_handle, (const char*)blob, blob_sz)) !=
+        if ((rc = rec_api6(s_ams_rec_handle, (const char*)blob, blob_sz)) !=
                             RECORDER_OK) {
             DEBUGMSGTL(("rec:log", "LogRecorderData failed (%d)\n",rc));
         }

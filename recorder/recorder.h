@@ -50,12 +50,12 @@
 #define RECORDER_HANDLE_MASK   (0x0000FFFF)
 
 // Filter (F_TYPE)
-#define RECORDER_5_NO_FILTER  (0)
-#define RECORDER_5_BYTE       (1)
-#define RECORDER_5_WORD       (2)
-#define RECORDER_5_DWORD      (4)
+#define RECORDER_FILTER_NO_FILTER  (0)
+#define RECORDER_FILTER_BYTE       (1)
+#define RECORDER_FILTER_WORD       (2)
+#define RECORDER_FILTER_DWORD      (4)
 
-#define RECORDER_5_SET      (0x01)
+#define RECORDER_FILTER_SET      (0x01)
 
 //
 // FLAGS FIELD
@@ -139,9 +139,9 @@
 //#define REC_CODE_T0          (0x40000000)
 
 
-#define REC_4_CLASS    (1)
-#define REC_4_CODE     (2)
-#define REC_4_FIELD    (3)
+#define REC_DESCRIBE_CLASS    (1)
+#define REC_DESCRIBE_CODE     (2)
+#define REC_DESCRIBE_FIELD    (3)
 
 
 
@@ -180,60 +180,6 @@ typedef struct {
     char  desc[88];
 } descript;
 
-// DATA - formats
-typedef struct {
-    UINT8  flags;
-    UINT8  classs;
-    UINT8  code;
-    UINT16 length;             // Length of data field
-    //UINT8  data;             // Data is variable in length, depending upon length field
-} RECORDER_DATA_RECORD_SIMPLE;
-
-typedef struct {
-    UINT8  flags;
-    UINT8  classs;
-    UINT8  code;
-    UINT8  instance;
-    UINT16 length;             // Length of data field
-    //UINT8  data;             // Data is variable in length, depending upon length field
-} RECORDER_DATA_RECORD_WITH_INSTANCE;
-
-typedef struct {
-    UINT8  flags;
-    UINT8  classs;
-    UINT8  code;
-    UINT8  field;
-    UINT16 length;             // Length of data field
-    //UINT8  data;             // Data is variable in length, depending upon length field
-} RECORDER_DATA_RECORD_WITH_FIELD;
-
-typedef struct {
-    UINT8  flags;
-    UINT8  classs;
-    UINT8  code;
-    UINT8  field;
-    UINT8  instance;
-    UINT16 length;             // Length of data field
-    //UINT8  data;             // Data is variable in length, depending upon length field
-} RECORDER_DATA_RECORD_WITH_FIELD_AND_INSTANCE;
-
-//
-// DATA union
-//
-typedef union {
-    RECORDER_DATA_RECORD_SIMPLE          simple;
-    RECORDER_DATA_RECORD_WITH_INSTANCE   instance;
-    RECORDER_DATA_RECORD_WITH_FIELD      field;
-    RECORDER_DATA_RECORD_WITH_FIELD_AND_INSTANCE fi;
-} RECORDER_DATA_RECORD;
-
-
-// TODO: TIMETICK - still need to add support
-typedef struct {
-    UINT32 tick;
-} RECORDER_TICK;
-
-
 // RECORDER
 // - These enumerations are important as they come from the CHIF world too - don't change them!
 typedef enum
@@ -244,15 +190,15 @@ typedef enum
     REC_API_3,
     REC_API_4,
     REC_API_5,
-    REC_6_BLOB,
-    REC_6_ARRAY,
-    REC_6_FIELD,
-    REC_6_INSTANCE,
-    REC_6_RAW,
-    REC_6_STATIC,
-    REC_COMMAND,
+    REC_API_6,
+    REC_API_7,
+    REC_API_8,
+    REC_API_9,
+    REC_API_10,
+    REC_API_11,
+    REC_API_12,
     REC_API_13
-} RECORD_TYPES;
+} REC_RECORDER_TYPES;
 
 /*******************************************************************
  * MESSAGE STRUCTURES
@@ -294,9 +240,9 @@ typedef struct {
     unsigned int flags;
 } REC_3_MSG;
 
-// REC_3_MSG.ModifyMask
+// REC_DETAIL_MSG.ModifyMask
 
-enum REC_3_MODIFY_MASK
+enum REC_DETAIL_MODIFY_MASK
 {
     REC_MODIFY_CLASS         = 0x01,
     REC_MODIFY_CODE          = 0x02,
@@ -315,7 +261,7 @@ typedef struct {
     int    handle;
     int    type;
     unsigned int    bytes;
-    UINT32 filt;
+    UINT32 filter;
 } REC_5_MSG;
 
 typedef struct {
@@ -337,14 +283,14 @@ typedef struct {
     int  subtype;
     union {
         REC_1_MSG    m1;
-        REC_2_MSG  m2;
-        REC_3_MSG      m3;
+        REC_2_MSG    m2;
+        REC_3_MSG    m3;
         REC_4_MSG    m4;
-        REC_5_MSG      m5;
-        REC_6_MSG         m6;
-        REC_13_MSG       m13;
+        REC_5_MSG    m5;
+        REC_6_MSG    m6;
+        REC_13_MSG   m13;
     } cmd;
-} RECORD_MESSAGE;
+} REC_MSG;
 
 // RECORDER
 typedef struct {
@@ -362,7 +308,7 @@ typedef struct
 {
     int type;
     union {
-        RECORD_MESSAGE     rec;
+        REC_MSG     rec;
     } rec_msg;
 } REC_MESSAGE;
 
@@ -413,12 +359,12 @@ typedef struct _pkt_hdr {
     uint16_t svc;
 } pkt_hdr;
 
-typedef struct __req {
+typedef struct _rec_req {
     pkt_hdr hdr;
     REC_MESSAGE msg;
 } _req;
 
-typedef struct __resp {
+typedef struct _rec_resp {
     pkt_hdr hdr;
     REC_ANSWER msg;
 } _resp;
@@ -469,33 +415,29 @@ int rec_api4_field( int handle,
 int rec_api3(  int handle, 
                  unsigned int code );
 
-int rec_build_filter( unsigned int size, 
-                 const descript * recs, 
-                 UINT32 * f );
-
 int rec_api5( int handle, 
                  int type, 
                  unsigned int bytes, 
                  const UINT32 * f );
 
-int rec_log( int handle, 
+int rec_api6( int handle, 
                  const char * data, 
                  unsigned int size );
 
-int rec_log_array( int handle, 
+int rec_api6_array( int handle, 
                  const char * data, 
                  unsigned int size );
 
-int rec_log_instance( int handle, 
+int rec_api6_instance( int handle, 
                  unsigned int instance, 
                  const char * data, 
                  unsigned int size );
 
-int rec_log_static( int handle, 
+int rec_api6_static( int handle, 
                  const char * data, 
                  unsigned int size );
 
-int rec_log_field( int handle, 
+int rec_api6_field( int handle, 
                  unsigned int instance, 
                  unsigned int field, 
                  const char * data, 

@@ -9,10 +9,9 @@
 
 #include "cpqHost/libcpqhost/cpqhost.h"
 
-#include "net-snmp/net-snmp-config.h"
-#include "net-snmp/library/snmp_impl.h"
 #include <net-snmp/net-snmp-config.h>
 #include <net-snmp/output_api.h>
+
 #include "driver.h"
 
 char * get_sysfs_str(char *);
@@ -37,7 +36,7 @@ int getDriver()
 
     /* Let's get our blob */
     if ((fp =  fopen("/proc/modules","r")) == 0) {
-        DEBUGMSGTL(("rec:log", "Unable to open /proc/modules\n"));
+        DEBUGMSGTL(("record:log", "Unable to open /proc/modules\n"));
         return 0;
     }
 
@@ -46,8 +45,8 @@ int getDriver()
     clearerr(fp);
     rewind(fp);
 
-    if ((drivers = malloc(modcount * sizeof(drv_entry))) == NULL) {
-        DEBUGMSGTL(("rec:log", "Unable to malloc() %ld bytes\n", 
+    if ((drivers = malloc(modcount * sizeof(drv_entry *))) == NULL) {
+        DEBUGMSGTL(("record:log", "Unable to malloc() %ld bytes\n", 
                                 modcount * sizeof(drv_entry)));
         fclose(fp);
         return 0;
@@ -64,7 +63,7 @@ int getDriver()
         mapsize = buf.st_size;
         if ((modules_dep = open(buffer, O_RDONLY)) >=0)
             moddep_ptr = (char *)mmap(0, mapsize, PROT_READ, MAP_SHARED,
-                                        modules_dep, 2*getpagesize());
+                                        modules_dep, 0);
     }
 
     while (fgets(buffer, sizeof(buffer), fp) > 0) {
@@ -126,11 +125,11 @@ int getDriver()
             } else
                 drivers[i]->version = version;
 
-            DEBUGMSGTL(("rec:log", "i = %d ", i));
-            DEBUGMSGTL(("rec:log", "module = %s ", drivers[i]->name));
-            DEBUGMSGTL(("rec:log", "filename = %s ", drivers[i]->filename));
-            DEBUGMSGTL(("rec:log", "timestamp = %s \n", drivers[i]->timestamp));
-            DEBUGMSGTL(("rec:log", "version = %s\n", drivers[i]->version));
+            DEBUGMSGTL(("record:log", "i = %d ", i));
+            DEBUGMSGTL(("record:log", "module = %s ", drivers[i]->name));
+            DEBUGMSGTL(("record:log", "filename = %s ", drivers[i]->filename));
+            DEBUGMSGTL(("record:log", "timestamp = %s \n", drivers[i]->timestamp));
+            DEBUGMSGTL(("record:log", "version = %s\n", drivers[i]->version));
 
             i++;
         }

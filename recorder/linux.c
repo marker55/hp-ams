@@ -52,12 +52,13 @@ void init_rec(void)  {
 
     int  start = -1;
     char dev[256] = "";
+    char *max_ccb = NULL;
     struct stat buf;
 
     if (rec_fd != -1 )
         return;
 
-    if ((start = get_sysfs_int("/sys/module/hpilo/parameters/max_ccb")) < 0) {
+    if ((max_ccb = get_sysfs_str("/sys/module/hpilo/parameters/max_ccb")) == NULL) {
         start = MAXHPILOCHANNELS - 1;
         
         sprintf(dev,"%s%d", HPILO_CCB, start);
@@ -65,8 +66,10 @@ void init_rec(void)  {
             start = start - 8;
             sprintf(dev,"%s%d", HPILO_CCB, start);
         }
-    } else
-        start--;
+    } else {
+        start = atoi(max_ccb);
+        free(max_ccb);
+    }
 
     while (start >= 0 && ((rec_fd = open(dev, O_RDWR|O_EXCL)) == -1)) 
         sprintf(dev,"%s%d", HPILO_CCB, --start);
@@ -76,6 +79,8 @@ void init_rec(void)  {
         rec_fd = -1;
     }  
     DEBUGMSGTL(("rec:arch", "open %d\n", rec_fd));
+    /* give the iLO a change to digest the open */
+    usleep(1000);
     return;
 }
 

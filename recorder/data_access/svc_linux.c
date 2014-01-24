@@ -11,8 +11,6 @@
 #include "cpqHost/libcpqhost/cpqhost.h"
 #include "service.h"
 
-#include "net-snmp/net-snmp-config.h"
-#include "net-snmp/library/snmp_impl.h"
 #include <net-snmp/net-snmp-config.h>
 #include <net-snmp/output_api.h>
 
@@ -56,7 +54,7 @@ int getService()
     /* Let's get our blob */
     proccount = scandir("/proc/", &proclist, proc_select, alphasort);
     /* get all proc dirs */
-    if ((services = (svc_entry**)malloc(proccount * sizeof(svc_entry))) 
+    if ((services = (svc_entry**)malloc(proccount * sizeof(svc_entry *))) 
                     == NULL) {
         return 0;
     }
@@ -74,7 +72,7 @@ int getService()
 
         /*This is a service */
         snprintf(procname, 80, "/proc/%s/status",  proclist[i]->d_name);
-        DEBUGMSGTL(("rec:log","service proc  status %s\n",procname));
+        DEBUGMSGTL(("record:log","service proc  status %s\n",procname));
         if ((procFd = open(procname, O_RDONLY)) == -1) {
             free(proclist[i]);
             continue;
@@ -100,10 +98,10 @@ int getService()
         /* Not daemonized so continue */
         if (values[PROC_PID] != NULL)
             pid = atoi(values[PROC_PID]);
-        DEBUGMSGTL(("rec:log","service proc pid = %d \n", pid));
+        DEBUGMSGTL(("record:log","service proc pid = %d \n", pid));
         if (values[PROC_TGID] != NULL)
             tgid = atoi(values[PROC_TGID]);
-        DEBUGMSGTL(("rec:log","service proc tgid = %d \n", tgid));
+        DEBUGMSGTL(("record:log","service proc tgid = %d \n", tgid));
         if (tgid != pid) {
             close(procFd);
             free(proclist[i]);
@@ -124,7 +122,7 @@ int getService()
         services[svccount]->name = malloc(length + 1);
         memset(services[svccount]->name, 0, length + 1);
         strncpy(services[svccount]->name, values[PROC_NAME], length);
-        DEBUGMSGTL(("rec:log","service proc name %s\n",  services[svccount]->name));
+        DEBUGMSGTL(("record:log","service proc name %s\n",  services[svccount]->name));
         /* not a thread */
         services[svccount]->filename = malloc(256);
         memset(services[svccount]->filename, 0, 256);
@@ -140,7 +138,7 @@ int getService()
             free(services[svccount]);
             continue;
         }
-        DEBUGMSGTL(("rec:log","service file name %s\n", 
+        DEBUGMSGTL(("record:log","service file name %s\n", 
                                 services[svccount]->filename));
         svccount++;
         free(proclist[i]);

@@ -14,43 +14,6 @@
 #define false 1
 #endif
 
-#ifdef UTEST
-void dump_chif(_req * req) {
-    fprintf(stderr, "pktsz = %d ",req->hdr.pktsz);
-    fprintf(stderr, "seq = %d   ",req->hdr.seq);
-    fprintf(stderr, "cmd = %d   ",req->hdr.cmd);
-    fprintf(stderr, "svc = %d\n",req->hdr.svc);
-}
-
-void dump_alloc_req(_req* req) {
-    fprintf(stderr, "CHIF Request: ");
-    dump_chif(req);
-
-    fprintf(stderr, "request->type = %d\n",req->msg.type);
-    fprintf(stderr, "request->rec_msg.subtype = %d\n",
-				req->msg.rec_msg.rec.subtype);
-    fprintf(stderr, "request->rec_msg.cmd.alloc.name = %s\n",
-				req->msg.rec_msg.rec.cmd.alloc.name);
-}
-
-void dump_alloc_resp(_resp* resp) {
-    fprintf(stderr, "CHIF Response: ");
-    dump_chif(resp);
-
-    fprintf(stderr, "response->rcode = %d\n",resp->msg.rcode);
-    fprintf(stderr, "response->rec_msg.returned.handle = %d\n",
-				resp->msg.rec_msg.returned.handle);
-}
-
-#else
-void dump_chif(_req* req) {
-}
-void dump_alloc_req(_req* resp) {
-}
-void dump_alloc_resp(_resp* resp) {
-}
-
-#endif
 int doWrite( _req *, int);
 int doRead( void *, int);
 int doWriteRead(void *, int, _resp *);
@@ -79,12 +42,9 @@ int rec_api13( const char* name )
     msg = &req.msg.rec_msg.rec.cmd.m13;
     strncpy(msg->name, name, sizeof(msg->name) - 1);
     msg->name[sizeof(msg->name) - 1] = 0;
-	//size = (int)msg - (int)&req + sizeof(msg->name) + 4;
 	size = sizeof(pkt_hdr) + sizeof(REC_13_MSG) + 8;
-	dump_alloc_req(&req);
     if (doWrite(&req, size) > 0 )
         if (doRead(&resp,sizeof(_resp)) > 0) {
-	    dump_alloc_resp(&resp);
             return (resp.msg.rcode);
         }
     
@@ -139,7 +99,6 @@ int rec_api1_array(const char * name,
     _req req;
     REC_1_MSG *msg;
 
-    DEBUGMSGTL(("rec:rec_log", "rec_api1_array\n"));
     memset (&req,0,sizeof(_req));
 
     req.hdr.svc = 0x11;
@@ -170,7 +129,6 @@ int rec_api2(int handle)
     _req req;
     REC_2_MSG *msg;
 
-    DEBUGMSGTL(("rec:rec_log", "rec_api2\n"));
     memset (&req,0,sizeof(_req));
 
     req.hdr.svc = 0x11;
@@ -200,7 +158,6 @@ static int _rec_api4(int handle,
     _req req;
     REC_4_MSG *msg;
 
-    DEBUGMSGTL(("rec:rec_log", "_rec_api4\n"));
     memset (&req,0,sizeof(_req));
 
     req.hdr.svc = 0x11;
@@ -215,12 +172,9 @@ static int _rec_api4(int handle,
     msg->size = size;
     msg->selection = d_type;
     memcpy(&msg->toc, toc, size);
-    dump_chunk("rec:rec_log","Request Packet", (const u_char *)&req, 
-                                             16+size + (3 * sizeof(int)));
 
     if ((rc = doWriteRead(&req, 16 + size + (3 * sizeof(int)) ,&resp)) == 0) {
         handle = resp.msg.rec_msg.returned.handle;
-        DEBUGMSGTL(("rec:rec_log", "handle = %x\n", handle));
     }
     return (rc);
 }
@@ -229,16 +183,14 @@ int rec_api4_class(int handle,
                         unsigned int size, 
                         const descript * toc )
 {
-    DEBUGMSGTL(("rec:rec_log", "rec_api4_class\n"));
-    return (_rec_api4(handle, size, REC_4_CLASS, toc));
+    return (_rec_api4(handle, size, REC_DESCRIBE_CLASS, toc));
 }
 
 int rec_api4_code(int handle, 
                         unsigned int size, 
                         const descript * toc )
 {
-    DEBUGMSGTL(("rec:rec_log", "rec_api4_code\n"));
-    return (_rec_api4(handle, size, REC_4_CODE, toc));
+    return (_rec_api4(handle, size, REC_DESCRIBE_CODE, toc));
 }
 
 int rec_api4_field(int handle, 
@@ -246,7 +198,7 @@ int rec_api4_field(int handle,
                         const descript * toc )
 {
     DEBUGMSGTL(("rec:rec_log", "rec_api4_field\n"));
-    return (_rec_api4(handle, size, REC_4_FIELD, toc));
+    return (_rec_api4(handle, size, REC_DESCRIBE_FIELD, toc));
 }
 
 int rec_api3(int handle, unsigned int code)
@@ -268,7 +220,6 @@ int rec_api3(int handle, unsigned int code)
 
     msg = &req.msg.rec_msg.rec.cmd.m3;
     msg->handle = handle;
-    //msg->classs = cls;
     msg->code = code;
     msg->modify_mask = REC_MODIFY_CODE;
 
@@ -278,14 +229,6 @@ int rec_api3(int handle, unsigned int code)
     }
     return (rc);
 }
-
-#ifdef notdef
-int rec_build_filter(unsigned int size, 
-                    const descript * recs, 
-                    UINT32 * f )
-{
-}
-#endif
 
 int rec_api5(int handle, 
               int type, 
@@ -311,7 +254,7 @@ int rec_api5(int handle,
     msg->handle = handle;
     msg->bytes = bytes;
     if (bytes != 0) 
-        memcpy(&msg->filt, f, bytes*sizeof(UINT32));
+        memcpy(&msg->filter,f,bytes*sizeof(UINT32));
 
     if ((rc = doWriteRead(&req, sizeof(REC_5_MSG) + 16 + bytes, &resp)) == 0) {
         handle = resp.msg.rec_msg.returned.handle;
@@ -320,8 +263,8 @@ int rec_api5(int handle,
     return (rc);
 }
 
-static int _rec_log( int handle, 
-            int l_type,
+static int _rec_api6( int handle, 
+            int log_type,
             int instance,
             int field,
             const char * data, 
@@ -332,7 +275,7 @@ static int _rec_log( int handle,
     _req req;
     REC_6_MSG *msg;
 
-    DEBUGMSGTL(("rec:rec_log", "_rec_log\n"));
+    DEBUGMSGTL(("rec:rec_log", "_rec_api6\n"));
     memset(&req,  0,sizeof(_req));
     memset(&resp, 0, sizeof(_resp));
 
@@ -340,8 +283,7 @@ static int _rec_log( int handle,
     req.hdr.seq = ++s_sequence;
 
     req.msg.type = 2;
-
-    req.msg.rec_msg.rec.subtype = l_type;
+    req.msg.rec_msg.rec.subtype = log_type;
 
     msg = &req.msg.rec_msg.rec.cmd.m6;
 
@@ -359,47 +301,47 @@ static int _rec_log( int handle,
     return (rc);
 }
 
-int rec_log( int handle, 
+int rec_api6( int handle, 
             const char * data, 
             unsigned int size )
 {
-    DEBUGMSGTL(("rec:rec_log", "rec_log\n"));
-    return (_rec_log(handle, REC_6_BLOB, 0, 0, data, size));
+    DEBUGMSGTL(("rec:rec_log", "rec_api6\n"));
+    return (_rec_api6(handle, REC_API_6, 0, 0, data, size));
 }
 
-int rec_log_array(int handle, 
+int rec_api6_array(int handle, 
                  const char * data, 
                  unsigned int size )
 {
-    DEBUGMSGTL(("rec:rec_log", "rec_log_array\n"));
-    return (_rec_log(handle, REC_6_ARRAY, 0, 0, data, size));
+    DEBUGMSGTL(("rec:rec_log", "rec_api6_array\n"));
+    return (_rec_api6(handle, REC_API_7, 0, 0, data, size));
 }
 
-int rec_log_instance(int handle, 
+int rec_api6_instance(int handle, 
                     unsigned int instance, 
                     const char * data, 
                     unsigned int size )
 {
-    DEBUGMSGTL(("rec:rec_log", "rec_log_instance\n"));
-    return (_rec_log(handle, REC_6_INSTANCE, instance, 0, data, size));
+    DEBUGMSGTL(("rec:rec_log", "rec_api6_instance\n"));
+    return (_rec_api6(handle, REC_API_9, instance, 0, data, size));
 }
 
-int rec_log_field(int handle, 
+int rec_api6_field(int handle, 
                     unsigned int instance, 
                     unsigned int field, 
                     const char * data, 
                     unsigned int size )
 {
-    DEBUGMSGTL(("rec:rec_log", "rec_log_field\n"));
-    return (_rec_log(handle, REC_6_FIELD, instance, field, data, size));
+    DEBUGMSGTL(("rec:rec_log", "rec_api6_field\n"));
+    return (_rec_api6(handle, REC_API_8, instance, field, data, size));
 }
 
-int rec_log_static(int handle, 
+int rec_api6_static(int handle, 
                   const char * data, 
                   unsigned int size )
 {
-    DEBUGMSGTL(("rec:rec_log", "rec_log_static\n"));
-    return (_rec_log(handle, REC_6_STATIC, 0, 0, data, size));
+    DEBUGMSGTL(("rec:rec_log", "rec_api6_static\n"));
+    return (_rec_api6(handle, REC_API_11, 0, 0, data, size));
 }
 
 int rec_init() {

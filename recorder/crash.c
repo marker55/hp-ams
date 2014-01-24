@@ -10,7 +10,7 @@
  *  that have been processed are marked by touching a file in its (the
  *  crash's) directory named SUCCESSFULLY_PROCESSED_TAGFILE.
  *
- *  The code starts at LOG_PROCESS_CRASHES at the bottom.
+ *  The code starts at REC_PROCESS_CRASHES at the bottom.
  *
  *  Copyright (C) 2011, Hewlett-Packard Development Company, L.P.
  *
@@ -45,7 +45,7 @@
 
 #define SUCCESSFULLY_PROCESSED_TAGFILE ".hp-ams"
 #define DEBUG_TRIGGER_FILE "/tmp/.hp-ams"
-#define DEBUG_6_FILE "/tmp/hp-ams.log"
+#define DEBUG_LOG_FILE "/tmp/hp-ams.log"
 
 #define LINVER_UNK         0x0
 #define LINVER_RHEL_UNK    0x1
@@ -129,7 +129,7 @@ static void debug_log(const char *fmt, ...) {
 
     if (debug) {
         if (NULL == debug_output) {
-            debug_output = fopen(DEBUG_6_FILE, "a");
+            debug_output = fopen(DEBUG_LOG_FILE, "a");
             assert(NULL != debug_output);
         }
         //fprintf(debug_output, "[%s]: ", ctime(&t));
@@ -195,7 +195,7 @@ static void get_os_deps(os_dep_config* dep) {
         dep->debug_sym_dir_pattern = "/usr/lib/debug/lib/modules/%s";
         dep->vmlinux_pattern = "/usr/lib/debug/lib/modules/%s/vmlinux";
         dep->crash_core = "/vmcore";
-        dep->output_template = "/tmp/reckdwXXXXXX";
+        dep->output_template = "/tmp.reckdwXXXXXX";
     }
 }
 
@@ -520,12 +520,14 @@ static int log_buffer_contents_rec(char *msg) {
         memset(blob, 0, blob_sz);
         strncpy(blob, msg, blob_sz);
         blob_sz = strlen(blob);
-        if ((rc = rec_log(s_ams_rec_handle, (const char*)blob, blob_sz))
+        if ((rc = rec_api6(s_ams_rec_handle, (const char*)blob, blob_sz))
             != RECORDER_OK) {
             DEBUGMSGTL(("rec:log", "KDump log to recorder data failed (%d)\n", rc));
+            free(blob);
             return -1;
         }
         DEBUGMSGTL(("rec:log", "Logged record for code %d\n", REC_CODE_AMS_OS_CRASH));
+        free(blob);
         return 0;
     }
 
@@ -570,22 +572,25 @@ static int log_file_contents(char *filename) {
     if (fp) {
         fseek(fp, 0, SEEK_END);
         file_len = ftell(fp);
-        fseek(fp, 0, SEEK_SET);
-        buf = (char*)malloc(file_len+1);
-        
-        
-        memset(buf, 0, BUFSIZ);
+        if (file_len > 0) {
+            fseek(fp, 0, SEEK_SET);
     
-        if (buf) {
-            size_t sz;
+            buf = (char*)malloc(file_len + 1);
+    
+            if (buf) {
+                size_t sz;
 
-            sz = fread(buf, file_len, 1, fp);
-            fclose(fp);
-            rc = log_buffer_contents(buf);
-            free(buf);
-        } else {
+                memset(buf, 0, file_len + 1);
+    
+                sz = fread(buf, file_len, 1, fp);
+                rc = log_buffer_contents(buf);
+                free(buf);
+            } else {
+                rc = -1;
+            }
+        } else
             rc = -1;
-        }
+        fclose(fp);
     } else {
         rc = -1;
     }
@@ -828,11 +833,12 @@ static int update_previous_crash_entries(llist* cur, llist* prev) {
                  crash_dir, t->entry, SUCCESSFULLY_PROCESSED_TAGFILE);
         if (stat(filename, &sb)) {
             // file doesn't exist
-            fp = fopen(filename, "w");
-            fprintf(fp, "This file notes that this crash has already been processed\n");
-            fprintf(fp, "and recorded by hpHelper.\n");
-            fclose(fp);
-            debug_log ("Created %s", filename);
+            if ((fp = fopen(filename, "w")) != NULL) {
+                fprintf(fp, "This file notes that this crash has already been processed\n");
+                fprintf(fp, "and recorded by hpHelper.\n");
+                fclose(fp);
+                debug_log ("Created %s", filename);
+            }
         }
 
         t = t->next;

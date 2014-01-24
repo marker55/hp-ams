@@ -15,8 +15,6 @@
 #include <strings.h>
 #include <sys/stat.h>
 
-#include "net-snmp/net-snmp-config.h"
-#include "net-snmp/library/snmp_impl.h"
 #include <net-snmp/net-snmp-includes.h>
 #include <net-snmp/agent/net-snmp-agent-includes.h>
 #include <net-snmp/library/container.h>
@@ -41,12 +39,16 @@ int getPackage()
 
     pkg_cache = netsnmp_cache_find_by_oid(cpqHoSwVerTable_oid, 
 					  cpqHoSwVerTable_oid_len);
-    if (pkg_cache != NULL)
-        pkg_container = pkg_cache->magic;
+    if (pkg_cache == NULL)
+        return  0;
+
+    pkg_container = pkg_cache->magic;
+    if (pkg_container == NULL)
+        return 0;
 
     pkgcount = (oid)CONTAINER_SIZE(pkg_container);
 
-    if ((packages = (pkg_entry**)malloc(pkgcount * sizeof(pkg_entry)))
+    if ((packages = (pkg_entry**)malloc(pkgcount * sizeof(pkg_entry *)))
                     == NULL) {
         return 0;
     }

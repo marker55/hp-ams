@@ -71,14 +71,14 @@ void LOG_DRIVER(
 
     /* build descriptor toc */
     num_descript = sizeof(fld)/sizeof(field);
-    DEBUGMSGTL(("rec:logdriver","Driver num_descript = %d\n", num_descript));
+    DEBUGMSGTL(("rec:log","Driver num_descript = %d\n", num_descript));
     if ((toc_sz *= num_descript) > RECORDER_MAX_BLOB_SIZE) {
-        DEBUGMSGTL(("rec:logdriver","Driver Descriptor too large %ld\n", toc_sz));
+        DEBUGMSGTL(("rec:log","Driver Descriptor too large %ld\n", toc_sz));
         return;
     }
-    DEBUGMSGTL(("rec:logdriver","Driver toc_sz = %ld\n", toc_sz));
+    DEBUGMSGTL(("rec:log","Driver toc_sz = %ld\n", toc_sz));
     if ((toc = malloc(toc_sz)) == NULL) {
-        DEBUGMSGTL(("rec:logdriver","Driver Unable to malloc() %ld bytes\n", toc_sz));
+        DEBUGMSGTL(("rec:log","Driver Unable to malloc() %ld bytes\n", toc_sz));
         return;
     }
 
@@ -93,7 +93,7 @@ void LOG_DRIVER(
         toc[i].format = fld[i].sz;
         toc[i].visibility =  REC_DESC_VISIBILITY_CUSTOMER;
         strncpy(toc[i].desc, fld[i].nm, strlen(fld[i].nm));
-        DEBUGMSGTL(("rec:logdriver", "toc[i] = %p\n", &toc[i]));
+        DEBUGMSGTL(("rec:log", "toc[i] = %p\n", &toc[i]));
         dump_chunk("rec:rec_log", "descriptor", (const u_char *)&toc[i], 96);
     }
 
@@ -101,7 +101,7 @@ void LOG_DRIVER(
 
     if ((rc = rec_api4_field(s_ams_rec_handle, toc_sz, toc))
             != RECORDER_OK) {
-        DEBUGMSGTL(("rec:logdriver","Driver register descriptor failed %d\n", rc));
+        DEBUGMSGTL(("rec:log","Driver register descriptor failed %d\n", rc));
         return;
     }
     free(toc);
@@ -109,7 +109,7 @@ void LOG_DRIVER(
     /* Let's go ahead and set the code for */
     if ((rc = rec_api3(s_ams_rec_handle, REC_CODE_AMS_DRIVER))
                != RECORDER_OK) {
-        DEBUGMSGTL(("rec:logdriver", "SetRecorderFeederCode failed (%d)\n", rc));
+        DEBUGMSGTL(("rec:log", "SetRecorderFeederCode failed (%d)\n", rc));
         return;
     }
 
@@ -117,18 +117,17 @@ void LOG_DRIVER(
     drvcount = getDriver();
     for (i = 0; i < drvcount; i++ ) {
         char * end;
-        blob_sz = sizeof(REC_AMS_DriverData);
         string_list_sz = strlen(drivers[i]->name) +
                  strlen(drivers[i]->filename) +
                  strlen(drivers[i]->version) +
                  strlen(drivers[i]->timestamp) +
                  4;
         if ((blob_sz += string_list_sz) > RECORDER_MAX_BLOB_SIZE) {
-            DEBUGMSGTL(("rec:logdriver","Driver Data too large %ld\n", blob_sz));
+            DEBUGMSGTL(("rec:log","Driver Data too large %ld\n", blob_sz));
             return;
         }
         if ((blob = malloc(blob_sz)) == NULL ) {
-            DEBUGMSGTL(("rec:logdriver","Driver Unable to malloc() %ld blob\n", blob_sz));
+            DEBUGMSGTL(("rec:log","Driver Unable to malloc() %ld blob\n", blob_sz));
             goto free;
         }
         memset(blob, 0, blob_sz);
@@ -153,18 +152,18 @@ void LOG_DRIVER(
 
         strcpy(end, drivers[i]->timestamp);
 
-        DEBUGMSGTL(("rec:logdriver","Module name %s, Driver filename  %s\n",
+        DEBUGMSGTL(("rec:log","Module name %s, Driver filename  %s\n",
            drivers[i]->name, drivers[i]->filename));
-        DEBUGMSGTL(("rec:logdriver","Module version %s, Driver timestamp  %s\n",
+        DEBUGMSGTL(("rec:log","Module version %s, Driver timestamp  %s\n",
            drivers[i]->version, drivers[i]->timestamp));
 
         // Log the record
-        if ((rc = rec_log(s_ams_rec_handle, (const char*)blob, blob_sz)) !=
+        if ((rc = rec_api6(s_ams_rec_handle, (const char*)blob, blob_sz)) !=
                             RECORDER_OK) {
-            DEBUGMSGTL(("rec:logdriver", "LogRecorderData failed (%d)\n",rc));
+            DEBUGMSGTL(("rec:log", "LogRecorderData failed (%d)\n",rc));
         }
 
-        DEBUGMSGTL(("rec:logdriver", "Logged record for code %d\n",
+        DEBUGMSGTL(("rec:log", "Logged record for code %d\n",
                     REC_CODE_AMS_DRIVER));
 free:
         free(blob);
@@ -174,6 +173,7 @@ free:
         if (drivers[i]->name != NULL) free(drivers[i]->name);
         free(drivers[i]);
     }
-    free(drivers);
+    if (drvcount != 0)
+        free(drivers);
 }
 
