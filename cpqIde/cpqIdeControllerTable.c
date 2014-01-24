@@ -39,6 +39,8 @@ initialize_table_cpqIdeControllerTable(void)
     netsnmp_table_registration_info *table_info = NULL;
     netsnmp_cache  *cache = NULL;
 
+    int reg_tbl_ret = SNMPERR_SUCCESS;
+
     DEBUGMSGTL(("cpqIdeControllerTable:init",
                 "initializing table cpqIdeControllerTable\n"));
 
@@ -130,7 +132,8 @@ initialize_table_cpqIdeControllerTable(void)
     /*
      * register the table
      */
-    if (SNMPERR_SUCCESS != netsnmp_register_table(reg, table_info)) {
+    reg_tbl_ret = netsnmp_register_table(reg, table_info);
+    if (reg_tbl_ret != SNMPERR_SUCCESS) {
         snmp_log(LOG_ERR,
                  "error registering table handler for cpqIdeControllerTable\n");
         goto bail;
@@ -155,8 +158,9 @@ initialize_table_cpqIdeControllerTable(void)
     if (container)
         CONTAINER_FREE(container);
 
-    if (reg)
-        netsnmp_handler_registration_free(reg);
+    if (reg_tbl_ret == SNMPERR_SUCCESS) 
+        if (reg)
+            netsnmp_handler_registration_free(reg);
 }
 
 /** Typical data structure for a row entry */

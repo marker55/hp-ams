@@ -11,8 +11,123 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 #include <netdb.h>
 #include "utils.h"
+#include "smbios.h"
+
+int getChassisPort_str(char * pci) 
+{
+    unsigned short dom = 0;
+    unsigned char  bus = 0, dev = 0, func = 0;
+    if (pci == NULL) return 0;
+    sscanf(pci, "%4hx:%2hhx:%2hhx.%1hhx", &dom, &bus, &dev, &func);
+    return getChassisPort(bus, dev, func);
+}
+
+int getChassisPort(int bus, int dev, int func) 
+{
+    int i = 0;
+    PSMBIOS_ONBOARD_DEVICES_EX_INFORMATION portInfo;
+
+    while (SmbGetRecordByType(SMBIOS_SMBIOS_ONBOARD_DEVICES_EX, 
+                              i , (void *)&portInfo) != 0) {
+        if ((bus == portInfo->byBusNumber) &&
+            (dev == portInfo->byDeviceNumber) &&
+            (func == portInfo->byFunctionNumber))
+            return ((int) portInfo->byDevTypeInstance);
+        i++;
+    }
+    return 0;
+}
+
+int getPCIslot_str(char * pci)
+{
+    unsigned short dom = 0;
+    unsigned char  bus = 0, dev = 0, func = 0;
+    if (pci == NULL) return 0;
+    sscanf(pci, "%4hx:%2hhx:%2hhx.%1hhx", &dom, &bus, &dev, &func);
+    return getPCIslot_bus(bus);
+}
+
+int getPCIslot_bus(int  bus)
+{
+    int i = 0;
+    PSMBIOS_SYSTEM_SLOTS slotInfo;
+
+    while (SmbGetRecordByType(SMBIOS_SYS_SLOTS, i , (void *)&slotInfo) != 0) {
+        if (bus == slotInfo->byBusNumber)
+            return ((int)slotInfo->wSlotID);
+        i++;
+    }
+    return 0;
+}
+
+/* buffer point to /sys/class/scsi_host/host? */
+int pcislot_scsi_host(char * buffer)
+{
+    char lbuffer[256], *pbuffer;
+    char *value = "";
+    int len;
+
+    if ((len = readlink(buffer, lbuffer, 253)) <= 0) {
+        strcat(buffer, "/device");
+        len = readlink(buffer, lbuffer, 253);
+    }
+    if (len > 0) {
+        lbuffer[len]='\0'; /* Null terminate the string */
+        pbuffer = strrchr(lbuffer, '/');
+        while (pbuffer !=  (char *) 0) {
+            *(pbuffer++) = '\0';
+            if ((*pbuffer >= 0x30) && (*pbuffer <= 0x39))
+                break;
+            pbuffer = strrchr(lbuffer, '/');
+        }
+        if (pbuffer != NULL) {
+            value = pbuffer;
+            if ((pbuffer = strrchr(pbuffer,'.')) != (char *) 0)
+                *(pbuffer) = '\0';
+        }
+    }
+    return getPCIslot_str(value);
+}
+
+int get_pcislot(char *bus_info)
+{
+    struct dirent **filelist;
+    int slotcount;
+    char fname[256] = "/sys/bus/pci/slots/";
+    int sysdirlen;
+    char buf[80];
+    int bc;
+    int slotfd = -1;
+    int i;
+    int ret = 0;
+
+
+    /* the bus_info var is in "domain:bus:slot.func".
+     * sometimes the domain may be absent, in which case
+     * we have "bus:slot.func". */
+    if ((slotcount = scandir(fname, &filelist, file_select, alphasort)) > 0) {
+        sysdirlen = strlen(fname);
+        for (i = 0; i < slotcount; i++) {
+            strcpy(&fname[sysdirlen], filelist[i]->d_name);
+            strcat(fname, "/address");
+            if ((slotfd = open(fname, O_RDONLY)) != -1 ) {
+                bc = read(slotfd, buf, 80);
+                if (bc  > 0) {
+                    buf[bc] = 0;
+                    if (!strncmp(buf, bus_info, bc - 1))
+                        ret = i + 1;
+                }
+                close(slotfd);
+            }
+            free (filelist[i]);
+        }
+        free(filelist);
+    }
+    return ret;
+}
 
 int file_select(const struct dirent *entry)
 {
@@ -38,9 +153,13 @@ int proc_select(const struct dirent *entry)
  ****************************************************************************/
 read_buf_t *ReadFile(char *FileName)
 {
-    int readsize = 1024;
+    int readsize = 2048;
+    int bufsize;
+
+    int readcount, readnext;
+
     int fileFD;
-    int readcount;
+    char * file_ptr = NULL;
     read_buf_t *readbuf = NULL;
 
     if (FileName  != NULL) {
@@ -49,28 +168,22 @@ read_buf_t *ReadFile(char *FileName)
         }
     } else
         return (NULL);
-    if (lseek(fileFD, 0, SEEK_SET) != 0) {
-        return (NULL);
+
+    bufsize = readsize;
+    readbuf = malloc(bufsize + sizeof(read_buf_t));
+    memset(readbuf, 0, bufsize);
+    readnext = 0;
+    while ((readcount = read(fileFD, &readbuf->buf[readnext], readsize)) > 0) {
+        readnext += readcount;
+        if ((readnext + readsize) > bufsize) {
+            bufsize += readsize;
+            readbuf = realloc(readbuf, bufsize + sizeof(read_buf_t));
     }
-    readbuf = malloc(readsize + sizeof(read_buf_t));
-    memset(readbuf, 0, (readsize + sizeof(int)));
-    readcount = read(fileFD, readbuf->buf, readsize);
-    while ((readcount == readsize) && (readcount <= 65535)) {
-        free(readbuf);
-        if (lseek(fileFD, 0, SEEK_SET) != 0)
-            return (NULL);
-        readsize = 2 * readsize;
-        readbuf = malloc(readsize + sizeof(read_buf_t));
-        memset(readbuf, 0, (readsize + sizeof(read_buf_t)));
-        readcount = read(fileFD, readbuf->buf, readsize);
     }
+    
     close(fileFD);
-    if (readcount <= 0) {
-        return (NULL);
-    } else {
-        readbuf->count = readcount;
+    readbuf->count = readnext;
         return (readbuf);
-    }
 }
 
 read_line_t *ReadFileLines(char *FileName)
@@ -78,7 +191,7 @@ read_line_t *ReadFileLines(char *FileName)
     char *str = NULL;
     unsigned int  lc = 0;
     unsigned int  lines_len = sizeof(read_line_t);
-
+    char *addrp = NULL;
     read_buf_t *buf;
     read_line_t *lines;
     char *splitbuf[256];
@@ -86,24 +199,24 @@ read_line_t *ReadFileLines(char *FileName)
     if ((buf = ReadFile(FileName)) == (read_buf_t *) 0 ) {
         return NULL;
     }
-
-    for (lc = 0, str = (char *)buf->buf;;lc++, str = NULL) {
-        splitbuf[lc] = strtok(str, "\n");
-        if (splitbuf[lc] == NULL)
-            break;
+    /* Change linefeeds to EOS */
+    addrp = buf->buf;
+    while (addrp = strchr(addrp, '\n') ) {
+        *(addrp++) = '\0';
+        lc++;
     }
-
     /* allocate buffer our lines, for count+ pointer+ pointer[lc] */
     lines_len += (lc * sizeof(char *));
     lines = malloc(lines_len);
     memset(lines, 0, lines_len);
-    lines->read_buf = buf;
-    for (lc = 0; splitbuf[lc] != (char *) 0; lc++) {
-        lines->buf[lc] = malloc(strlen(splitbuf[lc]) + 1);
-        /* copy the null byte when we copy the string */
-        strncpy(lines->buf[lc], splitbuf[lc], strlen(splitbuf[lc]) + 1);
-    }
     lines->count = lc;
+    lines->read_buf = buf;
+    lines->line[0] = buf->buf;
+    addrp = buf->buf;
+    for  (lc = 1; lc < lines->count; lc++) {
+        addrp = index(addrp, '\0');
+        lines->line[lc] = ++addrp;
+    }
     return (lines);
 }
 
@@ -222,6 +335,14 @@ void _get_sysfs_numeric(char * sysfs_attr, char *fmt, void *value)
     return;
 }
  
+unsigned long long get_sysfs_llhex(char * sysfs_attr)
+{
+    unsigned long  long number;
+    
+    _get_sysfs_numeric(sysfs_attr, "%llx", &number);
+    return number;
+}
+
 unsigned long get_sysfs_lhex(char * sysfs_attr)
 {
     unsigned long  number;
@@ -266,7 +387,7 @@ unsigned long long get_sysfs_ullong(char * sysfs_attr)
 {
     unsigned long long number;
 
-    _get_sysfs_numeric(sysfs_attr, "%lu", &number);
+    _get_sysfs_numeric(sysfs_attr, "%llu", &number);
     return number;
 }
 
@@ -290,14 +411,16 @@ long long get_sysfs_llong(char * sysfs_attr)
 #ifdef UTEST
         int main(int argc, char **argv)
         {
-            char *prefix[] = {"/dev/",0};
             int count, idx;
+read_line_t *s;
 
-            file_tok_t *fsentries;
-            line_tok_t *fsentry;
-            distro_id_t * distro;
+            s = ReadFileLines("/proc/interrupts");
+            fprintf(stderr,"read_size = %d\n",s->read_buf->count);
+            fprintf(stderr,"count = %d\n",s->count);
+            for (count=0; count < s->count; count++) 
+                fprintf(stderr,"%s\n",s->line[count]);
 
-            fsentries = ReadFilteredFileTokens("/etc/mtab",prefix,' ');
+/*
             if ((distro = getDistroInfo()) != NULL ) {
                 fprintf (stderr,"%s\n",distro->LongDistro);
                 fprintf (stderr,"%s\n",distro->Vendor);
@@ -311,7 +434,7 @@ long long get_sysfs_llong(char * sysfs_attr)
             fprintf(stderr,"hasTelnet() = %d\n",hasTelnet("/proc/net/tcp"));
             fprintf(stderr,"hasTelnet6() = %d\n",hasTelnet("/proc/net/tcp6"));
     
-            /*    if (fsentries == (read_line_t *) 0)  
+                if (fsentries == (read_line_t *) 0)  
                   fprintf(stderr," number of lines %d \n",0);
                   else
                   fprintf(stderr," number of lines %d \n",fsentries->count);

@@ -27,7 +27,7 @@ typedef struct cpqIdeAtaDiskTable_entry_s {
     size_t          cpqIdeAtaDiskSerialNumber_len;
     long            cpqIdeAtaDiskStatus;
     long            cpqIdeAtaDiskCondition;
-    long            cpqIdeAtaDiskCapacity;
+    unsigned long   cpqIdeAtaDiskCapacity;
     long            cpqIdeAtaDiskSmartEnabled;
     long            cpqIdeAtaDiskTransferMode;
     long            cpqIdeAtaDiskChannel;

@@ -41,6 +41,12 @@ void netsnmp_arch_idecntlr_init(void);
 void netsnmp_arch_idedisk_init(void);
 
 extern  int alphasort();
+extern unsigned char*get_ScsiGeneric(unsigned char*);
+extern unsigned long long get_BlockSize(unsigned char*);
+extern int get_DiskType(char *);
+extern char * get_DiskModel(char *);
+extern char * get_DiskRev(char *);
+extern char * get_DiskState(char *);
 
 static struct dirent **ScsiHostlist;
 static char * ScsiHostDir = "/sys/class/scsi_host/";
@@ -57,20 +63,6 @@ static struct dirent **GenericDisklist;
 static int NumGenericDisk;
 
 static char *current_Cntlr;
-
-static int block_select(const struct dirent *entry)
-{
-    if (strncmp(entry->d_name,"block:sd",8) == 0)
-            return(1);
-    return 0;
-}
-
-static int generic_select(const struct dirent *entry)
-{
-    if (strncmp(entry->d_name,"scsi_generic:sg",15) == 0)
-            return(1);
-    return 0;
-}
 
 static int disk_select(const struct dirent *entry)
 {
@@ -110,12 +102,13 @@ int netsnmp_arch_idecntlr_container_load(netsnmp_container* container)
         strcpy(attribute, buffer);
         strcat(attribute, sysfs_attr[CLASS_PROC_NAME]);
         if ((value = get_sysfs_str(attribute)) != NULL) {
-            if (strcmp(value, "ata_piix") == 0) {
+            if ((strcmp(value, "ahci") == 0) || 
+                (strcmp(value, "ata_piix") == 0)) {
                 strcpy(attribute, buffer);
                 strcat(attribute, sysfs_attr[CLASS_UNIQUE_ID]);
                 CntlrIndex = get_sysfs_int(attribute);
 
-                entry = cpqIdeControllerTable_createEntry(container, 
+                entry = cpqIdeControllerTable_createEntry(container,
                                                           (oid)CntlrIndex);
             }
             free(value);
@@ -127,9 +120,11 @@ int netsnmp_arch_idecntlr_container_load(netsnmp_container* container)
             sscanf(ScsiHostlist[i]->d_name, "host%d", &Host); 
 
             sprintf(entry->host,"%d:",Host);
-            entry->cpqIdeControllerOverallCondition = CPQ_REG_OTHER;
+            entry->cpqIdeControllerOverallCondition = IDE_CONTROLLER_STATUS_OK;
             entry->cpqIdeControllerStatus = CPQ_REG_OTHER;
     
+            entry->cpqIdeControllerSlot =  pcislot_scsi_host(buffer);
+
             strcpy(attribute, buffer);
             strcat(attribute, sysfs_attr[CLASS_STATE]);
             if ((value = get_sysfs_str(attribute)) != NULL) {
@@ -138,6 +133,10 @@ int netsnmp_arch_idecntlr_container_load(netsnmp_container* container)
                 free(value);
             }
     
+            strcpy(entry->cpqIdeControllerModel, "Standard IDE Controller");
+            entry->cpqIdeControllerModel_len = 
+                                        strlen(entry->cpqIdeControllerModel);
+
             entry->cpqIdeControllerCondition = 
                     MAKE_CONDITION(entry->cpqIdeControllerCondition, 
                                    entry->cpqIdeControllerStatus);
@@ -166,6 +165,8 @@ int netsnmp_arch_idedisk_container_load(netsnmp_container* container)
     char attribute[256];
     char *value;
     long long size;
+    char *scsi;
+    char *generic;
 
     int Cntlr, Bus, Index, Target;
     char * OS_name;
@@ -199,6 +200,9 @@ int netsnmp_arch_idedisk_container_load(netsnmp_container* container)
         current_Cntlr = cntlr->host;
         DEBUGMSGTL(("idedisk:container:load", 
                     "Starting Loop i%s\n", current_Cntlr));
+        cntlr->cpqIdeControllerOverallCondition =
+                  MAKE_CONDITION(cntlr->cpqIdeControllerOverallCondition,
+                                 cntlr->cpqIdeControllerCondition);
         /* Now chack for those HBA's in  the SCSI diskss */
         if ((NumScsiDisk = scandir(ScsiDiskDir, &ScsiDisklist, 
                                    disk_select, alphasort)) <= 0) {
@@ -239,61 +243,42 @@ int netsnmp_arch_idedisk_container_load(netsnmp_container* container)
 
                 DEBUGMSGTL(("idedisk:container:load", "Entry created\n"));
 
-                strcpy(attribute,buffer);
-                strcat(attribute, sysfs_attr[DEVICE_REV]);
-                if ((value = get_sysfs_str(attribute)) != NULL) {
+		scsi = ScsiDisklist[j]->d_name;
+
+                if ((value = get_DiskRev(scsi)) != NULL) {
                     strcpy(disk->cpqIdeAtaDiskFwRev, value);
                     disk->cpqIdeAtaDiskFwRev_len = 
                                                strlen(disk->cpqIdeAtaDiskFwRev);
                     free(value);
                 }
 
-                strcpy(attribute,buffer);
-                strcat(attribute, sysfs_attr[DEVICE_MODEL]);
-                if ((value = get_sysfs_str(attribute)) != NULL) {
+                if ((value = get_DiskModel(scsi)) != NULL) {
                     strcpy(disk->cpqIdeAtaDiskModel, value);
                     disk->cpqIdeAtaDiskModel_len = 
                                                strlen(disk->cpqIdeAtaDiskModel);
                     free(value);
                 }
 
-                strcpy(attribute,buffer);
-                strcat(attribute, sysfs_attr[DEVICE_STATE]);
-                if ((value = get_sysfs_str(attribute)) != NULL) {
+                if ((value = get_DiskState(scsi)) != NULL) {
                     if (strcmp(value, "running") == 0)
                         disk->cpqIdeAtaDiskStatus = SAS_PHYS_STATUS_OK;
                     free(value);
                 }
-    
-                strcpy(attribute,buffer);
-                strcat(attribute,"/device/");
 
-                /* Look for block:sd? */
-                if ((NumBlockDisk = scandir(attribute, &BlockDisklist,
-                                        block_select, alphasort))  >0) {
+                disk->cpqIdeAtaDiskCapacity = get_BlockSize(scsi) >> 11;
 
-                    strcat(attribute,BlockDisklist[0]->d_name);
-                    strcat(attribute,sysfs_attr[BLOCK_SIZE]);
-                    size = get_sysfs_llong(attribute);
-                    /* Size is in 512 block, need mmbytes 
-                    so left shift 11 bits */
-                    disk->cpqIdeAtaDiskCapacity = size>>11;
-                    free(BlockDisklist[0]);
-                    free(BlockDisklist);
-                }
-
-                /* Look for scsi_genric:sg? */
-                if ((NumGenericDisk = scandir(attribute, &GenericDisklist,
-                                        generic_select, alphasort))  >0) {
-    
-                    OS_name = index(GenericDisklist[0]->d_name,':');
-                    OS_name++;
+                generic = get_ScsiGeneric(scsi);
+                if (generic != NULL) {
                     memset(disk->cpqIdeAtaDiskOsName, 0, 256);
-                    sprintf(disk->cpqIdeAtaDiskOsName,"/dev/%s", OS_name);
-                    disk->cpqIdeAtaDiskOsName_len = strlen(OS_name);
-                    free(GenericDisklist[0]);
-                    free(GenericDisklist);
+                    disk->cpqIdeAtaDiskOsName_len =
+                                        sprintf(disk->cpqIdeAtaDiskOsName,
+                                                "/dev/%s",
+                                                generic);
+                    free(generic);
                 }
+                DEBUGMSGTL(("idedisk:container:load", "generic dev is %s\n",
+                                disk->cpqIdeAtaDiskOsName));
+
             }
             if ((disk_fd = open(disk->cpqIdeAtaDiskOsName, 
                                 O_RDWR | O_NONBLOCK)) >= 0) {

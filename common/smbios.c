@@ -15,6 +15,45 @@ static SMBIOSEntryPoint EPS;
 static u_char * pSMBTables = NULL;
 
 /*
+ *  * Probe for EFI interface
+ *   */
+#define EFI_NOT_FOUND   (-1)
+#define EFI_NO_SECTION   (-2)
+static int address_from_efi(char *section, size_t *address)
+{
+    FILE *systab;
+    char linebuf[64];
+    int ret;
+
+    *address = 0; /* Prevent compiler warning */
+
+    /*
+     * Linux up to 2.6.6: /proc/efi/systab
+     * Linux 2.6.7 and up: /sys/firmware/efi/systab
+     */
+    if ((systab = fopen("/sys/firmware/efi/systab", "r")) == NULL
+             && (systab = fopen("/proc/efi/systab", "r")) == NULL) {
+        /* No EFI interface, fallback to memory scan */
+        return EFI_NOT_FOUND;
+    }
+    ret = EFI_NO_SECTION;
+    while ((fgets(linebuf, sizeof(linebuf) - 1, systab)) != NULL) {
+        char *addrp = strchr(linebuf, '=');
+        if (addrp != NULL) {
+            *(addrp++) = '\0';
+            if (strcmp(linebuf, section) == 0) {
+                *address = strtoul(addrp, NULL, 0);
+                ret = 0;
+                break;
+            }
+        }
+    }
+    fclose(systab);
+
+    return ret;
+}
+
+/*
  *  Open a file.
  *
  *	input:
@@ -107,13 +146,31 @@ int ReadPhysMem(u_int offset, u_int size, u_char * buffer) {
  */
 int InitSMBIOS() {
     u_char * pBuf = NULL;
+    size_t fp, count;
     u_char* p;
+    int efi;
+
     SMBIOSEntryPoint *pEPS = NULL;
 
     if ((pBuf = malloc(SMBIOS_EPS_SCAN_SIZE)) == NULL)
         return fSMBiosInited;
 
-    if (ReadPhysMem(SMBIOS_EPS_ADDR_START, SMBIOS_EPS_SCAN_SIZE, pBuf)) {
+        /* First try EFI (ia64, Intel-based Mac) */
+    if ((efi = address_from_efi("SMBIOS", &fp)) >= 0) {
+        count = 0x20;
+    } else {
+        if (efi == EFI_NO_SECTION) {
+            free(pBuf);
+            return 0;
+        }
+
+        count = SMBIOS_EPS_SCAN_SIZE;
+        fp = SMBIOS_EPS_ADDR_START;
+    }
+
+    
+    if (ReadPhysMem(fp, count, pBuf)) {
+
         /* scan 0xF0000 through 0xFFFFF for an EPS (Entry Point Structure) */
         for (p = pBuf; p < pBuf + SMBIOS_EPS_SCAN_SIZE;
                 p += SMBIOS_EPS_BOUNDRY) {
@@ -135,8 +192,8 @@ int InitSMBIOS() {
             }
             break;
         }
-        free(pBuf);
     }
+    free(pBuf);
     return fSMBiosInited;
 }
 
@@ -398,4 +455,5 @@ int SmbGetSysGen() {
             } 
         len--;
     } 
+    return 0;
 }

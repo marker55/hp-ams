@@ -34,8 +34,10 @@ typedef struct cpqSasHbaTable_entry_s {
     size_t          cpqSasHbaBiosVersion_len;
 
     char            host[20];
+    long            OldStatus;
     oid             cpqHoFwVerIndex;
 
+    sas_connector_info Reference[32];
     int             valid;
 } cpqSasHbaTable_entry;
 /*

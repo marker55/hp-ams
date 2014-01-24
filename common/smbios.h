@@ -58,6 +58,7 @@
 #define SMBIOS_SMBIOS_ONBOARD_DEVICES_EX        41
 #define SMBIOS_INACTIVE                         126
 #define SMBIOS_END_OF_TABLE                     127
+#define SMBIOS_HPOEM_SYSID                      195
 
 
 #define SmbOffsetOfMember(s,m)   ((size_t)(&(((s *)0)->m)))
@@ -1696,6 +1697,13 @@ typedef struct _SMBIOSEntryPoint
    u_short    wNumStructures;                 /* number of structures present */
    u_char    byBCDRevision;                  /* BCD revision */
 } SMBIOSEntryPoint;
+
+/* type 195 */
+typedef struct _CQSMBIOS_SERV_SYS_ID
+{
+   SMBIOS_HEADER Header;                   /* common header */
+   unsigned char  serverSystemIdStr[32];
+} CQSMBIOS_SERV_SYS_ID, *PCQSMBIOS_SERV_SYS_ID;
 
 #pragma pack()
 

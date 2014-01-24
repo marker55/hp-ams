@@ -27,7 +27,7 @@ typedef struct cpqSasPhyDrvTable_entry_s {
     long            cpqSasPhyDrvCondition;
     char            cpqSasPhyDrvFWRev[9];
     size_t          cpqSasPhyDrvFWRev_len;
-    long            cpqSasPhyDrvSize;
+    unsigned long   cpqSasPhyDrvSize;
     u_long          cpqSasPhyDrvUsedReallocs;
     char            cpqSasPhyDrvSerialNumber[41];
     size_t          cpqSasPhyDrvSerialNumber_len;
@@ -40,8 +40,11 @@ typedef struct cpqSasPhyDrvTable_entry_s {
     long            cpqSasPhyDrvType;
     char            cpqSasPhyDrvSasAddress[17];
     size_t          cpqSasPhyDrvSasAddress_len;
+    long            cpqSasPhyDrvMediaType;
 
     long            OldStatus;
+    cpqSasHbaTable_entry *hba;
+    oid             FW_idx;
     int             valid;
 } cpqSasPhyDrvTable_entry;
 /*
@@ -73,4 +76,5 @@ Netsnmp_Node_Handler cpqSasPhyDrvTable_handler;
 #define COLUMN_CPQSASPHYDRVHOTPLUG		15
 #define COLUMN_CPQSASPHYDRVTYPE		16
 #define COLUMN_CPQSASPHYDRVSASADDRESS		17
+#define COLUMN_CPQSASPHYDRVMEDIATYPE		18
 #endif                          /* CPQSASPHYDRVTABLE_H */

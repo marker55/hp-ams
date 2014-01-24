@@ -5,11 +5,6 @@ enum {
     CLASS_UNIQUE_ID,
     CLASS_PROC_NAME,
     CLASS_STATE,
-    DEVICE_STATE,
-    DEVICE_REV,
-    DEVICE_MODEL,
-    DEVICE_VENDOR,
-    BLOCK_SIZE,
     MAX_VALUE_FILES
 };
 
@@ -17,11 +12,6 @@ static const char *sysfs_attr[MAX_VALUE_FILES] = {
     [CLASS_UNIQUE_ID] = "/unique_id",
     [CLASS_PROC_NAME] = "/proc_name",
     [CLASS_STATE] = "/state",
-    [DEVICE_STATE] = "/device/state",
-    [DEVICE_REV] = "/device/rev",
-    [DEVICE_MODEL] = "/device/model",
-    [DEVICE_VENDOR] = "/device/vendor",
-    [BLOCK_SIZE] = "/size",
 
 };
 

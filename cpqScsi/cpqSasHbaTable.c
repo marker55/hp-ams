@@ -8,6 +8,7 @@
 #include <net-snmp/agent/net-snmp-agent-includes.h>
 #include <net-snmp/agent/table_container.h>
 
+#include "common/scsi_info.h"
 #include "cpqSasHbaTable.h"
 
 int HbaCondition;
@@ -39,6 +40,8 @@ initialize_table_cpqSasHbaTable(void)
     netsnmp_container *container = NULL;
     netsnmp_table_registration_info *table_info = NULL;
     netsnmp_cache  *cache = NULL;
+
+    int reg_tbl_ret = SNMPERR_SUCCESS;
 
     DEBUGMSGTL(("cpqSasHbaTable:init",
                 "initializing table cpqSasHbaTable\n"));
@@ -106,6 +109,7 @@ initialize_table_cpqSasHbaTable(void)
         goto bail;
     }
     cache->flags = NETSNMP_CACHE_PRELOAD |
+                   NETSNMP_CACHE_DONT_FREE_BEFORE_LOAD |
                    NETSNMP_CACHE_DONT_FREE_EXPIRED |
                    NETSNMP_CACHE_DONT_AUTO_RELEASE |
                    NETSNMP_CACHE_DONT_INVALIDATE_ON_SET;
@@ -129,7 +133,8 @@ initialize_table_cpqSasHbaTable(void)
     /*
      * register the table
      */
-    if (SNMPERR_SUCCESS != netsnmp_register_table(reg, table_info)) {
+    reg_tbl_ret = netsnmp_register_table(reg, table_info);
+    if (reg_tbl_ret != SNMPERR_SUCCESS) {
         snmp_log(LOG_ERR,
                  "error registering table handler for cpqSasHbaTable\n");
         goto bail;
@@ -154,8 +159,9 @@ initialize_table_cpqSasHbaTable(void)
     if (container)
         CONTAINER_FREE(container);
 
-    if (reg)
-        netsnmp_handler_registration_free(reg);
+    if (reg_tbl_ret == SNMPERR_SUCCESS)
+        if (reg)
+            netsnmp_handler_registration_free(reg);
 }
 
 /** create a new row in the table */

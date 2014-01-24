@@ -23,14 +23,21 @@ typedef struct _read_buf_t {
 typedef struct _read_line_t {
     unsigned int count;
     read_buf_t *read_buf;
-    char * buf[];
+    char * line[];
 } read_line_t;
 
 
 read_buf_t *ReadFile(char *Filename);
 read_line_t *ReadFileLines(char *FileName);
 
+int getChassisPort_str(char *);
+int getChassisPort(int, int, int);
+int getPCIslot_str(char *);
+int getPCIslot_bus(int);
+
 char * get_sysfs_str(char *);
+unsigned long long get_sysfs_llhex(char *);
+unsigned long long get_sysfs_ullong(char *);
 unsigned long  get_sysfs_lhex(char *);
 unsigned int   get_sysfs_ihex(char *);
 unsigned short get_sysfs_shex(char *);

@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
             char *str = NULL;
             char *tokens[64];
             int tidx = 0;
-            for (str = nicdblines->buf[i]; ; tidx++) {
+            for (str = nicdblines->line[i]; ; tidx++) {
                 tokens[tidx] = str;
                 str = index(tokens[tidx],',');
                 if (str == NULL)

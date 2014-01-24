@@ -9,33 +9,24 @@ int get_defect_data_size(int);
 enum {
     DEVICE_SUBSYSTEM_DEVICE,
     DEVICE_SUBSYSTEM_VENDOR,
+    CLASS_BOARD_TRACER,
     CLASS_UNIQUE_ID,
     CLASS_VERSION_FW,
     CLASS_VERSION_BIOS,
     CLASS_MODEL,
     CLASS_STATE,
-    DEVICE_STATE,
-    DEVICE_REV,
-    DEVICE_MODEL,
-    DEVICE_VENDOR,
-    BLOCK_SIZE,
     MAX_VALUE_FILES
 };
 
 static const char *sysfs_attr[MAX_VALUE_FILES] = {
     [DEVICE_SUBSYSTEM_DEVICE] = "/device/../subsystem_device",
     [DEVICE_SUBSYSTEM_VENDOR] = "/device/../subsystem_vendor",
+    [CLASS_BOARD_TRACER] = "/board_tracer",
     [CLASS_UNIQUE_ID] = "/unique_id",
     [CLASS_VERSION_FW] = "/version_fw",
     [CLASS_VERSION_BIOS] = "/version_bios",
     [CLASS_MODEL] = "/model",
     [CLASS_STATE] = "/state",
-    [DEVICE_STATE] = "/device/state",
-    [DEVICE_REV] = "/device/rev",
-    [DEVICE_MODEL] = "/device/model",
-    [DEVICE_VENDOR] = "/device/vendor",
-    [BLOCK_SIZE] = "/size",
-
 };
 
 #define MAKE_CONDITION(total, new)  (new > total ? new : total)

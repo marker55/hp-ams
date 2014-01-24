@@ -6,6 +6,8 @@
 #define __i8    char
 #define IOCMASK 0x90
 #define SAS_GET_CNTLR_CONFIG   0xCC770002
+#define SAS_GET_CONNECTOR_INFO          0xCC770024
+
 #define SAS_TIMEOUT      60
 
 #define SAS_DATA_READ    0
@@ -70,8 +72,23 @@ typedef struct _sashba_config_buf {
     sashba_config Configuration;
 } sashba_config_buf;
 
+typedef struct _sas_connector_info {
+   __u32 uPinout;  
+   __u8  bConnector[16];
+   __u8  bLocation;
+   __u8  bReserved[11];
+   __u32 uConnectorPinout;
+} sas_connector_info;
+
+typedef struct _sas_connector_info_buf {
+   ioctl_hdr IoctlHeader;
+   sas_connector_info Reference[32];
+} sas_connector_info_buf;
+
 #pragma pack()
 sashba_config_buf * SasGetHbaConfig (int, char *);
+sas_connector_info_buf * SasGetHbaConnector (int, char *);
 
-#endif // _CSMI_SAS_H_
+
+#endif // _SCSI_INFO_H_
 

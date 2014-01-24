@@ -8,10 +8,17 @@
 #include <net-snmp/agent/net-snmp-agent-includes.h>
 #include <net-snmp/agent/net-snmp-agent-includes.h>
 #include <net-snmp/agent/table_container.h>
+
+#include "common/scsi_info.h"
+#include "cpqSasHbaTable.h"
 #include "cpqSasPhyDrvTable.h"
 
 int SasDiskCondition;
 
+const oid       cpqSasPhyDrvTable_oid[] =
+        { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1 };
+const size_t    cpqSasPhyDrvTable_oid_len =
+        OID_LENGTH(cpqSasPhyDrvTable_oid);
 extern int      netsnmp_arch_sasphydrv_container_load(netsnmp_container*);
 static void     _cache_free(netsnmp_cache * cache, void *magic);
 static int      _cache_load(netsnmp_cache * cache, void *vmagic);
@@ -30,15 +37,13 @@ init_cpqSasPhyDrvTable(void)
 void
 initialize_table_cpqSasPhyDrvTable(void)
 {
-    const oid       cpqSasPhyDrvTable_oid[] =
-        { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1 };
-    const size_t    cpqSasPhyDrvTable_oid_len =
-        OID_LENGTH(cpqSasPhyDrvTable_oid);
     netsnmp_handler_registration *reg = NULL;
     netsnmp_mib_handler *handler = NULL;
     netsnmp_container *container = NULL;
     netsnmp_table_registration_info *table_info = NULL;
     netsnmp_cache  *cache = NULL;
+
+    int reg_tbl_ret = SNMPERR_SUCCESS;
 
     DEBUGMSGTL(("cpqSasPhyDrvTable:init",
                 "initializing table cpqSasPhyDrvTable\n"));
@@ -74,7 +79,7 @@ initialize_table_cpqSasPhyDrvTable(void)
                                      ASN_INTEGER,       /* index: cpqSasPhyDrvIndex */
                                      0);
     table_info->min_column = COLUMN_CPQSASPHYDRVHBAINDEX;
-    table_info->max_column = COLUMN_CPQSASPHYDRVSASADDRESS;
+    table_info->max_column = COLUMN_CPQSASPHYDRVMEDIATYPE;
 
     /*************************************************
      *
@@ -107,7 +112,12 @@ initialize_table_cpqSasPhyDrvTable(void)
         snmp_log(LOG_ERR, "error creating cache for cpqSasPhyDrvTable\n");
         goto bail;
     }
-    cache->flags = NETSNMP_CACHE_DONT_INVALIDATE_ON_SET;
+    cache->flags = NETSNMP_CACHE_PRELOAD |
+                   NETSNMP_CACHE_DONT_FREE_BEFORE_LOAD |
+                   NETSNMP_CACHE_DONT_FREE_EXPIRED |
+                   NETSNMP_CACHE_DONT_AUTO_RELEASE |
+                   NETSNMP_CACHE_DONT_INVALIDATE_ON_SET;
+
     cache->magic = container;
 
     handler = netsnmp_cache_handler_get(cache);
@@ -127,7 +137,8 @@ initialize_table_cpqSasPhyDrvTable(void)
     /*
      * register the table
      */
-    if (SNMPERR_SUCCESS != netsnmp_register_table(reg, table_info)) {
+    reg_tbl_ret = netsnmp_register_table(reg, table_info);
+    if (reg_tbl_ret != SNMPERR_SUCCESS) {
         snmp_log(LOG_ERR,
                  "error registering table handler for cpqSasPhyDrvTable\n");
         goto bail;
@@ -156,8 +167,9 @@ initialize_table_cpqSasPhyDrvTable(void)
     if (container)
         CONTAINER_FREE(container);
 
-    if (reg)
-        netsnmp_handler_registration_free(reg);
+    if (reg_tbl_ret == SNMPERR_SUCCESS)
+        if (reg)
+            netsnmp_handler_registration_free(reg);
 }
 
 /** Typical data structure for a row entry */
@@ -186,9 +198,13 @@ void
 cpqSasPhyDrvTable_removeEntry(netsnmp_container * container,
                               cpqSasPhyDrvTable_entry * entry)
 {
+    int fw_idx;
 
     if (!entry)
         return;                 /* Nothing to remove */
+    DEBUGMSGTL(("netlink:disk", "RE FW index to be removed = %ld\n", entry->FW_idx));
+    fw_idx = unregister_FW_version(entry->FW_idx);
+    DEBUGMSGTL(("netlink:disk", "RE unregister FW index returned = %d\n", fw_idx));
     CONTAINER_REMOVE(container, entry);
     if (entry)
         SNMP_FREE(entry);       /* XXX - release any other internal resources */
@@ -415,6 +431,15 @@ cpqSasPhyDrvTable_handler(netsnmp_mib_handler *handler,
                                          table_entry->
                                          cpqSasPhyDrvSasAddress_len);
                 break;
+            case COLUMN_CPQSASPHYDRVMEDIATYPE:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_integer(request->requestvb, ASN_INTEGER,
+                                           table_entry->cpqSasPhyDrvMediaType);
+                break;
             default:
                 netsnmp_set_request_error(reqinfo, request,
                                           SNMP_NOSUCHOBJECT);
@@ -426,6 +451,22 @@ cpqSasPhyDrvTable_handler(netsnmp_mib_handler *handler,
     }
     return SNMP_ERR_NOERROR;
 }
+
+void
+cpqSasPhyDrvTable_cache_reload()
+{
+    netsnmp_cache  *cpqSasPhyDrvTable_cache = NULL;
+
+    cpqSasPhyDrvTable_cache = netsnmp_cache_find_by_oid(cpqSasPhyDrvTable_oid,
+                                            cpqSasPhyDrvTable_oid_len);
+
+    DEBUGMSGTL(("internal:cpqSasPhyDrvTable:_cache_reload", "triggered\n"));
+    if (NULL != cpqSasPhyDrvTable_cache) {
+       cpqSasPhyDrvTable_cache->valid = 0;
+       netsnmp_cache_check_and_reload(cpqSasPhyDrvTable_cache);
+    }
+}
+
 
 /**
  * @internal
