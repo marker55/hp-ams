@@ -57,7 +57,9 @@ cpqNicIfLogMapTable_entry *
 
 void            init_cpqNicIfLogMapTable(void);
 void            initialize_table_cpqNicIfLogMapTable(void);
+void        initialize_cpqNicIfLogMapOverallCondition(void);
 Netsnmp_Node_Handler cpqNicIfLogMapTable_handler;
+Netsnmp_Node_Handler cpqNicIfLogMapOverallCondition_handler;
 
 /*
  * column number definitions for table cpqNicIfLogMapTable 

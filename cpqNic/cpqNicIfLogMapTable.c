@@ -14,6 +14,75 @@ extern void     netsnmp_arch_iflog_container_load(netsnmp_container*);
 static void     _cache_free(netsnmp_cache * cache, void *magic);
 static int      _cache_load(netsnmp_cache * cache, void *vmagic);
 
+const oid       cpqNicIfLogMapTable_oid[] =
+        { 1, 3, 6, 1, 4, 1, 232, 18, 2, 2, 1 };
+const size_t    cpqNicIfLogMapTable_oid_len =
+        OID_LENGTH(cpqNicIfLogMapTable_oid);
+extern long     get_cpqNicIfLogMapOverallCondition(void);
+
+static  netsnmp_container *gContainer = NULL;
+
+#define CPQNICIFLOGMAPOVERALLCONDITION            2
+
+void
+initialize_cpqNicIfLogMapOverallCondition(void)
+{
+    const oid       cpqNicIfLogMapOverallCondition_oid[] =
+        { 1, 3, 6, 1, 4, 1, 232, 18, 2, 2 };
+    const size_t    cpqNicIfLogMapOverallCondition_oid_len =
+        OID_LENGTH(cpqNicIfLogMapOverallCondition_oid);
+
+    DEBUGMSGTL(("cpqNic", "Initializing cpqNicIfLogMapOverallCondition\n"));
+
+    /*
+     * register ourselves with the agent to handle our mib tree
+     */
+    netsnmp_register_scalar_group(
+        netsnmp_create_handler_registration("cpqNicIfLogMapOverallCondition",
+                             cpqNicIfLogMapOverallCondition_handler,
+                             cpqNicIfLogMapOverallCondition_oid, cpqNicIfLogMapOverallCondition_oid_len,
+                             HANDLER_CAN_RONLY),
+                             CPQNICIFLOGMAPOVERALLCONDITION, CPQNICIFLOGMAPOVERALLCONDITION);
+}
+
+int
+cpqNicIfLogMapOverallCondition_handler(netsnmp_mib_handler          *handler,
+               netsnmp_handler_registration *reginfo,
+               netsnmp_agent_request_info   *reqinfo,
+               netsnmp_request_info         *requests)
+{
+    long val = 0;
+
+    switch (reqinfo->mode) {
+    case MODE_GET:
+        switch (requests->requestvb->name[ reginfo->rootoid_len - 2 ]) {
+            case CPQNICIFLOGMAPOVERALLCONDITION:
+                val = get_cpqNicIfLogMapOverallCondition();
+                break;
+            default:
+                /*
+                 * An unsupported/unreadable column (if applicable)
+                 */
+                snmp_log(LOG_ERR, "unknown object (%lu) in cpqNicIfLogMapOverallCondition_handler\n",
+                     requests->requestvb->name[ reginfo->rootoid_len - 2 ]);
+                netsnmp_set_request_error( reqinfo, requests,
+                                            SNMP_NOSUCHOBJECT );
+                return SNMP_ERR_NOERROR;
+        }
+        snmp_set_var_typed_value(requests->requestvb, ASN_INTEGER,
+                                 (u_char *)&val, sizeof(val));
+        break;
+
+    default:
+        snmp_log(LOG_ERR, "unknown mode (%d) in cpqNicIfLogMapOverallCondition_handler\n",
+                 reqinfo->mode);
+        return SNMP_ERR_GENERR;
+    }
+
+    return SNMP_ERR_NOERROR;
+
+}
+
 /** Initializes the cpqNicIfLogMapTable module */
 void
 init_cpqNicIfLogMapTable(void)
@@ -37,6 +106,8 @@ initialize_table_cpqNicIfLogMapTable(void)
     netsnmp_container *container = NULL;
     netsnmp_table_registration_info *table_info = NULL;
     netsnmp_cache  *cache = NULL;
+
+    int reg_tbl_ret = SNMPERR_SUCCESS;
 
     DEBUGMSGTL(("cpqNicIfLogMapTable:init",
                 "initializing table cpqNicIfLogMapTable\n"));
@@ -131,7 +202,8 @@ initialize_table_cpqNicIfLogMapTable(void)
     /*
      * register the table
      */
-    if (SNMPERR_SUCCESS != netsnmp_register_table(reg, table_info)) {
+    reg_tbl_ret = netsnmp_register_table(reg, table_info);
+    if (reg_tbl_ret != SNMPERR_SUCCESS) {
         snmp_log(LOG_ERR,
                  "error registering table handler for cpqNicIfLogMapTable\n");
         goto bail;
@@ -156,8 +228,9 @@ initialize_table_cpqNicIfLogMapTable(void)
     if (container)
         CONTAINER_FREE(container);
 
-    if (reg)
-        netsnmp_handler_registration_free(reg);
+    if (reg_tbl_ret == SNMPERR_SUCCESS)
+        if (reg)
+            netsnmp_handler_registration_free(reg);
 }
 
 /** create a new row in the table */
@@ -484,6 +557,21 @@ cpqNicIfLogMapTable_handler(netsnmp_mib_handler *handler,
 
     }
     return SNMP_ERR_NOERROR;
+}
+
+void
+cpqNicIfLogMapTable_cache_reload()
+{
+    netsnmp_cache  *cpqNicIfLogMapTable_cache = NULL;
+
+    cpqNicIfLogMapTable_cache = netsnmp_cache_find_by_oid(cpqNicIfLogMapTable_oid,
+                                            cpqNicIfLogMapTable_oid_len);
+
+    DEBUGMSGTL(("internal:cpqNicIfLogMapTable:_cache_reload", "triggered\n"));
+    if (NULL != cpqNicIfLogMapTable_cache) {
+       cpqNicIfLogMapTable_cache->valid = 0;
+       netsnmp_cache_check_and_reload(cpqNicIfLogMapTable_cache);
+    }
 }
 
 /**

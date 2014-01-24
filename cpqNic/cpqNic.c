@@ -17,6 +17,7 @@
 #include "cpqNicIfPhysAdapterTable.h"
 
 extern unsigned char cpqHoMibHealthStatusArray[];
+extern char    ifLogMapOverallStatus;
 
 extern  int   InitLibCpqNic(void);
 extern  unsigned long iGetIfLastChange(char *);
@@ -51,12 +52,14 @@ void init_cpqNic(void)
 
     cpqHostMibStatusArray[CPQMIB].major = CPQMIBREVMAJOR;
     cpqHostMibStatusArray[CPQMIB].minor = CPQMIBREVMINOR;
-    cpqHostMibStatusArray[CPQMIB].cond = MIB_CONDITION_OK;
 
-    cpqHoMibHealthStatusArray[CPQMIBHEALTHINDEX] = MIB_CONDITION_OK;
 
     initialize_table_cpqNicIfPhysAdapterTable();
     initialize_table_cpqNicIfLogMapTable();
+    initialize_cpqNicIfLogMapOverallCondition();
+
+    cpqHoMibHealthStatusArray[CPQMIBHEALTHINDEX] = ifLogMapOverallStatus;
+    cpqHostMibStatusArray[CPQMIB].cond = ifLogMapOverallStatus;
 
     /*
      * register ourselves with the agent to handle our mib tree 

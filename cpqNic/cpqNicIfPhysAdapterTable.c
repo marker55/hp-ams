@@ -9,15 +9,130 @@
 #include <net-snmp/agent/net-snmp-agent-includes.h>
 #include <net-snmp/agent/table_container.h>
 #include "cpqNicIfPhysAdapterTable.h"
+#include <linux/rtnetlink.h>
+#define SUPPORT_PREFIX_FLAGS 1
 
 extern void     netsnmp_arch_ifphys_container_load(netsnmp_container *);
 static void     _cache_free(netsnmp_cache * cache, void *magic);
 static int      _cache_load(netsnmp_cache * cache, void *vmagic);
 
+static int cpqnic_iflink_listen(void);
+
 const oid       cpqNicIfPhysAdapterTable_oid[] =
         { 1, 3, 6, 1, 4, 1, 232, 18, 2, 3, 1 };
 const size_t    cpqNicIfPhysAdapterTable_oid_len =
         OID_LENGTH(cpqNicIfPhysAdapterTable_oid);
+
+void cpqNicIfPhysAdapterTable_cache_reload();
+extern void cpqNicIfLogMapTable_cache_reload();
+/* taken from netlink patch for if-mib */
+static int cpqnic_netlink_listen(unsigned subscriptions)
+{
+    struct sockaddr_nl localaddrinfo;
+    int fd = socket(PF_NETLINK, SOCK_DGRAM, NETLINK_ROUTE);
+    if (fd < 0) {
+       snmp_log(LOG_ERR, "cpqnic_netlink_listen: Cannot create socket.\n");
+        return -1;
+    }
+
+    memset(&localaddrinfo, 0, sizeof(struct sockaddr_nl));
+
+    localaddrinfo.nl_family = AF_NETLINK;
+    localaddrinfo.nl_groups = subscriptions;
+
+    if (bind(fd, (struct sockaddr*)&localaddrinfo, sizeof(localaddrinfo)) < 0) {
+        snmp_log(LOG_ERR,"cpqnic_netlink_listen: Bind failed.\n");
+        close(fd);
+        return -1;
+    }
+
+    return fd;
+}
+
+static void cpqnic_iflink_process(int fd, void *data) {
+    int                status;
+    char               buf[16384];
+    struct nlmsghdr    *nlmp;
+    struct ifinfomsg   *ifi;
+    int                len, req_len, length;
+
+    status = recv(fd, buf, sizeof(buf), 0);
+    if (status < 0) {
+        snmp_log(LOG_ERR,"cpqnic_iflink_listen: Receive failed.\n");
+        return;
+    }
+
+    if (status == 0){
+        DEBUGMSGTL(("access:interface:iflink", "End of File\n"));
+        return;
+    }
+
+    for (nlmp = (struct nlmsghdr *)buf;
+        status > sizeof(*nlmp);
+        status -= NLMSG_ALIGN(len),
+            nlmp = (struct nlmsghdr*)((char*)nlmp + NLMSG_ALIGN(len))) {
+       len = nlmp->nlmsg_len;
+        req_len = len - sizeof(*nlmp);
+
+        if (req_len < 0 || len > status) {
+            snmp_log(LOG_ERR,"cpqnic_iflink_listen: Error in length\n");
+            return;
+        }
+
+        if (!NLMSG_OK(nlmp, status)) {
+            DEBUGMSGTL(("access:interface:iflink", "NLMSG not OK\n"));
+            return;
+        }
+
+        if (nlmp->nlmsg_type == RTM_NEWLINK ||
+           nlmp->nlmsg_type == RTM_DELLINK) {
+           ifi = NLMSG_DATA(nlmp);
+            length = nlmp->nlmsg_len - NLMSG_LENGTH(sizeof(*ifi));
+
+            if (length < 0) {
+                DEBUGMSGTL(("access:interface:iflink", "wrong nlmsg length %d\n", length));
+                return;
+            }
+
+           /* Just request a refresh! */
+           cpqNicIfPhysAdapterTable_cache_reload();
+           cpqNicIfLogMapTable_cache_reload();
+        }
+    }
+}
+
+static int cpqnic_iflink_listen()
+{
+    struct {
+       struct nlmsghdr nlh;
+       struct rtgenmsg g;
+    } req;
+    int status;
+    int fd = cpqnic_netlink_listen(RTNLGRP_LINK);
+    if (fd < 0) return -1;
+
+    memset(&req, 0, sizeof(req));
+    req.nlh.nlmsg_len = sizeof(req);
+    req.nlh.nlmsg_type = RTM_GETLINK;
+    req.nlh.nlmsg_flags = NLM_F_DUMP | NLM_F_REQUEST;
+    req.g.rtgen_family = AF_UNSPEC;
+
+    status = send(fd, (void*)&req, sizeof(req), 0);
+    if (status < 0) {
+        snmp_log(LOG_ERR,"cpqnic_iflink_listen: send failed\n");
+        close(fd);
+        return -1;
+    }
+
+    if (register_readfd(fd, cpqnic_iflink_process, NULL) != 0) {
+        snmp_log(LOG_ERR,"cpqnic_iflink_listen: error registering netlink socket\n");
+        close(fd);
+        return -1;
+    }
+    return 0;
+
+}
+
 /** Initializes the cpqNicIfPhysAdapterTable module */
 void
 init_cpqNicIfPhysAdapterTable(void)
@@ -37,6 +152,8 @@ initialize_table_cpqNicIfPhysAdapterTable(void)
     netsnmp_container *container = NULL;
     netsnmp_table_registration_info *table_info = NULL;
     netsnmp_cache  *cache = NULL;
+
+    int reg_tbl_ret = SNMPERR_SUCCESS;
 
     DEBUGMSGTL(("cpqNicIfPhysAdapterTable:init",
                 "initializing table cpqNicIfPhysAdapterTable\n"));
@@ -131,11 +248,14 @@ initialize_table_cpqNicIfPhysAdapterTable(void)
     /*
      * register the table
      */
-    if (SNMPERR_SUCCESS != netsnmp_register_table(reg, table_info)) {
+    reg_tbl_ret = netsnmp_register_table(reg, table_info);
+    if (reg_tbl_ret != SNMPERR_SUCCESS) {
         snmp_log(LOG_ERR,
                  "error registering table handler for cpqNicIfPhysAdapterTable\n");
         goto bail;
     }
+
+    cpqnic_iflink_listen();
 
     return;                     /* ok */
 
@@ -156,8 +276,9 @@ initialize_table_cpqNicIfPhysAdapterTable(void)
     if (container)
         CONTAINER_FREE(container);
 
-    if (reg)
-        netsnmp_handler_registration_free(reg);
+    if (reg_tbl_ret == SNMPERR_SUCCESS)
+        if (reg)
+            netsnmp_handler_registration_free(reg);
 }
 
 /** create a new row in the table */
@@ -679,6 +800,21 @@ cpqNicIfPhysAdapterTable_handler(netsnmp_mib_handler *handler,
 
     }
     return SNMP_ERR_NOERROR;
+}
+
+void
+cpqNicIfPhysAdapterTable_cache_reload()
+{
+    netsnmp_cache  *cpqNicIfPhysAdapterTable_cache = NULL;
+
+    cpqNicIfPhysAdapterTable_cache = netsnmp_cache_find_by_oid(cpqNicIfPhysAdapterTable_oid,
+                                            cpqNicIfPhysAdapterTable_oid_len);
+
+    DEBUGMSGTL(("internal:cpqNicIfPhysAdapterTable:_cache_reload", "triggered\n"));
+    if (NULL != cpqNicIfPhysAdapterTable_cache) {
+       cpqNicIfPhysAdapterTable_cache->valid = 0;
+       netsnmp_cache_check_and_reload(cpqNicIfPhysAdapterTable_cache);
+    }
 }
 
 /**

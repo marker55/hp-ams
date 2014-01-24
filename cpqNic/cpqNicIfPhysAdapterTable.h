@@ -23,7 +23,7 @@ typedef struct cpqNicIfPhysAdapterTable_entry_s {
     long            cpqNicIfPhysAdapterRole;
     char            cpqNicIfPhysAdapterMACAddress[6];
     size_t          cpqNicIfPhysAdapterMACAddress_len;
-    long            cpqNicIfPhysAdapterSlot;
+    unsigned int    cpqNicIfPhysAdapterSlot;
     long            cpqNicIfPhysAdapterIoAddr;
     long            cpqNicIfPhysAdapterIrq;
     long            cpqNicIfPhysAdapterDma;
@@ -33,6 +33,9 @@ typedef struct cpqNicIfPhysAdapterTable_entry_s {
     long            cpqNicIfPhysAdapterCondition;
     long            cpqNicIfPhysAdapterState;
     long            cpqNicIfPhysAdapterStatus;
+    long            cpqNicIfPhysAdapterPrevCondition;
+    long            cpqNicIfPhysAdapterPrevState;
+    long            cpqNicIfPhysAdapterPrevStatus;
     long            cpqNicIfPhysAdapterStatsValid;
     u_long          cpqNicIfPhysAdapterGoodTransmits;
     u_long          cpqNicIfPhysAdapterGoodReceives;
@@ -68,6 +71,8 @@ typedef struct cpqNicIfPhysAdapterTable_entry_s {
 
     int             AdapterAutoNegotiate;
     oid             cpqHoFwVerIndex;
+    int             PCI_Bus;
+    int             PCI_Slot;
     int             valid;
 } cpqNicIfPhysAdapterTable_entry;
 

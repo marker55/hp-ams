@@ -23,14 +23,14 @@ typedef __u8 u8;
 link_status_t get_logical_interface_status(char *if_name)
 {
     struct ifreq ifr;
-    static int32_t sock = -1;
+    int32_t sock = -1;
 
 
     if (sock < 0) {
         sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
         if (sock < 0) {
             DEBUGMSGTL(("cpqNic:ethtool", "socket() failed: errno=%d (%s)\n",
-                    errno, strerror(errno)));
+                        errno, strerror(errno)));
             return(link_unknown);
         }
     }
@@ -43,11 +43,11 @@ link_status_t get_logical_interface_status(char *if_name)
     if (ioctl(sock, SIOCGIFFLAGS, &ifr) < 0) {
         if (errno != ENODEV) {
             DEBUGMSGTL(("cpqNic:ethtool",
-                    "INFO: ioctl(SIOCGIFFLAGS) for %s: errno=%d, %s\n",
-                    if_name, errno, strerror(errno)));
+                        "INFO: ioctl(SIOCGIFFLAGS) for %s: errno=%d, %s\n",
+                        if_name, errno, strerror(errno)));
         } else {
             DEBUGMSGTL(("cpqNic:ethtool", "INFO: ioctl(SIOCGIFFLAGS) for %s: errno=%d, %s\n",
-                    if_name, errno, strerror(errno)));
+                        if_name, errno, strerror(errno)));
         }
         close(sock);
         return(link_unknown);
@@ -88,11 +88,11 @@ void free_dynamic_interface_info(dynamic_interface_info *dyn_if_info)
 
 
 int32_t get_dynamic_interface_info(char* if_name,
-                                   dynamic_interface_info *dyn_if_info)
+        dynamic_interface_info *dyn_if_info)
 {
     int32_t rc = 0;
     struct ifreq ifr;
-    static int32_t sock = -1;
+    int32_t sock = -1;
     FILE *pf;
     char ipv6_addr[32];
     char ipv6_ifname[IF_NAMESIZE];
@@ -111,7 +111,7 @@ int32_t get_dynamic_interface_info(char* if_name,
         if (sock < 0) {
             DEBUGMSGTL(("cpqNic:ethtool", "socket() failed: errno=%d (%s)\n", errno, strerror(errno)));
             /*/ \todo investigate if we will always be able to get
-                 an AF_INET socket, even if we only have and IPv6 interface. */
+              an AF_INET socket, even if we only have and IPv6 interface. */
             return(-1);
         }
     }
@@ -126,22 +126,22 @@ int32_t get_dynamic_interface_info(char* if_name,
     if (ioctl(sock, SIOCGIFADDR, &ifr) < 0) {
         if ((errno != ENODEV) && (errno != EADDRNOTAVAIL)) {
             DEBUGMSGTL(("cpqNic:ethtool",
-                    "INFO: ioctl(SIOCGIFADDR) for %s: errno=%d, %s\n",
-                    if_name, errno, strerror(errno)));
+                        "INFO: ioctl(SIOCGIFADDR) for %s: errno=%d, %s\n",
+                        if_name, errno, strerror(errno)));
             rc = 1;
         } else {
             DEBUGMSGTL(("cpqNic:ethtool", "INFO: ioctl(SIOCGIFADDR) for %s: errno=%d, %s\n",
-                    if_name, errno, strerror(errno)));
+                        if_name, errno, strerror(errno)));
         }
     } else {
         /* each digit requires up to 4 ascii chars (eg 255 == "255.")
            plus 1 for null */
         dyn_if_info->ip_addr = (char*) malloc(sizeof(ifr.ifr_addr.sa_data) * 4 + 1);
         if (!(dyn_if_info->ip_addr)) {
-           DEBUGMSGTL(("cpqNic:ethtool",
-                   "ERROR: malloc failed (errno=%d), %s,%dn",
-                   errno, __FILE__, __LINE__));
-           abort()  ;
+            DEBUGMSGTL(("cpqNic:ethtool",
+                        "ERROR: malloc failed (errno=%d), %s,%dn",
+                        errno, __FILE__, __LINE__));
+            abort()  ;
         }
 
         sprintf(dyn_if_info->ip_addr,
@@ -158,21 +158,21 @@ int32_t get_dynamic_interface_info(char* if_name,
         if (ioctl(sock, SIOCGIFNETMASK, &ifr) < 0) {
             if ((errno != ENODEV) && (errno != EADDRNOTAVAIL)) {
                 DEBUGMSGTL(("cpqNic:ethtool",
-                        "INFO: ioctl(SIOCGIFNETMASK) for %s: errno=%d, %s\n",
-                        if_name, errno, strerror(errno)));
+                            "INFO: ioctl(SIOCGIFNETMASK) for %s: errno=%d, %s\n",
+                            if_name, errno, strerror(errno)));
                 rc = 1;
             } else {
                 DEBUGMSGTL(("cpqNic:ethtool", "INFO: ioctl(SIOCGIFNETMASK) for %s: errno=%d, %s\n",
-                        if_name, errno, strerror(errno)));
+                            if_name, errno, strerror(errno)));
             }
         } else {
             /* each digit requires up to 4 ascii chars (eg 255 == "255.")
-            plus 1 for null */
+               plus 1 for null */
             dyn_if_info->netmask = (char*) malloc(sizeof(ifr.ifr_addr.sa_data) * 4 + 1);
             if (!(dyn_if_info->netmask)) {
                 DEBUGMSGTL(("cpqNic:ethtool",
-                    "ERROR: malloc failed (errno=%d), %s,%dn",
-                    errno, __FILE__, __LINE__));
+                            "ERROR: malloc failed (errno=%d), %s,%dn",
+                            errno, __FILE__, __LINE__));
                 abort()  ;
             }
 
@@ -190,21 +190,21 @@ int32_t get_dynamic_interface_info(char* if_name,
         if (ioctl(sock, SIOCGIFBRDADDR, &ifr) < 0) {
             if ((errno != ENODEV) && (errno != EADDRNOTAVAIL)) {
                 DEBUGMSGTL(("cpqNic:ethtool",
-                        "INFO: ioctl(SIOCGIFBRDADDR) for %s: errno=%d, %s\n",
-                        if_name, errno, strerror(errno)));
+                            "INFO: ioctl(SIOCGIFBRDADDR) for %s: errno=%d, %s\n",
+                            if_name, errno, strerror(errno)));
                 rc = 1;
             } else {
                 DEBUGMSGTL(("cpqNic:ethtool", "INFO: ioctl(SIOCGIFBRDADDR) for %s: errno=%d, %s\n",
-                        if_name, errno, strerror(errno)));
+                            if_name, errno, strerror(errno)));
             }
         } else {
             /* each digit requires up to 4 ascii chars (eg 255 == "255.")
-             plus 1 for null */
+               plus 1 for null */
             dyn_if_info->broadcast = (char*) malloc(sizeof(ifr.ifr_addr.sa_data) * 4 + 1);
             if (!(dyn_if_info->broadcast)) {
                 DEBUGMSGTL(("cpqNic:ethtool",
-                        "ERROR: malloc failed (errno=%d), %s,%dn",
-                        errno, __FILE__, __LINE__));
+                            "ERROR: malloc failed (errno=%d), %s,%dn",
+                            errno, __FILE__, __LINE__));
                 abort()  ;
             }
 
@@ -219,17 +219,17 @@ int32_t get_dynamic_interface_info(char* if_name,
     }
 
     /*
-      get the current MAC address
-     */
+       get the current MAC address
+       */
     if (ioctl(sock, SIOCGIFHWADDR, &ifr) < 0) {
         if (errno != ENODEV) {
             DEBUGMSGTL(("cpqNic:ethtool",
-                    "ERROR: ioctl(SIOCGIFHWADDR) for %s: errno=%d, %s\n",
-                    if_name, errno, strerror(errno)));
+                        "ERROR: ioctl(SIOCGIFHWADDR) for %s: errno=%d, %s\n",
+                        if_name, errno, strerror(errno)));
             rc = 1;
         } else {
             DEBUGMSGTL(("cpqNic:ethtool", "INFO: ioctl(SIOCGIFHWADDR) for %s: errno=%d, %s\n",
-                    if_name, errno, strerror(errno)));
+                        if_name, errno, strerror(errno)));
         }
     } else {
         /* each hex digit requires 3 ascii chars (eg FF == "FF:")
@@ -238,8 +238,8 @@ int32_t get_dynamic_interface_info(char* if_name,
             (char*) malloc(sizeof(ifr.ifr_hwaddr.sa_data) * 3 + 1);
         if (!(dyn_if_info->current_mac)) {
             DEBUGMSGTL(("cpqNic:ethtool",
-                   "ERROR: malloc failed (errno=%d), %s,%dn",
-                   errno, __FILE__, __LINE__));
+                        "ERROR: malloc failed (errno=%d), %s,%dn",
+                        errno, __FILE__, __LINE__));
             abort()  ;
         }
 
@@ -268,10 +268,10 @@ int32_t get_dynamic_interface_info(char* if_name,
     /* This is a HACK!
        I can't find a direct one-to-one replacement for the IPv4
        SIOCGIFADDR ioctl call in IPv6. So brute force scan the list...
-     */
+       */
     /* \todo find an IPv6 version of the SIOCGIFADDR IPv4 ioctl */
 
-   pf = fopen(PROC_NET_IF_INET6, "r");
+    pf = fopen(PROC_NET_IF_INET6, "r");
     if (NULL == pf) {
         /* no IPv6 addresses */
         return(1);
@@ -292,16 +292,16 @@ int32_t get_dynamic_interface_info(char* if_name,
             dyn_if_info->ipv6_addr = (char*) malloc(41);
             if (!(dyn_if_info->ipv6_addr)) {
                 DEBUGMSGTL(("cpqNic:ethtool",
-                        "ERROR: malloc failed (errno=%d), %s,%dn",
-                        errno, __FILE__, __LINE__));
+                            "ERROR: malloc failed (errno=%d), %s,%dn",
+                            errno, __FILE__, __LINE__));
                 abort()  ;
             }
             dyn_if_info->ipv6_shorthand_addr =
                 (char*) malloc(41);
             if (!(dyn_if_info->ipv6_shorthand_addr)) {
                 DEBUGMSGTL(("cpqNic:ethtool",
-                        "ERROR: malloc failed (errno=%d), %s,%dn",
-                        errno, __FILE__, __LINE__));
+                            "ERROR: malloc failed (errno=%d), %s,%dn",
+                            errno, __FILE__, __LINE__));
                 abort()  ;
             }
 
@@ -406,8 +406,8 @@ int32_t get_ethtool_info(char *if_name,
         fd = socket(AF_INET, SOCK_DGRAM, 0);
         if (fd < 0) {
             DEBUGMSGTL(("cpqNic:ethtool",
-                    "ERROR: could not open socket for %s, (errno=%d)\n",
-                    if_name, errno));
+                        "ERROR: could not open socket for %s, (errno=%d)\n",
+                        if_name, errno));
             return(1);
         }
     }
@@ -420,58 +420,58 @@ int32_t get_ethtool_info(char *if_name,
         if (einfo.driver != NULL)
             et_info->driver_name = strdup(einfo.driver);
         if (!(et_info->driver_name)) {
-           DEBUGMSGTL(("cpqNic:ethtool",
-                   "ERROR: malloc failed (errno=%d), %s,%dn",
-                   errno, __FILE__, __LINE__));
-           abort()  ;
+            DEBUGMSGTL(("cpqNic:ethtool",
+                        "ERROR: malloc failed (errno=%d), %s,%dn",
+                        errno, __FILE__, __LINE__));
+            abort()  ;
         }
 
         if (einfo.version != NULL)
             et_info->driver_version = strdup(einfo.version);
         if (!(et_info->driver_version)) {
-           DEBUGMSGTL(("cpqNic:ethtool",
-                   "ERROR: malloc failed (errno=%d), %s,%dn",
-                   errno, __FILE__, __LINE__));
-           abort()  ;
+            DEBUGMSGTL(("cpqNic:ethtool",
+                        "ERROR: malloc failed (errno=%d), %s,%dn",
+                        errno, __FILE__, __LINE__));
+            abort()  ;
         }
 
         if (einfo.fw_version != NULL)
             et_info->firmware_version = strdup(einfo.fw_version);
         if (!(et_info->firmware_version)) {
-           DEBUGMSGTL(("cpqNic:ethtool",
-                   "ERROR: malloc failed (errno=%d), %s,%dn",
-                   errno, __FILE__, __LINE__));
-           abort()  ;
+            DEBUGMSGTL(("cpqNic:ethtool",
+                        "ERROR: malloc failed (errno=%d), %s,%dn",
+                        errno, __FILE__, __LINE__));
+            abort()  ;
         }
 
         if (einfo.bus_info != NULL)
             et_info->bus_info = strdup(einfo.bus_info);
         if (!(et_info->bus_info)) {
-           DEBUGMSGTL(("cpqNic:ethtool",
-                   "ERROR: malloc failed (errno=%d), %s,%dn",
-                   errno, __FILE__, __LINE__));
-           abort()  ;
+            DEBUGMSGTL(("cpqNic:ethtool",
+                        "ERROR: malloc failed (errno=%d), %s,%dn",
+                        errno, __FILE__, __LINE__));
+            abort()  ;
         }
 
         DEBUGMSGTL(("cpqNic:ethtool", "ethtool driver info for %s = %s, %s, %s, %s\n",
-                if_name,
-                einfo.driver,
-                einfo.version,
-                einfo.fw_version,
-                einfo.bus_info));
+                    if_name,
+                    einfo.driver,
+                    einfo.version,
+                    einfo.fw_version,
+                    einfo.bus_info));
 
     } else if ((rval < 0) && (errno != EOPNOTSUPP)) {
         DEBUGMSGTL(("cpqNic:ethtool",
-                "ERROR: ETHTOOL_GDRVINFO ioctl to %s failed, (errno=%d, %d)\n",
-                if_name, errno, rval));
+                    "ERROR: ETHTOOL_GDRVINFO ioctl to %s failed, (errno=%d, %d)\n",
+                    if_name, errno, rval));
     } else if ((rval < 0) && (errno == EOPNOTSUPP)) {
-   /* we should not be here, something has changed about this
-      interface below our feet. */
+        /* we should not be here, something has changed about this
+           interface below our feet. */
         return 1;
     }
 
-/* get physical link state
-  \todo remove this ifdef after vmware gets GLINK */
+    /* get physical link state
+       \todo remove this ifdef after vmware gets GLINK */
     memset(&eval, 0, sizeof(struct ethtool_value));
     eval.cmd = ETHTOOL_GLINK;
     ifr.ifr_data = (caddr_t)&eval;
@@ -480,18 +480,18 @@ int32_t get_ethtool_info(char *if_name,
         et_info->link_status  = eval.data?link_up:link_down;
     } else if ((rval < 0) && (errno != EOPNOTSUPP)) {
         DEBUGMSGTL(("cpqNic:ethtool",
-                "ERROR: ETHTOOL_GLINK ioctl to %s failed, (errno=%d, %d)\n",
-                if_name, errno, rval));
+                    "ERROR: ETHTOOL_GLINK ioctl to %s failed, (errno=%d, %d)\n",
+                    if_name, errno, rval));
         et_info->link_status  = link_unknown;
     }
 
     permaddr_data = (struct ethtool_perm_addr *)
         malloc(sizeof(struct ethtool_perm_addr) + MAC_ADDRESS_BYTES);
     if (!(permaddr_data)) {
-       DEBUGMSGTL(("cpqNic:ethtool",
-               "ERROR: malloc failed (errno=%d), %s,%dn",
-               errno, __FILE__, __LINE__));
-       abort()  ;
+        DEBUGMSGTL(("cpqNic:ethtool",
+                    "ERROR: malloc failed (errno=%d), %s,%dn",
+                    errno, __FILE__, __LINE__));
+        abort()  ;
     }
     memset(permaddr_data, 0,
             sizeof(struct ethtool_perm_addr) + MAC_ADDRESS_BYTES);
@@ -504,11 +504,11 @@ int32_t get_ethtool_info(char *if_name,
     rval = ioctl(fd, SIOCETHTOOL, &ifr);
     if (0 == rval) {
         memcpy(et_info->perm_addr, permaddr_data->data,
-            sizeof(et_info->perm_addr));
+                sizeof(et_info->perm_addr));
     } else if ((rval < 0) && (errno != EOPNOTSUPP)) {
         DEBUGMSGTL(("cpqNic:ethtool",
-                "ERROR: ETHTOOL_GPERMADDR ioctl to %s failed, (errno=%d, %d)\n",
-                if_name, errno, rval));
+                    "ERROR: ETHTOOL_GPERMADDR ioctl to %s failed, (errno=%d, %d)\n",
+                    if_name, errno, rval));
     }
     free(permaddr_data);
 
@@ -530,8 +530,8 @@ int32_t get_ethtool_info(char *if_name,
         }
     } else if ((rval < 0) && (errno != EOPNOTSUPP)) {
         DEBUGMSGTL(("cpqNic:ethtool",
-                "ERROR: ETHTOOL_GSET ioctl to %s failed, (errno=%d, %d)\n",
-                if_name, errno, rval));
+                    "ERROR: ETHTOOL_GSET ioctl to %s failed, (errno=%d, %d)\n",
+                    if_name, errno, rval));
     }
     return(0);
 }
