@@ -80,11 +80,11 @@ distro_id_t  *getDistroInfo()
 
         case rh_distro:
             distro_id->Vendor = (unsigned char *)linux_distro_name[rh_distro];
-            distro_id->LongDistro = (unsigned char *)strdup(distrolines->buf[0]);
-            distro_id->Code = (unsigned char *)strtok(distrolines->buf[0],"()");
+            distro_id->LongDistro = (unsigned char *)strdup(distrolines->line[0]);
+            distro_id->Code = (unsigned char *)strtok(distrolines->line[0],"()");
             distro_id->Code = (unsigned char *)strtok(NULL,"()");
             idx = 0;
-            for ( str = distrolines->buf[0];; str = NULL )   {
+            for ( str = distrolines->line[0];; str = NULL )   {
                 if (( tokens[idx++] = strtok(str, " ")) == NULL)
                     break;
             }
@@ -112,11 +112,11 @@ distro_id_t  *getDistroInfo()
 
         case suse_distro:
             distro_id->Vendor = (unsigned char *)linux_distro_name[suse_distro];
-            distro_id->LongDistro =(unsigned char *)strdup(distrolines->buf[0]);
+            distro_id->LongDistro =(unsigned char *)strdup(distrolines->line[0]);
             distro_id->Vendor = (unsigned char *)linux_distro_name[suse_distro];
             distro_id->Code =(unsigned char *)null_str;
             idx = 0;
-            for ( str = distrolines->buf[0];; str = NULL )   {
+            for ( str = distrolines->line[0];; str = NULL )   {
                 if (( tokens[idx++] = strtok(str, " ")) == NULL)
                     break;
             }
@@ -129,9 +129,9 @@ distro_id_t  *getDistroInfo()
                  tokens[0], tokens[1], tokens[2], tokens[3]);
 
             distro_id->Role = (unsigned char *)tokens[4];
-            sscanf(distrolines->buf[1],"VERSION = %d", &distro_id->Version);
-            if (distrolines->buf[2] != NULL) 
-                sscanf(distrolines->buf[1], "PATCHLEVEL = %d", 
+            sscanf(distrolines->line[1],"VERSION = %d", &distro_id->Version);
+            if (distrolines->line[2] != NULL) 
+                sscanf(distrolines->line[1], "PATCHLEVEL = %d", 
                         &distro_id->SubVersion);
             else
                 distro_id->SubVersion = 0;

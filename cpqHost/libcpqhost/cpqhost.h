@@ -6,12 +6,25 @@
 #endif
 #include <sys/utsname.h>
 
-#define OS_TYPE_OTHER    1
-#define OS_TYPE_NETWARE  2
-#define OS_TYPE_NT       3
-#define OS_TYPE_SCOUNIX  4
-#define OS_TYPE_UNIXWARE 5
-#define OS_TYPE_LINUX    14
+#define OS_TYPE_OTHER       1
+#define OS_TYPE_NETWARE     2
+#define OS_TYPE_NT          3
+#define OS_TYPE_SCOUNIX     4
+#define OS_TYPE_UNIXWARE    5
+#define OS_TYPE_LINUX      14
+#define OS_TYPE_RHEL       39
+#define OS_TYPE_RHEL_64    40
+#define OS_TYPE_SLES       42
+#define OS_TYPE_SLES_64    43
+#define OS_TYPE_UBUNTU     44
+#define OS_TYPE_UBUNTU_64  45
+#define OS_TYPE_DEB        46
+#define OS_TYPE_DEB_64     47
+#define OS_TYPE_LINUX_64   48 
+#define OS_TYPE_CENTOS     50
+#define OS_TYPE_CENTOS_64  51
+#define OS_TYPE_ORACLE     52
+#define OS_TYPE_ORACLE_64  53
 
 #define TELNET_OTHER            1
 #define TELNET_AVAILABLE        2
@@ -72,6 +85,7 @@ typedef struct _distro_id_t {
     unsigned char *Role;
     unsigned char *Code;
     unsigned char *VersionString;
+    int  cpqHostOsType;
     int  Version;
     int  SubVersion;
     int  BuildNumber;

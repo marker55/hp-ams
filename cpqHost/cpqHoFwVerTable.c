@@ -10,16 +10,14 @@
 #include <net-snmp/agent/agent_index.h>
 #include "cpqHoFwVerTable.h"
 
-
-
-
-static void     _cache_free(netsnmp_cache * cache, void *magic);
-static int      _cache_load(netsnmp_cache * cache, void *vmagic);
-
-const oid       cpqHoFwVerTable_oid[] = 
+extern void *netsnmp_table_row_extract(netsnmp_request_info *);
+oid       cpqHoFwVerTable_oid[] = 
               { 1, 3, 6, 1, 4, 1, 232, 11, 2, 14, 1 };
 const size_t    cpqHoFwVerTable_oid_len = OID_LENGTH(cpqHoFwVerTable_oid);
-int   FWidx = 50;
+int   other_fw_idx = 50;
+int   nic_fw_idx = 255;
+netsnmp_variable_list *
+cpqHoFwVerTable_buildIndexList(cpqHoFwVerTable_entry *);
 
 /** Initializes the cpqHoFwVerTable module */
 void
@@ -35,14 +33,20 @@ init_cpqHoFwVerTable(void)
 void
 initialize_table_cpqHoFwVerTable(void)
 {
-    netsnmp_handler_registration *reg = NULL;
-    netsnmp_mib_handler *handler = NULL;
-    netsnmp_container *container = NULL;
-    netsnmp_table_registration_info *table_info = NULL;
-    netsnmp_cache  *cache = NULL;
 
     DEBUGMSGTL(("cpqHoFwVerTable:init",
                 "initializing table cpqHoFwVerTable\n"));
+
+}
+
+/** create a new row in the table */
+cpqHoFwVerTable_entry *
+cpqHoFwVerTable_createEntry(oid cpqHoFwVerIndex)
+{
+    cpqHoFwVerTable_entry *entry;
+    netsnmp_handler_registration *reg = NULL;
+    netsnmp_table_registration_info *table_info = NULL;
+    netsnmp_variable_list *idxs;
 
     reg =
         netsnmp_create_handler_registration("cpqHoFwVerTable",
@@ -50,121 +54,16 @@ initialize_table_cpqHoFwVerTable(void)
                                             cpqHoFwVerTable_oid,
                                             cpqHoFwVerTable_oid_len,
                                             HANDLER_CAN_RONLY);
-    if (NULL == reg) {
-        snmp_log(LOG_ERR,
-                 "error creating handler registration for cpqHoFwVerTable\n");
-        goto bail;
-    }
-
-    container = netsnmp_container_find("cpqHoFwVerTable:table_container");
-    if (NULL == container) {
-        snmp_log(LOG_ERR, "error creating container for cpqHoFwVerTable\n");
-        goto bail;
-    }
-    container->container_name = strdup("cpqHoFwVerTable container");
 
     table_info = SNMP_MALLOC_TYPEDEF(netsnmp_table_registration_info);
-    if (NULL == table_info) {
-        snmp_log(LOG_ERR,
-                 "error allocating table registration for cpqHoFwVerTable\n");
-        goto bail;
-    }
 
     netsnmp_table_helper_add_indexes(table_info, ASN_INTEGER,   /* index: cpqHoFwVerIndex */
                                      0);
     table_info->min_column = COLUMN_CPQHOFWVERINDEX;
     table_info->max_column = COLUMN_CPQHOFWVERUPDATEMETHOD;
 
-    /*************************************************
-     *
-     * inject container_table helper
-     */
-    handler = netsnmp_container_table_handler_get(table_info, container,
-                                                  TABLE_CONTAINER_KEY_NETSNMP_INDEX);
-    if (NULL == handler) {
-        snmp_log(LOG_ERR,
-                 "error allocating table registration for cpqHoFwVerTable\n");
-        goto bail;
-    }
-    if (SNMPERR_SUCCESS != netsnmp_inject_handler(reg, handler)) {
-        snmp_log(LOG_ERR,
-                 "error injecting container_table handler for cpqHoFwVerTable\n");
-        goto bail;
-    }
-    handler = NULL;             /* reg has it, will reuse below */
-
-    /*************************************************
-     *
-     * inject cache helper
-     */
-    cache = netsnmp_cache_create(240,    /* timeout in seconds */
-                                 _cache_load, _cache_free,
-                                 cpqHoFwVerTable_oid,
-                                 cpqHoFwVerTable_oid_len);
-
-    if (NULL == cache) {
-        snmp_log(LOG_ERR, "error creating cache for cpqHoFwVerTable\n");
-        goto bail;
-    }
-    cache->flags = NETSNMP_CACHE_DONT_FREE_EXPIRED |
-                   NETSNMP_CACHE_DONT_AUTO_RELEASE |
-                   NETSNMP_CACHE_DONT_FREE_BEFORE_LOAD |
-                   NETSNMP_CACHE_DONT_INVALIDATE_ON_SET;
-
-    cache->magic = container;
-
-    handler = netsnmp_cache_handler_get(cache);
-    if (NULL == handler) {
-        snmp_log(LOG_ERR,
-                 "error creating cache handler for cpqHoFwVerTable\n");
-        goto bail;
-    }
-
-    if (SNMPERR_SUCCESS != netsnmp_inject_handler(reg, handler)) {
-        snmp_log(LOG_ERR,
-                 "error injecting cache handler for cpqHoFwVerTable\n");
-        goto bail;
-    }
-    handler = NULL;             /* reg has it */
-
-    /*
-     * register the table
-     */
-    if (SNMPERR_SUCCESS != netsnmp_register_table(reg, table_info)) {
-        snmp_log(LOG_ERR,
-                 "error registering table handler for cpqHoFwVerTable\n");
-        goto bail;
-    }
-
-    return;                     /* ok */
-
-    /*
-     * Some error occurred during registration. Clean up and bail.
-     */
-  bail:                        /* not ok */
-
-    if (handler)
-        netsnmp_handler_free(handler);
-
-    if (cache)
-        netsnmp_cache_free(cache);
-
-    if (table_info)
-        netsnmp_table_registration_info_free(table_info);
-
-    if (container)
-        CONTAINER_FREE(container);
-
-    if (reg)
-        netsnmp_handler_registration_free(reg);
-}
-
-/** create a new row in the table */
-cpqHoFwVerTable_entry *
-cpqHoFwVerTable_createEntry(netsnmp_container * container,
-                           oid cpqHoFwVerIndex)
-{
-    cpqHoFwVerTable_entry *entry;
+    DEBUGMSGTL(("cpqHoFwVerTable:init",
+                "FW_table_info = %p, reg = %p\n", table_info, reg));
 
     entry = SNMP_MALLOC_TYPEDEF(cpqHoFwVerTable_entry);
     if (!entry)
@@ -173,30 +72,26 @@ cpqHoFwVerTable_createEntry(netsnmp_container * container,
     entry->cpqHoFwVerIndex = cpqHoFwVerIndex;
     entry->oid_index.len = 1;
     entry->oid_index.oids = (oid *) &entry->cpqHoFwVerIndex;
+
+    idxs = cpqHoFwVerTable_buildIndexList(entry);
+    netsnmp_table_row_register(reg, table_info, entry, idxs);
+
     return entry;
 }
 
-/** remove a row from the table */
-void
-cpqHoFwVerTable_removeEntry(netsnmp_container * container,
-                           cpqHoFwVerTable_entry * entry)
+netsnmp_variable_list *
+cpqHoFwVerTable_buildIndexList(cpqHoFwVerTable_entry * row)
 {
+    netsnmp_variable_list *v1 = NULL, *v2;
 
-    if (!entry)
-        return;                 /* Nothing to remove */
-    CONTAINER_REMOVE(container, entry);
-    if (entry)
-        SNMP_FREE(entry);       /* XXX - release any other internal resources */
-}
+    if (!row)
+        return NULL;
 
-/** remove a row from the table */
-void
-cpqHoFwVerTable_freeEntry(cpqHoFwVerTable_entry * entry)
-{
+    v1 = SNMP_MALLOC_TYPEDEF(netsnmp_variable_list);
+    v2 = v1;
+    snmp_set_var_typed_integer(v2, ASN_INTEGER, row->cpqHoFwVerIndex);
 
-    if (!entry)
-        return;                 /* Nothing to remove */
-    SNMP_FREE(entry);           /* XXX - release any other internal resources */
+    return v1;
 }
 
 /** handles requests for the cpqHoFwVerTable table */
@@ -208,7 +103,6 @@ cpqHoFwVerTable_handler(netsnmp_mib_handler *handler,
 {
 
     netsnmp_request_info *request;
-    netsnmp_table_request_info *table_info;
     cpqHoFwVerTable_entry *table_entry;
 
     DEBUGMSGTL(("cpqHoFwVerTable:handler", "Processing request (%d)\n",
@@ -220,58 +114,25 @@ cpqHoFwVerTable_handler(netsnmp_mib_handler *handler,
          */
     case MODE_GET:
         for (request = requests; request; request = request->next) {
-           if (request->processed)
-                continue;
-
             table_entry = (cpqHoFwVerTable_entry *)
-                netsnmp_container_table_extract_context(request);
-            table_info = netsnmp_extract_table_info(request);
+                netsnmp_table_row_extract(request);
 
-           if ((NULL == table_entry) || (NULL == table_info)) {
-                snmp_log(LOG_ERR,
-                         "Table entry or info for cpqHoFwVerTable is NULL\n");
-                snmp_set_var_typed_value(request->requestvb,
-                                         SNMP_ERR_GENERR, NULL, 0);
-                continue;
-            }
-
-            switch (table_info->colnum) {
+            switch (request->requestvb->name[11 + 1]) {
             case COLUMN_CPQHOFWVERINDEX:
-                if (!table_entry) {
-                    netsnmp_set_request_error(reqinfo, request,
-                                              SNMP_NOSUCHINSTANCE);
-                    continue;
-                }
-
                 snmp_set_var_typed_integer(request->requestvb, ASN_INTEGER,
                                            table_entry->cpqHoFwVerIndex);
                 break;
             case COLUMN_CPQHOFWVERCATEGORY:
-                if (!table_entry) {
-                    netsnmp_set_request_error(reqinfo, request,
-                                              SNMP_NOSUCHINSTANCE);
-                    continue;
-                }
                 snmp_set_var_typed_integer(request->requestvb, ASN_INTEGER,
                                            table_entry->
                                            cpqHoFwVerCategory);
                 break;
             case COLUMN_CPQHOFWVERDEVICETYPE:
-                if (!table_entry) {
-                    netsnmp_set_request_error(reqinfo, request,
-                                              SNMP_NOSUCHINSTANCE);
-                    continue;
-                }
                 snmp_set_var_typed_integer(request->requestvb, ASN_INTEGER,
                                            table_entry->
                                            cpqHoFwVerDeviceType);
                 break;
             case COLUMN_CPQHOFWVERDISPLAYNAME:
-                if (!table_entry) {
-                    netsnmp_set_request_error(reqinfo, request,
-                                              SNMP_NOSUCHINSTANCE);
-                    continue;
-                }
                 snmp_set_var_typed_value(request->requestvb, ASN_OCTET_STR,
                                          table_entry->
                                          cpqHoFwVerDisplayName,
@@ -279,128 +140,109 @@ cpqHoFwVerTable_handler(netsnmp_mib_handler *handler,
                                          cpqHoFwVerDisplayName_len);
                 break;
             case COLUMN_CPQHOFWVERVERSION:
-                if (!table_entry) {
-                    netsnmp_set_request_error(reqinfo, request,
-                                              SNMP_NOSUCHINSTANCE);
-                    continue;
-                }
                 snmp_set_var_typed_value(request->requestvb, ASN_OCTET_STR,
                                          table_entry->cpqHoFwVerVersion,
                                          table_entry->
                                          cpqHoFwVerVersion_len);
                 break;
             case COLUMN_CPQHOFWVERLOCATION:
-                if (!table_entry) {
-                    netsnmp_set_request_error(reqinfo, request,
-                                              SNMP_NOSUCHINSTANCE);
-                    continue;
-                }
                 snmp_set_var_typed_value(request->requestvb, ASN_OCTET_STR,
                                          table_entry->cpqHoFwVerLocation,
                                          table_entry->
                                          cpqHoFwVerLocation_len);
                 break;
             case COLUMN_CPQHOFWVERXMLSTRING:
-                if (!table_entry) {
-                    netsnmp_set_request_error(reqinfo, request,
-                                              SNMP_NOSUCHINSTANCE);
-                    continue;
-                }
                 snmp_set_var_typed_value(request->requestvb, ASN_OCTET_STR,
                                          table_entry->cpqHoFwVerXmlString,
                                          table_entry->
                                          cpqHoFwVerXmlString_len);
                 break;
             case COLUMN_CPQHOFWVERKEYSTRING:
-                if (!table_entry) {
-                    netsnmp_set_request_error(reqinfo, request,
-                                              SNMP_NOSUCHINSTANCE);
-                    continue;
-                }
                 snmp_set_var_typed_value(request->requestvb, ASN_OCTET_STR,
                                          table_entry->cpqHoFwVerKeyString,
                                          table_entry->
                                          cpqHoFwVerKeyString_len);
                 break;
             case COLUMN_CPQHOFWVERUPDATEMETHOD:
-                if (!table_entry) {
-                    netsnmp_set_request_error(reqinfo, request,
-                                              SNMP_NOSUCHINSTANCE);
-                    continue;
-                }
                 snmp_set_var_typed_integer(request->requestvb, ASN_INTEGER,
                                            table_entry->
                                            cpqHoFwVerUpdateMethod);
                 break;
             default:
-                netsnmp_set_request_error(reqinfo, request,
-                                          SNMP_NOSUCHOBJECT);
-                break;
+                /*
+ *                  * An unsupported/unreadable column (if applicable)
+ *                                   */
+                snmp_set_var_typed_value(request->requestvb,
+                                         SNMP_NOSUCHOBJECT, NULL, 0);
             }
         }
         break;
-
     }
     return SNMP_ERR_NOERROR;
 }
 
-/**
- * @internal
- */
-static int
-_cache_load(netsnmp_cache * cache, void *vmagic)
+int unregister_FW_version(int fw_idx)
 {
-    netsnmp_container *container;
-
-    if ((NULL == cache) || (NULL == cache->magic)) {
-        snmp_log(LOG_ERR, "invalid cache for cpqHoFwVerTable_cache_load\n");
-        return -1;
-    }
-    container = (netsnmp_container *) cache->magic;
-
-    /** should only be called for an invalid or expired cache */
-    netsnmp_assert((0 == cache->valid) || (1 == cache->expired));
-
-    /*
-     * load cache here (or call function to do it)
-     */
-    cache->valid = 1;
-    cache->expired = 0;
-
-    return 0;
-}                               /* _cache_load */
-
-/**
- * @internal
- */
-/** remove a row from the table */
-static void
-cpqHoFwVerTable_freeEntry_cb(cpqHoFwVerTable_entry * entry, void *magic)
-{
-
-    cpqHoFwVerTable_freeEntry(entry);
+    int idx = 0;
+    idx = unregister_int_index(cpqHoFwVerTable_oid,
+            cpqHoFwVerTable_oid_len,
+            fw_idx);
+    DEBUGMSGTL(("cpqHoFwVerTable:init",
+                "cpqHoFwVerTable unregister idx %d = %d\n",
+                fw_idx, idx));
+    return idx;
 }
 
-/**
-  * @internal
-  */
-static void
-_cache_free(netsnmp_cache * cache, void *magic)
+int register_FW_version(int dir, int fw_idx, int cat, int type,  int update, 
+                        char *fw_version, char *name, char *location, char *key)
 {
-    netsnmp_container *container;
+    int idx = 0;
+    cpqHoFwVerTable_entry *fw_entry;
 
+    idx = unregister_int_index(cpqHoFwVerTable_oid,
+            cpqHoFwVerTable_oid_len,
+            fw_idx);
+    DEBUGMSGTL(("cpqHoFwVerTable:init",
+                "cpqHoFwVerTable unregister idx %d = %d\n",
+                fw_idx, idx));
+    idx = register_int_index(cpqHoFwVerTable_oid,
+            cpqHoFwVerTable_oid_len,
+            fw_idx);
 
-    if ((NULL == cache) || (NULL == cache->magic)) {
-        snmp_log(LOG_ERR, "invalid cache in cpqHoFwVerTable_cache_free\n");
-        return;
+    DEBUGMSGTL(("cpqHoFwVerTable:init",
+                "cpqHoFwVerTable register idx %d = %d\n",
+                fw_idx, idx));
+    if (idx != -1) {
+        fw_idx = idx + dir;
+        DEBUGMSGTL(("cpqHoFwVerTable:init",
+                    "cpqHoFwVerTable next fw_idx = %d\n",
+                    fw_idx));
+
+        fw_entry = cpqHoFwVerTable_createEntry((oid)idx);
+        if (fw_entry) {
+            DEBUGMSGTL(("cpqHoFwVerTable:init",
+                        "cpqHoFwVerTable entry = %p\n",
+                        fw_entry));
+
+            fw_entry->cpqHoFwVerIndex = idx;
+
+            fw_entry->cpqHoFwVerCategory = cat;
+            fw_entry->cpqHoFwVerDeviceType = type;
+            fw_entry->cpqHoFwVerUpdateMethod = update;
+
+            strcpy(fw_entry->cpqHoFwVerVersion, fw_version);
+            fw_entry->cpqHoFwVerVersion_len = strlen(fw_version);
+
+            strcpy(fw_entry->cpqHoFwVerDisplayName, name);
+            fw_entry->cpqHoFwVerDisplayName_len = strlen(name);
+
+            strcpy(fw_entry->cpqHoFwVerLocation, location);
+            fw_entry->cpqHoFwVerLocation_len = strlen(location);
+
+            strcpy(fw_entry->cpqHoFwVerKeyString, key);
+            fw_entry->cpqHoFwVerKeyString_len = strlen(key);
+        }
     }
-    container = (netsnmp_container *) cache->magic;
-
-    /*
-     * empty (but don't free) cache here
-     */
-    CONTAINER_CLEAR(container,
-                    (netsnmp_container_obj_func *)
-                    cpqHoFwVerTable_freeEntry_cb, NULL);
-}                               /* _cache_free */
+    return fw_idx;
+}
 

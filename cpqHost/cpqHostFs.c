@@ -49,6 +49,8 @@ initialize_table_cpqHoFileSysTable(void)
     netsnmp_mib_handler *handler = NULL;
     netsnmp_table_registration_info *table_info = NULL;
 
+    int reg_tbl_ret = SNMPERR_SUCCESS;
+
     reg =
         netsnmp_create_handler_registration(MYTABLE,
                                             cpqHoFileSysTable_handler,
@@ -113,7 +115,8 @@ initialize_table_cpqHoFileSysTable(void)
     }
     handler = NULL; /* reg has it*/
 
-    if (SNMPERR_SUCCESS != netsnmp_register_table(reg, table_info)) {
+    reg_tbl_ret = netsnmp_register_table(reg, table_info);
+    if (reg_tbl_ret != SNMPERR_SUCCESS) {
         snmp_log(LOG_ERR,"error registering table handler for "
                  MYTABLE "\n");
         goto bail;
@@ -130,8 +133,9 @@ initialize_table_cpqHoFileSysTable(void)
     if (table_info)
         netsnmp_table_registration_info_free(table_info);
 
-    if (reg)
-        netsnmp_handler_registration_free(reg);
+    if (reg_tbl_ret == SNMPERR_SUCCESS)
+        if (reg)
+            netsnmp_handler_registration_free(reg);
 
 }
 

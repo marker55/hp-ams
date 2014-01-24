@@ -134,7 +134,7 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
 
             entry->cpqHoSwVerName_len = snprintf( entry->cpqHoSwVerName, 
                                          sizeof(entry->cpqHoSwVerName),
-                                         "%s-%s-%s", n, v, r);
+                                         "%s", n);
             if (entry->cpqHoSwVerName_len > sizeof(entry->cpqHoSwVerName))
                 entry->cpqHoSwVerName_len = sizeof(entry->cpqHoSwVerName) - 1;
             entry->cpqHoSwVerType = (NULL != strstr( g, "System Environment"))
@@ -165,9 +165,9 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
                 entry->cpqHoSwVerDate[5] = (char)td->tm_min;
                 entry->cpqHoSwVerDate[6] = (char)td->tm_sec;
                 entry->cpqHoSwVerDate_len = 7;
-	        entry->timestamp = *t;
+	            entry->timestamp = *t;
             } else {
-	        entry->timestamp = *t;
+	            entry->timestamp = 0;
                 memset(&entry->cpqHoSwVerDate[0], 0, 8);
                 entry->cpqHoSwVerDate_len = 0;
             }
@@ -182,13 +182,15 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
                     entry->cpqHoSwVerVersion_len = 
                             sizeof(entry->cpqHoSwVerVersion) - 1;
 
-                entry->cpqHoSwVerVersionBinary_len = strlen(v);
-                strncpy(entry->cpqHoSwVerVersionBinary, v,
-                            sizeof(entry->cpqHoSwVerVersionBinary));
-                if (entry->cpqHoSwVerVersionBinary_len > 
-                            sizeof(entry->cpqHoSwVerVersionBinary))
-                    entry->cpqHoSwVerVersionBinary_len = 
-                            sizeof(entry->cpqHoSwVerVersionBinary) - 1;
+                if (r != NULL ) {
+                    DEBUGMSGTL(("cpqHoSwVerTable:load:arch", "release = %s\n", r));
+                    entry->cpqHoSwVerVersionBinary_len = snprintf(entry->cpqHoSwVerVersionBinary, 
+                                         sizeof(entry->cpqHoSwVerVersionBinary),
+                                         "%s-%s", v, r);
+                } else
+                    entry->cpqHoSwVerVersionBinary_len = snprintf(entry->cpqHoSwVerVersionBinary, 
+                                         sizeof(entry->cpqHoSwVerVersionBinary),
+                                         "%s", v);
             }
 
             entry->vendor_len = strlen(vendor);

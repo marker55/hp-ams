@@ -32,6 +32,8 @@ distro_id_t  *getDistroInfo()
     if ((distro_id = malloc(sizeof(distro_id_t))) == NULL)
         return NULL;
 
+    distro_id->cpqHostOsType = OS_TYPE_SLES;
+
     uname(&distro_id->utsName);
     distro_id->KernelVersion = strdup((char *)&distro_id->utsName.release);
     machine_len = strlen(distro_id->utsName.machine);
@@ -52,12 +54,12 @@ distro_id_t  *getDistroInfo()
         return distro_id;
 
     distro_id->Vendor = (unsigned char *)linux_distro_name;
-    distro_id->LongDistro = malloc (strlen(distrolines->buf[0]) + 1);
+    distro_id->LongDistro = malloc (strlen(distrolines->line[0]) + 1);
     strncpy((char *)distro_id->LongDistro, 
-	    (char *)distrolines->buf[0], strlen(distrolines->buf[0]) + 1);
+	    (char *)distrolines->line[0], strlen(distrolines->line[0]) + 1);
     distro_id->Code =(unsigned char *)null_str;
     idx = 0;
-    for ( str = distrolines->buf[0];; str = NULL )   {
+    for ( str = distrolines->line[0];; str = NULL )   {
         if (( tokens[idx++] = strtok(str, " ")) == NULL)
             break;
     }
@@ -70,9 +72,9 @@ distro_id_t  *getDistroInfo()
          tokens[0], tokens[1], tokens[2], tokens[3]);
 
     distro_id->Role = (unsigned char *)tokens[4];
-    sscanf(distrolines->buf[1],"VERSION = %d", &distro_id->Version);
-    if (distrolines->buf[2] != NULL) 
-        sscanf(distrolines->buf[2], "PATCHLEVEL = %d", 
+    sscanf(distrolines->line[1],"VERSION = %d", &distro_id->Version);
+    if (distrolines->line[2] != NULL) 
+        sscanf(distrolines->line[2], "PATCHLEVEL = %d", 
                 &distro_id->SubVersion);
     else
         distro_id->SubVersion = 0;
@@ -82,13 +84,14 @@ distro_id_t  *getDistroInfo()
             distro_id->SubVersion);
 
     if (distrolines != NULL) {
-        int i = 0;
-        while (i < distrolines->count)
-            free(distrolines->buf[i++]);
         if(distrolines->read_buf != NULL) 
             free(distrolines->read_buf);
         free(distrolines);
     }
+
+    if (distro_id->Bits == 64)
+        distro_id->cpqHostOsType++;
+
     return distro_id;
 
 }

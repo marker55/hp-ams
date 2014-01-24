@@ -19,8 +19,8 @@ PWD = `pwd`
 MIB=Host
 DLFLAGS=-fPIC -shared 
 CFLAGS          = -fno-strict-aliasing $(OPT) -g -pipe -Werror -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux 
-CPPFLAGS = -I. -I.. -I../cpqNic2 -I../cpqScsi2 -I../cpqIde2 $(shell if [ -f ../$(NETSNMP)/net-snmp-config ] ; then ../$(NETSNMP)/net-snmp-config --build-includes ../$(NETSNMP) ; fi) -DHELPER_VERSION=\"$(VERSION)\"
-OBJS=cpqHost.o cpqHostMemory.o cpqHoSWRunningTable.o cpqHoSwVerTable.o cpqHoFileSysTable.o
+CPPFLAGS = -I. -I.. -I../cpqNic -I../cpqScsi -I../cpqIde $(shell if [ -f ../$(NETSNMP)/net-snmp-config ] ; then ../$(NETSNMP)/net-snmp-config --build-includes ../$(NETSNMP) ; fi) -DHELPER_VERSION=\"$(VERSION)\"
+OBJS=cpqHost.o cpqHostMemory.o cpqHoSWRunningTable.o cpqHoSwVerTable.o cpqHoFileSysTable.o cpqHoFwVerTable.o
 TARGETS=cpqHost.o 
 NETSNMPVERSIONMAJ = $(shell if [ -f ../$(NETSNMP)/net-snmp-config ] ; then  ../$(NETSNMP)/net-snmp-config --version | cut -f1 -d\. ; fi  )
 NETSNMPVERSIONMIN = $(shell if [ -f ../$(NETSNMP)/net-snmp-config ] ; then  ../$(NETSNMP)/net-snmp-config --version | cut -f2 -d\. ; fi  )
@@ -31,7 +31,7 @@ BUILDAGENTLIBS = $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --a
 BUILDNETSNMPDEPS = $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --build-lib-deps ../$(NETSNMP) ; fi)
 BUILDNETSNMPCMD =  $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --build-command ;fi)
 BUILDLIBS = $(BUILDNETSNMPDEPS)  -lm -lresolv -lcrypt $(DISTROLIBS)
-EXTRAS = ../common/utils.o ../cpqNic2/data_access/nic_util_linux.o
+EXTRAS = ../common/utils.o ../cpqNic/data_access/nic_util_linux.o
 
 
 SUBDIRS := libcpqhost data_access

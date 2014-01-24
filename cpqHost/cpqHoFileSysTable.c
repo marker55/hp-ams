@@ -38,6 +38,8 @@ initialize_table_cpqHoFileSysTable(void)
     netsnmp_table_registration_info *table_info = NULL;
     netsnmp_cache  *cache = NULL;
 
+    int reg_tbl_ret = SNMPERR_SUCCESS;
+
     DEBUGMSGTL(("cpqHoFileSysTable:init",
                 "initializing table cpqHoFileSysTable\n"));
 
@@ -126,7 +128,8 @@ initialize_table_cpqHoFileSysTable(void)
     /*
      * register the table
      */
-    if (SNMPERR_SUCCESS != netsnmp_register_table(reg, table_info)) {
+    reg_tbl_ret = netsnmp_register_table(reg, table_info);
+    if (reg_tbl_ret != SNMPERR_SUCCESS) {
         snmp_log(LOG_ERR,
                  "error registering table handler for cpqHoFileSysTable\n");
         goto bail;
@@ -151,8 +154,9 @@ initialize_table_cpqHoFileSysTable(void)
     if (container)
         CONTAINER_FREE(container);
 
-    if (reg)
-        netsnmp_handler_registration_free(reg);
+    if (reg_tbl_ret == SNMPERR_SUCCESS)
+        if (reg)
+            netsnmp_handler_registration_free(reg);
 
 
     /*

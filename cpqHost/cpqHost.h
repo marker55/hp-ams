@@ -10,8 +10,6 @@
 config_require(util_funcs/header_generic)
 config_require(util_funcs)
 
-#define OS_TYPE_LINUX    14
-
 /*
  * function declarations 
  */

@@ -36,7 +36,10 @@ typedef struct cpqHoFwVerTable_entry_s {
 void            init_cpqHoFwVerTable(void);
 void            initialize_table_cpqHoFwVerTable(void);
 Netsnmp_Node_Handler cpqHoFwVerTable_handler;
-extern cpqHoFwVerTable_entry * cpqHoFwVerTable_createEntry(netsnmp_container *, oid);
+extern cpqHoFwVerTable_entry * cpqHoFwVerTable_createEntry(oid);
+extern int other_fw_idx;
+extern int nic_fw_idx;
+
 
 
 /*
