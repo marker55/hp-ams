@@ -14,4 +14,4 @@
 *.rej
 hpHelper
 *-stamp
-net-snmp-*
+net-snmp-*.tar.gz

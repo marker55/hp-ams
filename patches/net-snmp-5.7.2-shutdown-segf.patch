@@ -1,0 +1,13 @@
+--- net-snmp-5.7.2.saved/snmplib/snmp_api.c	2012-10-09 17:28:58.000000000 -0500
++++ net-snmp-5.7.2/snmplib/snmp_api.c	2013-07-23 15:29:26.000000000 -0500
+@@ -5118,6 +5118,10 @@
++    if (pdu->securityEngineIDLen)
+     SNMP_FREE(pdu->securityEngineID);
++    if (pdu->contextNameLen)
+     SNMP_FREE(pdu->contextName);
++    if (pdu->securityNameLen)
+     SNMP_FREE(pdu->securityName);
++    if (pdu->transport_data_length)
+     SNMP_FREE(pdu->transport_data);
+     memset(pdu, 0, sizeof(netsnmp_pdu));
+     free((char *) pdu);
