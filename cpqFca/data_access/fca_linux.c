@@ -286,16 +286,6 @@ int enumPCIid(unsigned int BoardID)
                     return (60);
                     break;
 
-                case 0x1958103C:
-                    /* QLogic 526M flex fabric id       */
-                    return (61);
-                    break;
-
-                case 0x1959103C:  
-                    /* QLogic 526FLB flex fabric id     */
-                    return (62);
-                    break;
-
                 default:
                     return(1);
                     break;
