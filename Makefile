@@ -1,11 +1,11 @@
 # Overridden during automated builds
-COMP_NAME    := hp-ams
-COMP_VER     := 1.3.0
-COMP_PKG_REV := 666
+COMP_NAME    ?= hp-ams
+COMP_VER     ?= 1.5.9
+COMP_PKG_REV ?= 666
 
-NAME         := $(COMP_NAME)
-VERSION      := $(COMP_VER)
-BUILD_NUMBER := $(COMP_PKG_REV)
+NAME         ?= $(COMP_NAME)
+VERSION      ?= $(COMP_VER)
+BUILD_NUMBER ?= $(COMP_PKG_REV)
 
 ARCH ?= $(shell uname -m)
 MAKE := make ARCH=${ARCH}
@@ -24,6 +24,7 @@ endif
 SBINDIR=$(DESTDIR)$(PREFIX)/sbin
 ETCDIR=$(DESTDIR)$(PREFIX)/etc
 INITDIR=$(ETCDIR)/init.d
+HPAMSDIR=$(DESTDIR)$(PREFIX)/opt/hp/hp-ams
 MANDIR:=$(shell if [ -d $(PREFIX)/share/man ] ; then \
                     echo $(DESTDIR)/$(PREFIX)/share/man ; \
                 elif [ -d $(PREFIX)/usr/share/man ] ; then \
@@ -44,18 +45,14 @@ DISTROLIBS ?= $(shell if [ -f /etc/redhat-release ] ; then \
 #
 export SHELL=/bin/bash
 
-NETSNMP_VERSION ?= 5.7.1
-NETSNMP = net-snmp-$(NETSNMP_VERSION)
-NETSNMP_TARBALL=$(NETSNMP).tar.gz
-DOWNLOAD=http://downloads.sourceforge.net/project/net-snmp/net-snmp/$(NETSNMP_VERSION)/$(NETSNMP_TARBALL)
-
 OS = linux
+NETSNMP ?= net-snmp-5.7.2
 NETSNMPCONFIG = $(NETSNMP)/net-snmp-config
 export OS NETSNMP VERSION
 NETSNMPVERSIONMIN = $(shell echo $(NETSNMP)| cut -f2 -d\.  )
 ifeq "$(NETSNMPVERSIONMIN)" "7"
-MIBS="host agentx/subagent mibII"
-NOTMIBS="mibII/vacm_vars mibII/vacm_conf target agent_mibs cd_snmp notification notification-log-mib disman/event disman/schedule snmpv3mibs mibII/vacm utilities/execute" 
+MIBS="host agentx/subagent mibII mibII/ipv6"
+NOTMIBS="mibII/vacm_vars mibII/vacm_conf target agent_mibs cd_snmp notification notification-log-mib disman/event disman/schedule snmpv3mibs mibII/vacm utilities/execute mibII/tcpTable" 
 OPTIONS=--enable-read-only --disable-set-support --disable-agent --disable-privacy --without-openssl
 else
 MIBS="hardware/fsys"
@@ -75,7 +72,7 @@ CPPFLAGS = -I. -I ./include  $(shell  if [ -f $(NETSNMPCONFIG) ] ; then $(NETSNM
 BUILDAGENTLIBS = $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --agent-libs ; fi)   
 BUILDNETSNMPDEPS = $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --build-lib-deps $(NETSNMP) ; fi)
 BUILDNETSNMPCMD =  $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --build-command ;fi)
-BUILDLIBS = $(BUILDNETSNMPDEPS)  -lm -lresolv -lcrypt -lnl $(DISTROLIBS)
+BUILDLIBS = $(BUILDNETSNMPDEPS)  -lm -lresolv -lcrypt $(DISTROLIBS)
 
 TARFILE=$(NAME)-$(VERSION)-$(COMP_PKG_REV).tar.gz
 
@@ -83,7 +80,7 @@ OBJS=hpHelper.o
 
 TARGETS=hpHelper
 
-AMSDIRS = cpqHost cpqNic cpqSe cpqScsi cpqIde common recorder
+AMSDIRS = cpqHost cpqNic cpqSe cpqFca cpqScsi cpqIde common recorder
 
 SUBDIRS = $(NETSNMP) $(AMSDIRS)
  
@@ -107,13 +104,8 @@ net-snmp-patch-stamp: net-snmp-untar-stamp
 	    done  
 	touch $@
 
-net-snmp-tarball: net-snmp-tarball-stamp
-net-snmp-tarball-stamp: 
-	wget $(DOWNLOAD)
-	touch $@
-
 net-snmp-untar: net-snmp-untar-stamp
-net-snmp-untar-stamp: net-snmp-tarball-stamp
+net-snmp-untar-stamp: $(NETSNMPTAR)
 	tar xovfz $(NETSNMPTAR) 
 	touch $@
 
@@ -124,9 +116,6 @@ net-snmp-configure-stamp: net-snmp-patch-stamp
             --with-sys-location=Unknown \
             --with-sys-contact=root@localhost \
             --with-logfile=/var/log/snmpd.log \
-            --enable-minimalist \
-            --with-features="logging_enable_calllog enable_stderrlog fd_event_manager ctime_to_timet date_n_time check_storage_transition file_utils text_utils stash_to_next oid_stash oid_stash_add_data oid_stash_get_data oid_stash_iterate unregister_app_config_handler data_list_get_list_node statistics" \
-            --enable-ipv6 \
             --with-nl \
             --with-persistent-directory=/var/net-snmp \
             --enable-ucd-snmp-compatibility \
@@ -153,7 +142,7 @@ subdirs: $(SUBDIRS) net-snmp-configure-stamp
 		it="$(SUBDIRS)" ; \
 		for i in $$it ; do \
 			echo "making all in `pwd`/$$i"; \
-			( cd $$i ; $(MAKE)  OS=$(OS)) ; \
+			( cd $$i ; $(MAKE)  OS=$(OS) VERSION=$(VERSION)) ; \
 			if test $$? != 0 ; then \
 				exit 1 ; \
 			fi  \
@@ -197,11 +186,13 @@ debian/changelog: debian/changelog.in
 	mv $<.tmp $@
 
 install: all
-	$(DIRINSTALL) -m 755 $(SBINDIR) $(INITDIR)
+	$(DIRINSTALL) -m 755 $(SBINDIR) $(INITDIR) $(HPAMSDIR)
 	$(DIRINSTALL) -m 755 $(MANDIR)/man8
 	$(INSTALL) -m 755 ./hpHelper $(SBINDIR)
 	$(INSTALL) -m 755 ./hp-ams.sh $(INITDIR)/hp-ams
 	$(INSTALL) -m 644 ./doc/hpHelper.8 $(MANDIR)/man8
+	$(INSTALL) -m 644 ./LICENSE $(HPAMSDIR)
+
 	gzip -f $(MANDIR)/man8/hpHelper.8
 
 

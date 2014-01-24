@@ -40,7 +40,6 @@ case "$1" in
       if [ $? -ne 0 ]; then 
          modprobe hpilo
       fi
-      # this is for getting core dumps, remove for final builds
       if [ "$ALLOW_CORE" = "y" ]; then 
         mkdir -p /var/log/cores/hpHelper
         echo "/var/log/cores/%e/%p-%s-%t.core" > /proc/sys/kernel/core_pattern

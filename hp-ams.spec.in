@@ -5,14 +5,14 @@ name            : hp-ams
 Version         : %VERSION%
 Release         : %RELEASE%
 group           : System Environment/Daemons
-source          : %{tardir}-%RELEASE%.tar.gz
+source          : %{tardir}.tar.gz
 license         : Proprietary
 packager        : Hewlett-Packard Company
 vendor          : Hewlett-Packard Company
 url             : http://www.hp.com/go/proliantlinux
-buildroot       : %{_tmppath}/%{name}-%{version}-%{release}-%(%{__id} -un)
 autoreqprov     : yes 
 Requires(post)  : coreutils, pciutils, bash, lsof
+buildroot       : %{_tmppath}/%{name}-%{version}-%{release}-%(%{__id} -un)
 %if 0%{?_rhel}
 BuildRequires   : rpm-build, make, gcc
 BuildRequires   : glibc-devel
@@ -22,13 +22,8 @@ BuildRequires   : bzip2-devel
 %endif
 %if 0%{?suse_version}
 %if %{suse_version} > 1100
-%define _rpmfilename %{name}-%{version}-%{release}.%{_arch}.rpm
 %if %(%{__id} -un) == abuild
 BuildRequires   : -post-build-checks -rpmlint-Factorys -brp-check-suse
-%endif
-%else
-%if %{suse_version} > 1000
-%define _rpmfilename %{name}-%{version}-%{release}.%{_arch}.rpm
 %endif
 %endif
 %endif
@@ -44,6 +39,10 @@ This package contains the helper daemon that provides information for iLO4
 embedded health and alerting.
 
 %define tardir %{name}-%{version}
+
+%if 0%{?suse_version}
+%debug_package
+%endif
 
 %prep
 ##########################################################################
@@ -76,7 +75,7 @@ else
     export OS=linux
 fi
 
-make ARCH=%{_arch} EFS_VER="$EFS_VER" OS="$OS" all
+make ARCH=%{_arch} EFS_VER="$EFS_VER" OS="$OS" VERSION=%{version} all
 ##########################################################################
 
 %install
@@ -201,18 +200,18 @@ exit 0
 
 %clean
 ##########################################################################
-if [ $RPM_BUILD_ROOT != "/" ]; then
+if [ "$RPM_BUILD_ROOT" != "/" ]; then
    rm -rf $RPM_BUILD_ROOT
 fi
 ##########################################################################
 
 %files -f filelist-%{tardir}
 %defattr(755,root,root)
-# some libraries build 32 and 64 bit versions, 
-# use wildcards to account for this.
+
 %defattr(755,root,root)
 /sbin/hpHelper
 /etc/init.d/hp-ams
+/opt/hp/hp-ams
 
 %defattr(644,root,root)
 /usr/share/man/man8/hpHelper.8.gz

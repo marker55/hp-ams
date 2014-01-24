@@ -15,3 +15,6 @@
 hpHelper
 *-stamp
 net-snmp-*.tar.gz
+net-snmp-?.?
+net-snmp-?.?.?
+

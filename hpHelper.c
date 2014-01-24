@@ -37,7 +37,8 @@ extern void init_cpqStdPciTable(void);
 extern void init_cpqHost(void);
 extern void init_cpqScsi(void);
 extern void init_cpqIde(void);
-
+extern void init_cpqFibreArray(void);
+extern void init_cpqLinOsMgmt(void);
 /* Forward declaration for BB log functions   */
 extern void LOG_OS_INFORMATION(void );
 extern void LOG_OS_BOOT(void );
@@ -231,7 +232,6 @@ main(int argc, char **argv)
      */
     init_agent("hpHelper");
 
-    init_mib_modules();
     netsnmp_ds_set_int(NETSNMP_DS_LIBRARY_ID,
                        NETSNMP_DS_HPILODOMAIN_IML, 4);
 
@@ -243,12 +243,15 @@ main(int argc, char **argv)
                        NETSNMP_DS_AGENT_AGENTX_PING_INTERVAL, interval2ping);
 
     /* sometime iLO4 can be slow so double the default to 2 sec if necessary*/
-    netsnmp_ds_set_int(NETSNMP_DS_LIBRARY_ID, NETSNMP_DS_LIB_TIMEOUT, 1); 
+    netsnmp_ds_set_int(NETSNMP_DS_LIBRARY_ID, NETSNMP_DS_LIB_TIMEOUT, 3); 
 
     /* if the ilo starts dropping packets retry a couple of times */
     netsnmp_ds_set_int(NETSNMP_DS_LIBRARY_ID, NETSNMP_DS_LIB_RETRIES, 5);
 
     init_snmp("hpHelper");
+
+    init_mib_modules();
+
     init_cpqStdPciTable();
 
     init_cpqHost();
@@ -260,6 +263,8 @@ main(int argc, char **argv)
     init_cpqScsi();
 
     init_cpqIde();
+
+    init_cpqFibreArray();
 
     init_cpqNic();
 
@@ -377,18 +382,15 @@ main(int argc, char **argv)
     netsnmp_large_fd_set_cleanup(&writefds);
     netsnmp_large_fd_set_cleanup(&exceptfds);
 
-    snmp_log(LOG_INFO, "Received TERM or STOP signal...  shutting down...\n");
-    return 0;
-
-
     /*
      * at shutdown time 
      */
+
     snmp_shutdown("hpHelper");
 
-    LOG_OS_SHUTDOWN();
+    snmp_log(LOG_INFO, "Received TERM or STOP signal...  shutting down...\n");
 
-    //while(bb_running != 0) usleep(10 * 1000); // 10 milliseconds
+    LOG_OS_SHUTDOWN();
 
     syslog(LOG_NOTICE, "hpHelper Stopped . . "); 
     exit(0);
