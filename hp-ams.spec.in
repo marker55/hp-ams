@@ -5,8 +5,8 @@ name            : hp-ams
 Version         : %VERSION%
 Release         : %RELEASE%
 group           : System Environment/Daemons
-source          : %{tardir}.tar.gz
-license         : Proprietary
+Source0         : %{tardir}-%RELEASE%.tar.gz
+license         : MIT
 packager        : Hewlett-Packard Company
 vendor          : Hewlett-Packard Company
 url             : http://www.hp.com/go/proliantlinux
