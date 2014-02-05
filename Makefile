@@ -1,7 +1,7 @@
 # Overridden during automated builds
 COMP_NAME    ?= hp-ams
-COMP_VER     ?= 1.5.9
-COMP_PKG_REV ?= 666
+COMP_VER     ?= 1.7.0
+COMP_PKG_REV ?= 1242
 
 NAME         ?= $(COMP_NAME)
 VERSION      ?= $(COMP_VER)
@@ -32,7 +32,7 @@ MANDIR:=$(shell if [ -d $(PREFIX)/share/man ] ; then \
                 else \
                     echo $(DESTDIR)/$(PREFIX)/usr/man; fi )
 DISTROLIBS ?= $(shell if [ -f /etc/redhat-release ] ; then \
-                     echo "-lrpm"; \
+                     echo "-lrpmio -lrpm"; \
                   elif [ -f /etc/SuSE-release ] ; then \
                      echo "-lrpm"; \
                   elif [ -f /etc/lsb-release ] ; then \
@@ -160,8 +160,8 @@ hpHelper: $(OBJS) $(OBJS2) $(BUILDNETSNMPDEPS)
 
 clean:
 	rm -f $(TARGETS) $(OBJS) 
-	for d in $(SUBDIRS); do echo $$d ; if [ -d $$d ] ; then ${MAKE} -C $$d clean;fi; done
-	rm -f  debian/changelog
+			for d in $(SUBDIRS); do echo $$d ; if [ -d $$d ] ; then ${MAKE} -C $$d clean;fi; done
+			rm -f  debian/changelog
 	echo "Finished cleaning"
 
 distclean: clean
@@ -209,8 +209,13 @@ $(TARFILE): debian/changelog $(NAME).spec
 	$(MAKE) -C tmp/$(NAME)-$(VERSION) \
           COMP_NAME=$(COMP_NAME) COMP_VER=$(COMP_VER) \
           COMP_PKG_REV=$(COMP_PKG_REV) $(NAME).spec
+	tar -C tmp/$(NAME)-$(VERSION) -xozf $(NETSNMPTAR)
+	if [ -f tmp/$(NAME)-$(VERSION)/$(NETSNMP)/agent/mibgroup/host/data_access/swrun_darwin.c ] ; then \
+	     rm -rf tmp/$(NAME)-$(VERSION)/$(NETSNMP)/agent/mibgroup/host/data_access/swrun_darwin.c ;\
+         tar -C  tmp/$(NAME)-$(VERSION) -cz $(NETSNMP) > $(NETSNMPTAR) ; \
+	fi     
+	rm -rf tmp/$(NAME)-$(VERSION)/$(NETSNMP)
 	tar -C tmp -cz $(NAME)-$(VERSION) > $@
-
 
 provides:
 	@echo $(OBJS2)
