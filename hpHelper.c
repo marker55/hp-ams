@@ -38,7 +38,6 @@ extern void init_cpqHost(void);
 extern void init_cpqScsi(void);
 extern void init_cpqIde(void);
 extern void init_cpqFibreArray(void);
-extern void init_cpqLinOsMgmt(void);
 /* Forward declaration for BB log functions   */
 extern void LOG_OS_INFORMATION(void );
 extern void LOG_OS_BOOT(void );
