@@ -15,7 +15,8 @@ Requires(post)  : coreutils, pciutils, bash, lsof
 buildroot       : %{_tmppath}/%{name}-%{version}-%{release}-%(%{__id} -un)
 %if 0%{?_rhel}
 BuildRequires   : rpm-build, make, gcc
-BuildRequires   : glibc-devel
+BuildRequires   : glibc-devel, rpm-devel
+ExclusiveArch   : x86_64 i686
 %if %{_rhel} < 5
 BuildRequires   : bzip2-devel
 %endif
