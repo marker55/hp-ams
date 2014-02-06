@@ -181,8 +181,8 @@ int get_PortID(char *deviceLink)
 {
     char *devlink;
     char *slashdev;
-    int Port;
-    int Cntlr = 0;
+    int Port = -1;
+    int Cntlr = -1;
     struct dirent **Phylist;
     int NumPhy,k;
     
@@ -192,7 +192,7 @@ int get_PortID(char *deviceLink)
         if ((devlink = strstr(devlink, "port-")) != NULL) {
             if ((slashdev = strstr(devlink, "/")) != NULL) 
                 *slashdev = 0;
-            DEBUGMSGTL(("sasphydrv:container:load", "get_PortID %s\n", devlink));
+            DEBUGMSGTL(("sasphydrv:container:load","get_PortID %s\n", devlink));
             NumPhy = scandir(devlink, &Phylist, phy_select, alphasort);
             if (NumPhy  > 0) {
                 for (k = 0; k < NumPhy; k++) {
@@ -202,11 +202,10 @@ int get_PortID(char *deviceLink)
                      free(Phylist[k]);
                 }
                 free(Phylist);
-	    }
+	        }
             return Port;
         }
     }
-
     return -1;
 }
 
