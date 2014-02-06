@@ -13,14 +13,8 @@ url             : http://www.hp.com/go/proliantlinux
 autoreqprov     : yes 
 Requires(post)  : coreutils, pciutils, bash, lsof
 buildroot       : %{_tmppath}/%{name}-%{version}-%{release}-%(%{__id} -un)
-%if 0%{?_rhel}
-BuildRequires   : rpm-build, make, gcc
 BuildRequires   : glibc-devel, rpm-devel
 ExclusiveArch   : x86_64 i686
-%if %{_rhel} < 5
-BuildRequires   : bzip2-devel
-%endif
-%endif
 %if 0%{?suse_version}
 %if %{suse_version} > 1100
 %if %(%{__id} -un) == abuild
