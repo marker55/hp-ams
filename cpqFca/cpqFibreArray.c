@@ -12,7 +12,7 @@
 
 #define CPQMIB              16
 #define CPQMIBREVMAJOR      1
-#define CPQMIBREVMINOR      32
+#define CPQMIBREVMINOR      34
 
 oid       cpqFcaMib_oid[] = { 1, 3, 6, 1, 4, 1, 232, 16, 1 };
 size_t    cpqFcaMib_oid_len =  OID_LENGTH(cpqFcaMib_oid);
