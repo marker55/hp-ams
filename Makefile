@@ -1,7 +1,7 @@
 # Overridden during automated builds
 COMP_NAME    ?= hp-ams
 COMP_VER     ?= 1.7.0
-COMP_PKG_REV ?= 1247
+COMP_PKG_REV ?= 1
 
 NAME         ?= $(COMP_NAME)
 VERSION      ?= $(COMP_VER)
@@ -74,7 +74,7 @@ BUILDNETSNMPDEPS = $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) -
 BUILDNETSNMPCMD =  $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --build-command ;fi)
 BUILDLIBS = $(BUILDNETSNMPDEPS)  -lm -lresolv -lcrypt $(DISTROLIBS)
 
-TARFILE=$(NAME)-$(VERSION)-$(COMP_PKG_REV).tar.gz
+TARFILE=$(NAME)-$(VERSION).tar.gz
 
 OBJS=hpHelper.o 
 

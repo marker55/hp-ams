@@ -1,14 +1,11 @@
-#Do not change the string "Insight Management Agents" in Summary field. This
-#is used by HPSIM to check if agents are present.
 summary         : Agentless Monitoring Service for HP ProLiant Gen8 Systems
 name            : hp-ams
 Version         : %VERSION%
-Release         : %RELEASE%
+Release         : 1%{?dist}
 group           : System Environment/Daemons
-Source0         : %{tardir}-%RELEASE%.tar.gz
+Source0         : %{tardir}.tar.gz
 license         : MIT
-packager        : Hewlett-Packard Company
-vendor          : Hewlett-Packard Company
+vendor          : Hewlett-Packard
 url             : http://www.hp.com/go/proliantlinux
 autoreqprov     : yes 
 Requires(post)  : coreutils, pciutils, bash, lsof
@@ -61,11 +58,7 @@ export RPM_NAME=%{name}
 #master make step
     export DEBUGFLAGS="-O2"
 if [ -f /etc/debian_version ]; then
-    export SPECIFIC_LINUX="-DDEBIAN"
     export OS=debian
-elif [ -d /etc/vmware ]; then
-    export SPECIFIC_LINUX="-DVMWARE"
-    export OS=vmware
 else 
     export OS=linux
 fi
@@ -173,16 +166,6 @@ if [ -x /sbin/insserv ]; then
    /sbin/insserv -f -r hp-ams 2>/dev/null
 elif [ -x /sbin/chkconfig ]; then
    /sbin/chkconfig --del hp-ams
-fi
-
-# un-install any SELinux files we installed
-selinux_policy_module=/opt/hp/hp-ams/nic/etc/HPcmanic.pp
-selinux_policy_cmd=/usr/sbin/semodule
-if [ -f $selinux_policy_module ] && [ -f $selinux_policy_cmd ]
-then
-  policy_module_name=`basename $selinux_policy_module .pp`
-  echo "Un-installing $policy_module_name SELinux policy module"
-  $selinux_policy_cmd -r $policy_module_name
 fi
 
 exit 0
