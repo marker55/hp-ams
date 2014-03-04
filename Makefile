@@ -32,7 +32,7 @@ MANDIR:=$(shell if [ -d $(PREFIX)/share/man ] ; then \
                 else \
                     echo $(DESTDIR)/$(PREFIX)/usr/man; fi )
 DISTROLIBS ?= $(shell if [ -f /etc/redhat-release ] ; then \
-                     echo "-lrpmio -lrpm"; \
+                     echo "-lrpmio -lrpm -lpci"; \
                   elif [ -f /etc/SuSE-release ] ; then \
                      echo "-lrpm"; \
                   elif [ -f /etc/lsb-release ] ; then \
