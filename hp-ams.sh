@@ -51,7 +51,7 @@ case "$1" in
       else
           let MAXCCBS=6
       fi
-      let ILODEVS=`lsof|grep hpilo|wc -l`
+      let ILODEVS=`lsof +d /dev/hpilo|grep hpilo|wc -l`
       if [ $ILODEVS -ge $MAXCCBS ]; then
          echo "Running $SNAME will exhaust all available iLO devices." 
          echo "Please stop hp-health, hp-snmp-agents or other consumers of iLO devices."
