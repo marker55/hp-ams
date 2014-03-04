@@ -202,6 +202,7 @@ $(TARFILE): debian/changelog $(NAME).spec
 	tar -c * --exclude '*/.svn' \
 	         --exclude tmp \
                  --exclude '*~' \
+                 --exclude cpqPerf \
                  --exclude '#*#' \
                  --exclude $(NAME).spec \
                  --exclude '.*.swp' | (cd tmp/$(NAME)-$(VERSION) && tar x)
