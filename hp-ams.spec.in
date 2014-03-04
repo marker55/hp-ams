@@ -5,7 +5,6 @@ Release         : 1%{?dist}
 group           : System Environment/Daemons
 Source0         : %{tardir}.tar.gz
 license         : MIT
-vendor          : Hewlett-Packard
 url             : http://www.hp.com/go/proliantlinux
 autoreqprov     : yes 
 Requires(post)  : coreutils, pciutils, bash, lsof
