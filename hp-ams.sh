@@ -40,11 +40,6 @@ case "$1" in
       if [ $? -ne 0 ]; then 
          modprobe hpilo
       fi
-      if [ "$ALLOW_CORE" = "y" ]; then 
-        mkdir -p /var/log/cores/hpHelper
-        echo "/var/log/cores/%e/%p-%s-%t.core" > /proc/sys/kernel/core_pattern
-        ulimit -c unlimited
-      fi
 
       if [ -f /sys/module/hpilo/parameters/max_ccb ]; then
           let MAXCCBS=`cat /sys/module/hpilo/parameters/max_ccb`-2
