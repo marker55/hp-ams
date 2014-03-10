@@ -6,7 +6,9 @@ OPT ?= -O2
 # -I/build/toolchain/lin32/RHEL5/usr/include
 CPPFLAGS = -I../$(NETSNMP)/include -I../ -I../common
 
-CFLAGS = -fno-strict-aliasing $(OPT) -g -pipe -Werror -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux -D_GNU_SOURCE
+CFLAGS ?= -fno-strict-aliasing $(OPT) -g -pipe -Werror -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux -D_GNU_SOURCE
+
+CFLAGS += -D_GNU_SOURCE
 
 OBJS = $(OS).o log.o osinfo.o boot.o driver.o service.o osusage.o memusage.o procusage.o common.o crash.o package.o
 

@@ -64,9 +64,11 @@ NETSNMPTAR = $(NETSNMP).tar.gz
 CC = gcc
 OPT ?= -O2
 
-CFLAGS = -fno-strict-aliasing $(OPT) -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux 
-export CFLAGS
+#CFLAGS = -fno-strict-aliasing $(OPT) -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector-strong --param=ssp-buffer-size=4 -grecord-gcc-switches -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux 
+#export CFLAGS
 
+#LDFLAGS = -Wl,-z,relro -Wl,-z,now
+#export LDFLAGS
 PWD = `pwd`
 CPPFLAGS = -I. -I ./include  $(shell  if [ -f $(NETSNMPCONFIG) ] ; then $(NETSNMPCONFIG) --build-includes $(NETSNMP); fi) -I$(NETSNMP)/agent/mibgroup/mibII
 BUILDAGENTLIBS = $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --agent-libs ; fi)   
@@ -142,6 +144,8 @@ subdirs: $(SUBDIRS) net-snmp-configure-stamp
 		it="$(SUBDIRS)" ; \
 		for i in $$it ; do \
 			echo "making all in `pwd`/$$i"; \
+			export CFLAGS=`$(NETSNMPCONFIG) --cflags`; \
+			export LDFLAGS=`$(NETSNMPCONFIG) --ldflags`; \
 			( cd $$i ; $(MAKE)  OS=$(OS) VERSION=$(VERSION)) ; \
 			if test $$? != 0 ; then \
 				exit 1 ; \
@@ -156,7 +160,7 @@ testHelper: testHelper.o $(BUILDNETSNMPDEPS)
 	(CC) -o testHelper testHelper.o $(BUILDLIBS)
 
 hpHelper: $(OBJS) $(OBJS2) $(BUILDNETSNMPDEPS)
-	$(CC) -o hpHelper $(OBJS) $(OBJS2) $(BUILDLIBS)
+	$(CC) -o hpHelper `${NETSNMPCONFIG} --cflags` `${NETSNMPCONFIG} --ldflags` $(OBJS) $(OBJS2) $(BUILDLIBS)
 
 clean:
 	rm -f $(TARGETS) $(OBJS) 
@@ -202,7 +206,6 @@ $(TARFILE): debian/changelog $(NAME).spec
 	tar -c * --exclude '*/.svn' \
 	         --exclude tmp \
                  --exclude '*~' \
-                 --exclude cpqPerf \
                  --exclude '#*#' \
                  --exclude $(NAME).spec \
                  --exclude '.*.swp' | (cd tmp/$(NAME)-$(VERSION) && tar x)
