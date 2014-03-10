@@ -186,7 +186,7 @@ int get_pci_slot_info(netsnmp_container* container)
     int i , rc, bc, dom = 0, bus = 0, device = 0;
     PSMBIOS_SYSTEM_SLOTS slotInfo;
 
-    char buf[80];
+    char buf[81];
     char fname[256];
     int slotfd = -1;
     if (slots)

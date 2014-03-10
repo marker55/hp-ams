@@ -324,7 +324,7 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
     int     i, j = 0;
     int     domain,bus,device,function;
     char    sysfsDir[1024];
-    char    linkBuf[1024];
+    char    linkBuf[1025];
     char    mibStatus =  MIB_CONDITION_OK;
     ssize_t link_sz;
     cpqNicIfPhysAdapterTable_entry* entry;

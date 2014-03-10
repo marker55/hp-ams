@@ -98,7 +98,7 @@ int get_pcislot(char *bus_info)
     int slotcount;
     char fname[256] = "/sys/bus/pci/slots/";
     int sysdirlen;
-    char buf[80];
+    char buf[81];
     int bc;
     int slotfd = -1;
     int i;

@@ -687,7 +687,7 @@ static void cpqsas_disk_process(int fd, void *data) {
     netsnmp_container* container;
  
     int                buflen, bufpos;
-    char               buf[16384];
+    char               buf[16394];
     int                len, req_len, length;
     char *action = NULL;
     char *subsystem = NULL;
