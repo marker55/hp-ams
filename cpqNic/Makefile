@@ -18,7 +18,8 @@ OPT ?= -O2
 
 # shared library flags (assumes gcc)
 DLFLAGS=-fPIC -shared 
-CFLAGS          = -fno-strict-aliasing $(OPT) -g -pipe -Werror -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux -D_GNU_SOURCE
+CFLAGS          ?= -fno-strict-aliasing $(OPT) -g -pipe -Werror -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux -D_GNU_SOURCE
+CFLAGS          += -D_GNU_SOURCE
 CPPFLAGS = -I. -I..  $(shell if [ -f ../$(NETSNMP)/net-snmp-config ] ; then ../$(NETSNMP)/net-snmp-config --build-includes ../$(NETSNMP); fi)
 OBJS=cpqNicIfLogMapTable.o cpqNicIfPhysAdapterTable.o cpqNic.o
 TARGETS=cpqNicIfLogMapTable.o cpqNicIfPhysAdapterTable.o cpqNic.o

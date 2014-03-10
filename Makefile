@@ -12,6 +12,7 @@ MAKE := make ARCH=${ARCH}
 #
 RPMSOURCES=$(shell rpm --eval %{_sourcedir})
 RPMRPMS=$(shell rpm --eval %{_rpmdir})
+RPM_OPT_FLAGS=$(shell rpm --eval %{__global_cflags})
 #
 INSTALL=install
 DIRINSTALL=install -d
@@ -114,15 +115,15 @@ net-snmp-untar-stamp: $(NETSNMPTAR)
 net-snmp-configure: net-snmp-configure-stamp
 net-snmp-configure-stamp: net-snmp-patch-stamp
 	cd $(NETSNMP) ; ./configure \
-            --with-cflags="$(OPT) -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE" \
+            --enable-static --disable-shared \
+            --with-cflags="$(RPM_OPT_FLAGS)  -D_RPM_4_4_COMPAT -DNETSNMP_NO_INLINE" \
+            --with-ldflags="-Wl,-z,relro -Wl,-z,now" \
             --with-sys-location=Unknown \
             --with-sys-contact=root@localhost \
             --with-logfile=/var/log/snmpd.log \
             --with-nl \
-            --with-persistent-directory=/var/net-snmp \
+            --with-persistent-directory=/var/lib/net-snmp \
             --enable-ucd-snmp-compatibility \
-            --enable-static \
-            --disable-shared \
             --with-pic \
             --disable-embedded-perl \
             --without-perl-modules \
