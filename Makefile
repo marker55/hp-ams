@@ -132,7 +132,7 @@ net-snmp-configure-stamp: net-snmp-patch-stamp
             --with-out-mib-modules=$(NOTMIBS) \
 	    --with-mib-modules=$(MIBS) \
             --with-out-transports="TCPIPv6 UDPIPv6 SSH TCP Alias" \
-            --with-transports="HPILO UDP Unix" \
+            --with-transports="HPILO Unix" \
 	    --disable-manuals \
 	    --disable-applications \
 	    --disable-md5 \
