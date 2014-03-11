@@ -69,13 +69,7 @@ endif
 
 NETSNMPTAR = $(NETSNMP).tar.gz
 CC = gcc
-OPT ?= -O2
 
-#CFLAGS = -fno-strict-aliasing $(OPT) -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector-strong --param=ssp-buffer-size=4 -grecord-gcc-switches -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux 
-#export CFLAGS
-
-#LDFLAGS = -Wl,-z,relro -Wl,-z,now
-#export LDFLAGS
 PWD = `pwd`
 CPPFLAGS = -I. -I ./include  $(shell  if [ -f $(NETSNMPCONFIG) ] ; then $(NETSNMPCONFIG) --build-includes $(NETSNMP); fi) -I$(NETSNMP)/agent/mibgroup/mibII
 BUILDAGENTLIBS = $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --agent-libs ; fi)   
