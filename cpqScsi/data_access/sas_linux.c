@@ -64,12 +64,19 @@ struct udev_monitor_netlink_header {
 extern unsigned char     cpqHoMibHealthStatusArray[];
 extern oid       cpqHoFwVerTable_oid[];
 extern size_t    cpqHoFwVerTable_oid_len;
-extern unsigned char*get_ScsiGeneric(unsigned char*);
-extern unsigned long long get_BlockSize(unsigned char*);
+extern unsigned char*get_ScsiGeneric(char*);
+extern unsigned long long get_BlockSize(char*);
+extern int is_unit_ssd(int fd);
 extern int get_DiskType(char *);
 extern char * get_DiskModel(char *);
 extern char * get_DiskRev(char *);
 extern char * get_DiskState(char *);
+extern int pcislot_scsi_host(char * buffer);
+
+extern int register_FW_version(int dir, int fw_idx, int cat, int type,  int update,
+                        char *fw_version, char *name, char *location, char *key);
+
+extern int unregister_FW_version(int fw_idx);
 
 static int cpqsas_disk_listen(netsnmp_container* container);
 
@@ -251,7 +258,6 @@ int get_BoxID(char *deviceLink)
 
 int get_ExpPhyID(char *deviceLink) 
 {
-    int ExpPhyID = 0;
     int Cntlr = 0;
     int Exp = -1;
     char attribute[256];
@@ -381,7 +387,6 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
                                       cpqSasHbaTable_entry *hba,
                                       netsnmp_container* container)
 {
-    int Cntlr, Index;
     char *dname;
     int Host = -1;
     int Exp = -1;
@@ -399,10 +404,8 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
     cpqSasPhyDrvTable_entry *disk;
     int PortID = 0;
     char *value;
-    unsigned long long llvalue;
     char *generic;
     int disk_fd;
-    char * OS_name;
     char *serialnum = NULL;
     int Health = 0, Speed = 0;
     //int j, k;
@@ -521,7 +524,7 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
 
         disk->cpqSasPhyDrvSize = get_BlockSize(scsi) >> 11;
 
-        generic = get_ScsiGeneric(scsi);
+        generic = (char *)get_ScsiGeneric(scsi);
         if (generic != NULL) {
             memset(disk->cpqSasPhyDrvOsName, 0, 256);
             disk->cpqSasPhyDrvOsName_len = 
@@ -634,7 +637,6 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
     /* send a trap if drive is failed or degraded on the first time 
        through or it it changes from OK to degraded of failed */
     if ((old == NULL) || (disk->OldStatus == SAS_PHYS_STATUS_OK)) {
-        int trapflag = 0;
         switch (disk->cpqSasPhyDrvStatus) {
             case SAS_PHYS_STATUS_PREDICTIVEFAILURE:
             case SAS_PHYS_STATUS_OFFLINE:
@@ -681,14 +683,10 @@ static void cpqsas_disk_process(int fd, void *data) {
     struct msghdr smsg;
     struct iovec iov;
     char cred_msg[CMSG_SPACE(sizeof(struct ucred))];
-    struct cmsghdr *cmsg;
-    struct ucred *cred;
     struct udev_monitor_netlink_header *nlh;
-    netsnmp_container* container;
  
     int                buflen, bufpos;
     char               buf[16394];
-    int                len, req_len, length;
     char *action = NULL;
     char *subsystem = NULL;
     char *devpath = NULL;
@@ -700,7 +698,6 @@ static void cpqsas_disk_process(int fd, void *data) {
 
 
     DEBUGMSGTL(("netlink:disk", "cpqsas_disk_process()\n"));
-retry:
     memset(buf, 0x00, sizeof(buf));
     iov.iov_base = &buf;
     iov.iov_len = sizeof(buf);
@@ -750,8 +747,6 @@ retry:
     while (bufpos < buflen) {
         char *key;
         size_t keylen;
-        int removing = 0;
-        int adding = 0;
 
         key = &buf[bufpos];
         if (!strncmp(key, "ACTION=", 7)) 
@@ -842,7 +837,7 @@ retry:
              !strncmp(action, "add", 3) &&
             (devpath != NULL)) {
 #if RHEL_MAJOR == 5
-	    char buffer[256];
+	        char buffer[256];
             char lbuffer[256];
             int len;
             strcpy(buffer, "/sys/");
@@ -856,8 +851,6 @@ retry:
 
             cpqSasHbaTable_entry *hba;
             cpqSasPhyDrvTable_entry *disk;
-            cpqSasPhyDrvTable_entry *old;
-            cpqHoFwVerTable_entry *fw_entry;
             netsnmp_container *hba_container;
             netsnmp_iterator  *it;
             netsnmp_cache *hba_cache;
@@ -872,7 +865,7 @@ retry:
             hba = ITERATOR_FIRST(it);
 
             while ( hba != NULL ) {
-		sleep(1);
+		        sleep(1);
                 if (Cntlr == hba->cpqSasHbaIndex) {
 #if RHEL_MAJOR == 5
                     DEBUGMSGTL(("sasphydrv:container:load", 
@@ -900,7 +893,6 @@ retry:
 
 static int cpqsas_disk_listen(netsnmp_container* container)
 {
-    int status;
     static int fd = -1;
 
     if (fd >= 0)
@@ -925,7 +917,6 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
 
     cpqSasHbaTable_entry *entry;
     cpqSasHbaTable_entry *old;
-    cpqHoFwVerTable_entry *fw_entry = NULL;
 
     sashba_config_buf * hbaConfig = NULL;
     sas_connector_info_buf * hbaConnector = NULL;
@@ -936,7 +927,7 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
     char attribute[256];
     char *value;
     long  rc = 0;
-    int i, j, len;
+    int i, len;
     netsnmp_index tmp;
     oid oid_index[2];
 
@@ -1172,7 +1163,7 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
                        sizeof(sas_connector_info) * 32);
                 free(hbaConnector);
                 for (iii = 0; iii < 32; iii++) {
-                    int conlen = strlen(entry->Reference[iii].bConnector) - 1;
+                    int conlen = strlen((char *)entry->Reference[iii].bConnector) - 1;
                     if (entry->Reference[iii].bConnector[conlen] == 0x20 ) 
                         entry->Reference[iii].bConnector[conlen] = 0;
                     DEBUGMSGTL(("sashba:container:load", "Connector= %s\n",
@@ -1214,16 +1205,13 @@ int netsnmp_arch_sasphydrv_container_load(netsnmp_container* container)
 {
     cpqSasHbaTable_entry *hba;
     cpqSasPhyDrvTable_entry *disk;
-    cpqSasPhyDrvTable_entry *old;
-    cpqHoFwVerTable_entry *fw_entry;
     netsnmp_container *hba_container;
     netsnmp_iterator  *it;
     netsnmp_cache *hba_cache;
 
     int len;
 
-    int j, k;
-    long  rc = 0;
+    int j;
     int SasCondition = CPQ_REG_OK;
     DEBUGMSGTL(("sasphydrv:container:load", "loading\n"));
     /*
@@ -1258,7 +1246,6 @@ int netsnmp_arch_sasphydrv_container_load(netsnmp_container* container)
 
         for (j= 0; j< NumSasDevice; j++) {
             char buffer[256], lbuffer[256];
-            char *end_device = NULL;
             int Cntlr;
             memset(&buffer, 0, sizeof(buffer));
             strcpy(buffer, SasDeviceDir);
@@ -1324,7 +1311,7 @@ void SendSasTrap(int trapID,
     static oid cpqSasPhyDrvSasAddress[] = 
     { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 17 };
 
-    netsnmp_variable_list *var_list = NULL, *vars = NULL;
+    netsnmp_variable_list *var_list = NULL;
     int status, oldstatus;
 
     unsigned int cpqHoTrapFlag;

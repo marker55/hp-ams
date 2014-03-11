@@ -237,7 +237,7 @@ static int gettmpname(char *buf, int bufsz) {
         rc = fd;
     } else {
         close(fd);
-        if (debug = 0)
+        if (debug == 0)
             unlink(buf);
     }
     return rc;
@@ -757,7 +757,7 @@ static llist* find_crash_entries(int previous_flag) {
                     }
                 } else {
                     /* skip if there is no vmcore file */
-                    DEBUGMSGTL(("rec:crash", "rec:crash", "Skipping: %s (no vmcore found).", ep->d_name));
+                    DEBUGMSGTL(("rec:crash", "Skipping: %s (no vmcore found).", ep->d_name));
                 }
             }
             closedir(dp);
@@ -765,7 +765,7 @@ static llist* find_crash_entries(int previous_flag) {
             perror ("Couldn't open crash directory.");
         }
     } else {
-        DEBUGMSGTL(("rec:crash", "rec:crash", "Crash directory does not exist (%s), skipping.", crash_dir));
+        DEBUGMSGTL(("rec:crash", "Crash directory does not exist (%s), skipping.", crash_dir));
     }
     return l;
 }
@@ -810,7 +810,7 @@ static int update_previous_crash_entries(llist* cur, llist* prev) {
                 fprintf(fp, "This file notes that this crash has already been processed\n");
                 fprintf(fp, "and recorded by hpHelper.\n");
                 fclose(fp);
-                DEBUGMSGTL(("rec:crash", "rec:crash", "Created %s", filename));
+                DEBUGMSGTL(("rec:crash", "Created %s", filename));
             }
         }
 
@@ -1068,7 +1068,6 @@ void LOG_PROCESS_CRASHES(void) {
     int rc = 0;
     llist* current_crash_entries = NULL;
     llist* previous_crash_entries = NULL;
-    int fd;
 
     struct stat sb;
 

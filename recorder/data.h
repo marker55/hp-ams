@@ -14,6 +14,10 @@
 
 #include <string.h>
 #include "recorder_types.h"
+extern void
+dump_chunk(const char *debugtoken, const char *title, const u_char * buf,
+           int size);
+
 
 #pragma pack(1)
 

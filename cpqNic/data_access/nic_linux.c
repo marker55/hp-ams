@@ -51,7 +51,6 @@ typedef __u8 u8;
 #include "cpqNic.h"
 #include "cpqnic.h"
 #include "nic_linux.h"
-#include "nic_db.h"
 #include "utils.h"
 #include "smbios.h"
 
@@ -72,7 +71,6 @@ extern unsigned char cpqHoMibHealthStatusArray[];
 extern oid       cpqHoFwVerTable_oid[];
 extern size_t    cpqHoFwVerTable_oid_len;
 
-static struct ifconf ifc;
 static struct ifreq  ifr;
 char    ifLogMapOverallStatus = 2;
 
@@ -146,6 +144,9 @@ static void GetConfSpeedDuplex(cpqNicIfPhysAdapterTable_entry *);
 
 oid sysUpTimeOid[] = {1, 3, 6, 1, 2, 1, 1, 3, 0};
 
+extern int name2indx(char *name);
+extern int register_FW_version(int dir, int fw_idx, int cat, int type,  int update,
+                        char *fw_version, char *name, char *location, char *key);
 void free_ethtool_info_members(ethtool_info *); 
 int32_t get_ethtool_info(char *, ethtool_info *);
 static int send_cpqnic_trap(int, cpqNicIfPhysAdapterTable_entry*);
@@ -285,6 +286,7 @@ int get_if_status(char *interface) {
                 return ADAPTER_CONDITION_OTHER;
             
             free(value);
+            return ADAPTER_CONDITION_OTHER;
         }
     } else 
         return ADAPTER_CONDITION_OTHER;
@@ -306,7 +308,6 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
 
     char buffer[256];
     char attribute[256];
-    char *value;
     int     iMacLoop;
     oid     Index;
     netsnmp_index tmp;
@@ -323,7 +324,6 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
     struct dirent **devlist;
     int     i, j = 0;
     int     domain,bus,device,function;
-    char    sysfsDir[1024];
     char    linkBuf[1025];
     char    mibStatus =  MIB_CONDITION_OK;
     ssize_t link_sz;
@@ -628,7 +628,7 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
                         devlist[i]->d_name));
             j++;
         }
-        DEBUGMSGTL(("cpqnic:arch","Check NIC trap = %s Status = %d, Prev = %d\n",
+        DEBUGMSGTL(("cpqnic:arch","Check NIC trap = %s Status = %ld, Prev = %ld\n",
                         devlist[i]->d_name,
                         entry->cpqNicIfPhysAdapterStatus,
                         entry->cpqNicIfPhysAdapterPrevStatus));
@@ -663,14 +663,12 @@ int netsnmp_arch_iflog_container_load(netsnmp_container *container)
     int map = 0;
     int rc;
     char chTemp[256];
-    char *pchTemp;
     int bondtype;
     int mapStatus;
     netsnmp_index tmp;
     oid oid_index[2];
     netsnmp_container *ifphys_container;
     netsnmp_iterator  *it;
-    netsnmp_cache *ifphys_cache;
     cpqNicIfPhysAdapterTable_entry* ifphys_entry;
 
     cpqNicIfLogMapTable_entry *entry;
@@ -1079,8 +1077,7 @@ static int send_cpqnic_trap(int specific_type,
 
     unsigned char *pRecord = NULL;
     PCQSMBIOS_SERV_SYS_ID pServSysId;
-    int recCount = 0, iLoop;
-    cpqNicIfLogical_t *pIfLog;
+    int recCount = 0;
     netsnmp_variable_list *var_list = NULL;
 
     static oid compaq[] = { 1, 3, 6, 1, 4, 1, 232 };

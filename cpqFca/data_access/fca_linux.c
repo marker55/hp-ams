@@ -37,6 +37,8 @@
 extern unsigned char     cpqHoMibHealthStatusArray[];
 extern oid       cpqHoFwVerTable_oid[];
 extern size_t    cpqHoFwVerTable_oid_len;
+extern int register_FW_version(int dir, int fw_idx, int cat, int type,  int update,
+                        char *fw_version, char *name, char *location, char *key);
 
 extern int file_select(const struct dirent *);
 extern int pcislot_scsi_host(char * buffer);
@@ -52,39 +54,6 @@ static int NumFcaHost;
 static struct dirent **ScsiHostlist;
 static char * ScsiHostDir = "/sys/class/scsi_host/";
 static int NumScsiHost;
-
-static struct dirent **ScsiDisklist;
-static char * ScsiDiskDir = "/sys/class/scsi_disk/";
-static int NumScsiDisk;
-
-static struct dirent **BlockDisklist;
-static int NumBlockDisk;
-
-static struct dirent **GenericDisklist;
-static int NumGenericDisk;
-
-static char *current_Hba;
-
-static int block_select(const struct dirent *entry)
-{
-    if (strncmp(entry->d_name,"block:sd",8) == 0)
-        return(1);
-    return 0;
-}
-
-static int generic_select(const struct dirent *entry)
-{
-    if (strncmp(entry->d_name,"scsi_generic:sg",15) == 0)
-        return(1);
-    return 0;
-}
-
-static int disk_select(const struct dirent *entry)
-{
-    if (strncmp(entry->d_name,current_Hba,strlen(current_Hba)) == 0)
-        return(1);
-    return 0;
-}
 
 static int fca_select(const struct dirent *entry)
 {
@@ -365,17 +334,16 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
 
     cpqFcaHostCntlrTable_entry *entry;
     cpqFcaHostCntlrTable_entry *old;
-    cpqHoFwVerTable_entry *fw_entry;
 
     netsnmp_index tmp;
     oid oid_index[2];
 
     int FcaIndex, Host;
-    char buffer[256], lbuffer[256], *pbuffer;
+    char buffer[256];
     char attribute[256];
     char *value;
     long  rc = 0;
-    int i,len;
+    int i;
 
     DEBUGMSGTL(("fcahc:container:load", "loading\n"));
 
@@ -611,7 +579,9 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
 
         if ((entry->cpqFcaHostCntlrStatus != entry->oldStatus) &&
             (entry->oldStatus != FC_HBA_STATUS_OTHER))  {
-             DEBUGMSGTL(("fcahc:container:load", "SENDING FCA STATUS CHANGE TRAP status = %d old = %d\n", entry->cpqFcaHostCntlrStatus, entry->oldStatus));
+             DEBUGMSGTL(("fcahc:container:load", 
+                         "SENDING FCA STATUS CHANGE TRAP status = %ld old = %ld\n", 
+                         entry->cpqFcaHostCntlrStatus, entry->oldStatus));
              SendFcaTrap( FCA_TRAP_HOST_CNTLR_STATUS_CHANGE, entry );
              entry->oldStatus = entry->cpqFcaHostCntlrStatus; //save Old status
         }

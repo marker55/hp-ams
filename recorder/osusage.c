@@ -23,6 +23,9 @@ int doCodeDescriptor(unsigned int, unsigned int, unsigned char, unsigned char,
 extern int log_interval;
 extern void rec_log_os_usage(unsigned int, void *);
 extern int os_usage_reinit;
+extern void
+dump_chunk(const char *debugtoken, const char *title, const u_char * buf,
+           int size);
 
 static field fld[] = {
       {REC_SIZE_DWORD,   REC_TYP_NUMERIC, "Process Count"},

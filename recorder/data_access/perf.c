@@ -23,7 +23,7 @@ REC_AMS_MemoryUsageData MemoryUsageData;
 int proc_usage_reinit = 0;
 int mem_usage_reinit = 0;
 
-extern void close_record(int);
+extern void close_rec(int);
 extern void LOG_MEMORY_USAGE(void);
 extern void LOG_PROCESSOR_USAGE(void);
 

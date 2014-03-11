@@ -19,6 +19,7 @@ const oid       cpqSasPhyDrvTable_oid[] =
         { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1 };
 const size_t    cpqSasPhyDrvTable_oid_len =
         OID_LENGTH(cpqSasPhyDrvTable_oid);
+extern int unregister_FW_version(int fw_idx);
 extern int      netsnmp_arch_sasphydrv_container_load(netsnmp_container*);
 static void     _cache_free(netsnmp_cache * cache, void *magic);
 static int      _cache_load(netsnmp_cache * cache, void *vmagic);

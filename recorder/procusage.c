@@ -27,6 +27,9 @@ extern int proc_select(const struct dirent *);
 extern int log_interval;
 extern void rec_log_proc_usage(unsigned int, void *);
 extern int proc_usage_reinit;
+extern void
+dump_chunk(const char *debugtoken, const char *title, const u_char * buf,
+           int size);
 
 static field fld[] = {
       {REC_SIZE_BYTE,   REC_TYP_NUMERIC, "User Time "},

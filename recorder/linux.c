@@ -23,6 +23,9 @@
 #define MAXHPILOCHANNELS 24
 
 #define HPILO_CCB "/dev/hpilo/d0ccb"
+extern void
+dump_chunk(const char *debugtoken, const char *title, const u_char * buf,
+           int size);
 
 int rec_fd = -1;
 extern int s_ams_rec_class;

@@ -55,13 +55,10 @@ int
 cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
 {
     rpmts                 ts;
-#ifdef NEWRPM
-    struct rpmtd_s tag_data;
-#endif
     rpmdbMatchIterator    mi;
     Header                h;
     const char           *n, *v, *r, *g, *vendor, *description;
-    int32_t              *t;
+    uint32_t              *t;
     int                   rc = 0, i = 0;
     struct tm            *td;
     cpqHoSwVerTable_entry *entry;

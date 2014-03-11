@@ -588,7 +588,7 @@ void scan_hw_ids()
             class_id = (int)strtol(&buffer[2], NULL, 16) << 16;
             class_looking = 1;
             memset(&class_id_str[0], 0, 80);
-            strcpy(&class_id_str[0], &buffer[6]);
+            strcpy((char *)&class_id_str[0], &buffer[6]);
             continue;
         }
 
@@ -601,8 +601,8 @@ void scan_hw_ids()
             for (pciclass = class_root; 
                     pciclass != NULL; pciclass = pciclass->next) {
                 if (class_id == (pciclass->device_class & 0xffff00) ) {
-                    if ((pciclass->super = malloc(strlen(&class_id_str[0]) + 1)) != NULL) 
-                        strcpy((char *)pciclass->super, &class_id_str[0]);
+                    if ((pciclass->super = malloc(strlen((char *)&class_id_str[0]) + 1)) != NULL) 
+                        strcpy((char *)pciclass->super, (char *)&class_id_str[0]);
                     if ((pciclass->name = malloc(strlen(&buffer[5]) + 1)) != NULL) 
                         strcpy((char *)pciclass->name, &buffer[5]);
                 }
