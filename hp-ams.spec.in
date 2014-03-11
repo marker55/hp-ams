@@ -106,7 +106,7 @@ sync
 #
 echo "Please read the Licence Agreement for this software at"
 echo
-echo "         /opt/hp/hp-ams/hp-ams.license"
+echo "         /usr/share/doc/%{name}-%{version}/LICENSE"
 echo
 echo "By not removing this package, you are accepting the terms"
 echo "of the \"HP Proliant Essentials Software End User License Agreement\"."
@@ -192,6 +192,10 @@ fi
 
 %defattr(644,root,root)
 /usr/share/man/man8/hpHelper.8.gz
+
+%defattr(644,root,root)
+/usr/share/doc/hp-ams-%{version}/LICENSE
+/usr/share/doc/hp-ams-%{version}/COPYING
 
 %changelog
 * Wed Jul 28 2010 HP Linux Development <Linux_SWdeliverables@external.groups.hp.com> %VERSION%-%RELEASE%

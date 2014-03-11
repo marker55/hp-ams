@@ -26,6 +26,12 @@ SBINDIR=$(DESTDIR)$(PREFIX)/sbin
 ETCDIR=$(DESTDIR)$(PREFIX)/etc
 INITDIR=$(ETCDIR)/init.d
 HPAMSDIR=$(DESTDIR)$(PREFIX)/opt/hp/hp-ams
+DOCDIR:=$(shell if [ -d $(PREFIX)/share/ ] ; then \
+                    echo $(DESTDIR)/$(PREFIX)/share/doc/$(NAME)-$(VERSION) ; \
+                elif [ -d $(PREFIX)/usr/share/ ] ; then \
+                    echo $(DESTDIR)/$(PREFIX)/usr/share/doc/$(NAME)-$(VERSION) ; \
+                else \
+                    echo $(DESTDIR)/$(PREFIX)/usr/doc/$(NAME)-$(VERSION); fi )
 MANDIR:=$(shell if [ -d $(PREFIX)/share/man ] ; then \
                     echo $(DESTDIR)/$(PREFIX)/share/man ; \
                 elif [ -d $(PREFIX)/usr/share/man ] ; then \
@@ -191,12 +197,13 @@ debian/changelog: debian/changelog.in
 	mv $<.tmp $@
 
 install: all
-	$(DIRINSTALL) -m 755 $(SBINDIR) $(INITDIR) $(HPAMSDIR)
+	$(DIRINSTALL) -m 755 $(SBINDIR) $(INITDIR) $(HPAMSDIR) $(DOCDIR)
 	$(DIRINSTALL) -m 755 $(MANDIR)/man8
 	$(INSTALL) -m 755 ./hpHelper $(SBINDIR)
 	$(INSTALL) -m 755 ./hp-ams.sh $(INITDIR)/hp-ams
 	$(INSTALL) -m 644 ./doc/hpHelper.8 $(MANDIR)/man8
-	$(INSTALL) -m 644 ./LICENSE $(HPAMSDIR)
+	$(INSTALL) -m 644 ./LICENSE $(DOCDIR)
+	$(INSTALL) -m 644 $(NETSNMP)/COPYING $(DOCDIR)
 
 	gzip -f $(MANDIR)/man8/hpHelper.8
 
