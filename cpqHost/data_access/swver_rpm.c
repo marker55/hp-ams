@@ -15,7 +15,6 @@
 #include <rpm/rpmts.h>
 #include <rpm/rpmdb.h>
 #endif
-#include <strings.h>
 #include <sys/stat.h>
 #include <rpm/rpmlib.h>
 
@@ -130,11 +129,9 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
                                             (void **) &description, NULL);
 #endif
 
-            entry->cpqHoSwVerName_len = snprintf( entry->cpqHoSwVerName, 
-                                         sizeof(entry->cpqHoSwVerName),
-                                         "%s", n);
-            if (entry->cpqHoSwVerName_len > sizeof(entry->cpqHoSwVerName))
-                entry->cpqHoSwVerName_len = sizeof(entry->cpqHoSwVerName) - 1;
+            strncpy(entry->cpqHoSwVerName, n, sizeof(entry->cpqHoSwVerName) - 1);
+                entry->cpqHoSwVerName_len = strlen(entry->cpqHoSwVerName);
+
             entry->cpqHoSwVerType = (NULL != strstr(g, "System Environment"))
                                     ? 2 /* operatingSystem */
                                     : 5;     /*  application    */
@@ -142,13 +139,10 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
             if (description != NULL ) {
                 DEBUGMSGTL(("cpqHoSwVerTable:load:arch", "description = %s\n",
                     description));
-                entry->cpqHoSwVerDescription_len = strlen(description);
                 strncpy(entry->cpqHoSwVerDescription, description,
-                            sizeof(entry->cpqHoSwVerDescription));
-                if (entry->cpqHoSwVerDescription_len > 
-                            sizeof(entry->cpqHoSwVerDescription))
-                    entry->cpqHoSwVerDescription_len = 
-                            sizeof(entry->cpqHoSwVerDescription) - 1;
+                            sizeof(entry->cpqHoSwVerDescription - 1));
+                entry->cpqHoSwVerDescription_len = 
+                        strlen(entry->cpqHoSwVerDescription);
             }
 
 	        entry->timestamp = 0;
@@ -174,11 +168,9 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
                 DEBUGMSGTL(("cpqHoSwVerTable:load:arch", "version = %s\n", v));
                 entry->cpqHoSwVerVersion_len = strlen(v);
                 strncpy(entry->cpqHoSwVerVersion, v,
-                            sizeof(entry->cpqHoSwVerVersion));
-                if (entry->cpqHoSwVerVersion_len > 
-                            sizeof(entry->cpqHoSwVerVersion))
-                    entry->cpqHoSwVerVersion_len = 
-                            sizeof(entry->cpqHoSwVerVersion) - 1;
+                            sizeof(entry->cpqHoSwVerVersion - 1));
+                entry->cpqHoSwVerVersion_len = 
+                        strlen(entry->cpqHoSwVerVersion);
 
                 if (r != NULL ) {
                     DEBUGMSGTL(("cpqHoSwVerTable:load:arch", "release = %s\n", r));
@@ -192,9 +184,8 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
             }
 
             if (vendor != NULL) { 
-                entry->vendor_len = strlen(vendor);
-                strncpy(entry->vendor, vendor, entry->vendor_len);
-                entry->vendor[strlen(vendor)] = 0;
+                strncpy(entry->vendor, vendor, sizeof(entry->vendor_len) - 1);
+                entry->vendor_len = strlen(entry->vendor);
             } else {
                 entry->vendor_len = 0;
                 entry->vendor[0] = 0;
