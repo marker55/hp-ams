@@ -8,7 +8,6 @@
 #include <net-snmp/agent/net-snmp-agent-includes.h>
 #include <net-snmp/agent/net-snmp-agent-includes.h>
 #include <net-snmp/agent/table_container.h>
-#include "cpqSePciMemoryTable.h"
 
 static void     _cache_free(netsnmp_cache * cache, void *magic);
 static int      _cache_load(netsnmp_cache * cache, void *vmagic);

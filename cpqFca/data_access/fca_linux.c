@@ -1,7 +1,6 @@
 #include <net-snmp/net-snmp-config.h>
 #include <net-snmp/net-snmp-includes.h>
 #include <net-snmp/agent/net-snmp-agent-includes.h>
-#include <net-snmp/agent/agent_index.h>
 #include <net-snmp/library/container.h>
 #include <net-snmp/library/snmp_debug.h>
 
@@ -10,20 +9,14 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <ctype.h>
 #include <string.h>
-#include <errno.h>
-#include <scsi/sg.h>
 #include <sys/ioctl.h>
 #include <dirent.h>
 #include <unistd.h>
-#include <sys/errno.h>
 #include <getopt.h>
-#include <scsi/sg.h>
 #include <sys/utsname.h>
 #include <linux/version.h>
 
-#include "cpqFibreArray.h"
 #include "cpqFcaHostCntlrTable.h"
 #include "cpqHoFwVerTable.h"
 
@@ -290,17 +283,26 @@ char * getFcHBASerialNum(char *buffer)
 {
     char attribute[1024];
     char *value = NULL;
+
+    if (strlen(buffer) >= 1024)
+        return (char*) 0;
     strcpy(attribute, buffer);
+    if ((strlen(buffer) + strlen(sysfs_attr[DEVICE_SERIALE])) >= 1024)
+        return (char*) 0;
     strcat(attribute, sysfs_attr[DEVICE_SERIALE]);
     DEBUGMSGTL(("fcahc:container:load", "Getting attribute from %s\n",
                     attribute));
     if ((value = get_sysfs_str(attribute)) == NULL) {
         strcpy(attribute, buffer);
+        if ((strlen(buffer) + strlen(sysfs_attr[DEVICE_SERIALQ])) >= 1024)
+            return (char*) 0;
         strcat(attribute, sysfs_attr[DEVICE_SERIALQ]);
         DEBUGMSGTL(("fcahc:container:load", "Getting attribute from %s\n",
                     attribute));
         if ((value = get_sysfs_str(attribute)) == NULL) {
             strcpy(attribute, buffer);
+            if ((strlen(buffer) + strlen(sysfs_attr[DEVICE_SERIALB])) >= 1024)
+                return (char*) 0;
             strcat(attribute, sysfs_attr[DEVICE_SERIALB]);
             DEBUGMSGTL(("fcahc:container:load", "Getting attribute from %s\n",
                     attribute));
@@ -315,17 +317,25 @@ char * getFcHBAFWVer(char *buffer)
     char attribute[1024];
     char *value = NULL;
 
+    if (strlen(buffer) >= 1024)
+        return (char*) 0;
     strcpy(attribute, buffer);
+    if ((strlen(buffer) + strlen(sysfs_attr[CLASS_VERSION_FWQ])) >= 1024)
+        return (char*) 0;
     strcat(attribute, sysfs_attr[CLASS_VERSION_FWQ]);
     DEBUGMSGTL(("fcahc:container:load", "Getting attribute from %s\n",
                     attribute));
     if ((value = get_sysfs_str(attribute)) == NULL) {
         strcpy(attribute, buffer);
+        if ((strlen(sysfs_attr[CLASS_VERSION_FWE]) + strlen(buffer)) >= 1024)
+            return (char*) 0;
         strcat(attribute, sysfs_attr[CLASS_VERSION_FWE]);
         DEBUGMSGTL(("fcahc:container:load", "Getting attribute from %s\n",
                     attribute));
         if ((value = get_sysfs_str(attribute)) == NULL) {
             strcpy(attribute, buffer);
+            if ((strlen(sysfs_attr[CLASS_VERSION_FWB]) + strlen(buffer)) >= 1024)
+                return (char*) 0;
             strcat(attribute, sysfs_attr[CLASS_VERSION_FWB]);
             DEBUGMSGTL(("fcahc:container:load", "Getting attribute from %s\n",
                     attribute));
@@ -340,12 +350,18 @@ char * getFcHBARomVer( char *buffer)
     char attribute[1024];
     char *value = NULL;
 
+    if (strlen(buffer) >= 1024)
+        return (char*) 0;
     strcpy(attribute, buffer);
+    if ((strlen(buffer) + strlen(sysfs_attr[CLASS_VERSION_OPTIONROMBE])) >= 1024)
+        return (char*) 0;
     strcat(attribute, sysfs_attr[CLASS_VERSION_OPTIONROMBE]);
     DEBUGMSGTL(("fcahc:container:load", "Getting attribute from %s\n",
                     attribute));
     if ((value = get_sysfs_str(attribute)) == NULL) {
         strcpy(attribute, buffer);
+        if ((strlen(buffer) + strlen(sysfs_attr[CLASS_VERSION_OPTIONROMQ]))  >= 1024)
+            return (char*) 0;
         strcat(attribute, sysfs_attr[CLASS_VERSION_OPTIONROMQ]);
         DEBUGMSGTL(("fcahc:container:load", "Getting attribute from %s\n",
                     attribute));
@@ -427,8 +443,9 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
             entry->oldStatus = FC_HBA_STATUS_OTHER;
      
             memset(buffer, 0, sizeof(buffer));
-            strcpy(buffer, ScsiHostDir);
-            strcat(buffer, ScsiHostlist[i]->d_name);
+            strncpy(buffer, ScsiHostDir, sizeof(buffer) - 1);
+            strncat(buffer, ScsiHostlist[i]->d_name, 
+                    sizeof(buffer) - strlen(buffer) - 1);
 
             strcpy(attribute, buffer);
             entry->cpqFcaHostCntlrSlot = pcislot_scsi_host(attribute);
@@ -454,14 +471,16 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
             }
     
             strcpy(attribute, buffer);
-            strcat(attribute, sysfs_attr[DEVICE_SUBSYSTEM_DEVICE]);
+            strncat(attribute, sysfs_attr[DEVICE_SUBSYSTEM_DEVICE], 
+                    sizeof(attribute) - strlen(attribute) - 1);
             DEBUGMSGTL(("fcahc:container:load", "Getting attribute from %s\n",
                             attribute));
             device = get_sysfs_shex(attribute);
             DEBUGMSGTL(("fcahc:container:load", "Value = %x\n", device));
 
             strcpy(attribute, buffer);
-            strcat(attribute, sysfs_attr[DEVICE_SUBSYSTEM_VENDOR]);
+            strncat(attribute, sysfs_attr[DEVICE_SUBSYSTEM_VENDOR],
+                    sizeof(attribute) - strlen(attribute) - 1);
             DEBUGMSGTL(("fcahc:container:load", "Getting attribute from %s\n",
                         attribute));
             vendor = get_sysfs_shex(attribute);
@@ -474,7 +493,8 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
     
             if ((value = getFcHBASerialNum(buffer)) != NULL) {
                 DEBUGMSGTL(("fcahc:container:load", "Value = %s\n", value));
-                strcpy(entry->cpqFcaHostCntlrSerialNumber, value);    
+                strncpy(entry->cpqFcaHostCntlrSerialNumber, value,
+                        sizeof(entry->cpqFcaHostCntlrSerialNumber) - 1);    
                 entry->cpqFcaHostCntlrSerialNumber_len = 
                         strlen(entry->cpqFcaHostCntlrSerialNumber);
                 free(value);
@@ -482,7 +502,8 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
     
             if ((value = getFcHBAFWVer(buffer)) != NULL) {
                 DEBUGMSGTL(("fcahc:container:load", "Value = %s\n", value));
-                strcpy(entry->cpqFcaHostCntlrFirmwareVersion, value);    
+                strncpy(entry->cpqFcaHostCntlrFirmwareVersion, value,
+                        sizeof(entry->cpqFcaHostCntlrFirmwareVersion) - 1);    
                 entry->cpqFcaHostCntlrFirmwareVersion_len = 
                         strlen(entry->cpqFcaHostCntlrFirmwareVersion);
                 free(value);
@@ -501,7 +522,8 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
     
             if ((value = getFcHBARomVer(buffer)) != NULL) {
                 DEBUGMSGTL(("fcahc:container:load", "Value = %s\n", value));
-                strcpy(entry->cpqFcaHostCntlrOptionRomVersion, value);    
+                strncpy(entry->cpqFcaHostCntlrOptionRomVersion, value,
+                        sizeof(entry->cpqFcaHostCntlrOptionRomVersion) - 1);    
                 entry->cpqFcaHostCntlrOptionRomVersion_len = 
                                  strlen(entry->cpqFcaHostCntlrOptionRomVersion);
                 free(value);
@@ -518,28 +540,35 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
                                                 "");
     
             memset(buffer, 0, sizeof(buffer));
-            strcpy(buffer, FcaHostDir);
-            strcat(buffer, ScsiHostlist[i]->d_name);
+            strncpy(buffer, FcaHostDir, sizeof(buffer) - 1);
+            strncat(buffer, ScsiHostlist[i]->d_name,
+                    sizeof(buffer) - strlen(buffer) - 1);
     
             strcpy(attribute, buffer);
-            strcat(attribute, sysfs_attr[FC_WWN]);
+            strncat(attribute, sysfs_attr[FC_WWN],
+                    sizeof(attribute) - strlen(attribute) - 1);
             DEBUGMSGTL(("fcahc:container:load", "Getting attribute from %s\n",
                             attribute));
             if ((value = get_sysfs_str(attribute)) != NULL) {
                 DEBUGMSGTL(("fcahc:container:load", "Value = %s\n", value));
-                strncpy(entry->cpqFcaHostCntlrWorldWideName, &value[2], 16);
-                entry->cpqFcaHostCntlrWorldWideName_len =  16;
+                memcpy(entry->cpqFcaHostCntlrWorldWideName, &value[2], 
+                        sizeof(entry->cpqFcaHostCntlrWorldWideName));
+                entry->cpqFcaHostCntlrWorldWideName_len = 
+                        sizeof(entry->cpqFcaHostCntlrWorldWideName);
                 free(value);
             }
     
             strcpy(attribute, buffer);
-            strcat(attribute, sysfs_attr[FC_WWNPORT]);
+            strncat(attribute, sysfs_attr[FC_WWNPORT],
+                    sizeof(attribute) - strlen(attribute) - 1);
             DEBUGMSGTL(("fcahc:container:load", "Getting attribute from %s\n",
                             attribute));
             if ((value = get_sysfs_str(attribute)) != NULL) {
                 DEBUGMSGTL(("fcahc:container:load", "Value = %s\n", value));
-                strncpy(entry->cpqFcaHostCntlrWorldWidePortName, &value[2], 16);
-                entry->cpqFcaHostCntlrWorldWidePortName_len = 16;
+                memcpy(entry->cpqFcaHostCntlrWorldWidePortName, &value[2], 
+                        sizeof(entry->cpqFcaHostCntlrWorldWidePortName));
+                entry->cpqFcaHostCntlrWorldWidePortName_len =
+                        sizeof(entry->cpqFcaHostCntlrWorldWidePortName);
                 free(value);
             }
     
@@ -553,11 +582,13 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
         entry->cpqFcaHostCntlrStatus = FC_HBA_STATUS_OK;
 #else
         memset(buffer, 0, sizeof(buffer));
-        strcpy(buffer, ScsiHostDir);
-        strcat(buffer, ScsiHostlist[i]->d_name);
+        strncpy(buffer, ScsiHostDir, sizeof(buffer) - 1);
+        strncat(buffer, ScsiHostlist[i]->d_name,
+                sizeof(buffer) - strlen(buffer) - 1);
 
         strcpy(attribute, buffer);
-        strcat(attribute, sysfs_attr[CLASS_STATE]);
+        strncat(attribute, sysfs_attr[CLASS_STATE],
+                sizeof(attribute) - strlen(attribute) - 1);
         DEBUGMSGTL(("fcahc:container:load", "Getting attribute from %s\n",
                         attribute));
         if ((value = get_sysfs_str(attribute)) != NULL) {
@@ -570,11 +601,13 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
         }
 #endif
         memset(buffer, 0, sizeof(buffer));
-        strcpy(buffer, FcaHostDir);
-        strcat(buffer, ScsiHostlist[i]->d_name);
+        strncpy(buffer, FcaHostDir, sizeof(buffer) - 1);
+        strncat(buffer, ScsiHostlist[i]->d_name,
+                sizeof(buffer) - strlen(buffer) - 1);
     
         strcpy(attribute, buffer);
-        strcat(attribute, sysfs_attr[FC_PORTSTATE]);
+        strncat(attribute, sysfs_attr[FC_PORTSTATE],
+                sizeof(attribute) - strlen(attribute) - 1);
         DEBUGMSGTL(("fcahc:container:load", "Getting attribute from %s\n",
                         attribute));
         if ((value = get_sysfs_str(attribute)) != NULL) {

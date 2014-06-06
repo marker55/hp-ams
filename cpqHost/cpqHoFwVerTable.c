@@ -230,16 +230,20 @@ int register_FW_version(int dir, int fw_idx, int cat, int type,  int update,
             fw_entry->cpqHoFwVerDeviceType = type;
             fw_entry->cpqHoFwVerUpdateMethod = update;
 
-            strcpy(fw_entry->cpqHoFwVerVersion, fw_version);
+            strncpy(fw_entry->cpqHoFwVerVersion, fw_version, 
+                    sizeof(fw_entry->cpqHoFwVerVersion) - 1);
             fw_entry->cpqHoFwVerVersion_len = strlen(fw_version);
 
-            strcpy(fw_entry->cpqHoFwVerDisplayName, name);
+            strncpy(fw_entry->cpqHoFwVerDisplayName, name, 
+                    sizeof(fw_entry->cpqHoFwVerDisplayName) - 1);
             fw_entry->cpqHoFwVerDisplayName_len = strlen(name);
 
-            strcpy(fw_entry->cpqHoFwVerLocation, location);
+            strncpy(fw_entry->cpqHoFwVerLocation, location, 
+                    sizeof(fw_entry->cpqHoFwVerLocation_len) - 1);
             fw_entry->cpqHoFwVerLocation_len = strlen(location);
 
-            strcpy(fw_entry->cpqHoFwVerKeyString, key);
+            strncpy(fw_entry->cpqHoFwVerKeyString, key, 
+                    sizeof(fw_entry->cpqHoFwVerKeyString) - 1);
             fw_entry->cpqHoFwVerKeyString_len = strlen(key);
         }
     }

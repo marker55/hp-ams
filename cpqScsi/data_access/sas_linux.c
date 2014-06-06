@@ -1,7 +1,6 @@
 #include <net-snmp/net-snmp-config.h>
 #include <net-snmp/net-snmp-includes.h>
 #include <net-snmp/agent/net-snmp-agent-includes.h>
-#include <net-snmp/agent/agent_index.h>
 #include <net-snmp/library/container.h>
 #include <net-snmp/library/snmp_debug.h>
 
@@ -10,10 +9,8 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <ctype.h>
 #include <string.h>
 #include <errno.h>
-#include <scsi/sg.h>
 #include <sys/ioctl.h>
 #include <dirent.h>
 #include <unistd.h>
@@ -21,7 +18,6 @@
 #include <getopt.h>
 #include <linux/socket.h>
 #include <linux/version.h>
-#include <scsi/sg.h>
 
 #include "common/scsi_info.h"
 
@@ -494,7 +490,7 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
                 strcpy(disk->cpqSasPhyDrvModel,"ATA     ");
             else
                 strcpy(disk->cpqSasPhyDrvModel,"HP      ");
-            strcat(disk->cpqSasPhyDrvModel, value);
+            strncat(disk->cpqSasPhyDrvModel, value, sizeof(disk->cpqSasPhyDrvModel)-strlen(disk->cpqSasPhyDrvModel));
             disk->cpqSasPhyDrvModel_len =
                 strlen(disk->cpqSasPhyDrvModel);
             free(value);
@@ -511,7 +507,7 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
                     "SAS Attached Disk",
                     disk->cpqSasPhyDrvLocationString,
                     disk->cpqSasPhyDrvModel);
-            strcpy(disk->cpqSasPhyDrvFWRev, value);
+            strncpy(disk->cpqSasPhyDrvFWRev, value, sizeof(disk->cpqSasPhyDrvFWRev) - 1);
             disk->cpqSasPhyDrvFWRev_len = 
                                 strlen(disk->cpqSasPhyDrvFWRev);
             free(value);
@@ -524,7 +520,7 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
         }
 
         if ((value = get_ScsiSasAddress(scsi)) != NULL) {
-            strcpy(disk->cpqSasPhyDrvSasAddress, value+2);	
+            strncpy(disk->cpqSasPhyDrvSasAddress, value + 2, sizeof(disk->cpqSasPhyDrvSasAddress) - 1);	
             disk->cpqSasPhyDrvSasAddress_len = 
                          strlen(disk->cpqSasPhyDrvSasAddress);
             free(value);
@@ -562,7 +558,8 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
 
         if ((serialnum = get_unit_sn(disk_fd)) != NULL  ) {
             memset(disk->cpqSasPhyDrvSerialNumber, 0, 41);
-            strcpy(disk->cpqSasPhyDrvSerialNumber, serialnum);
+            strncpy(disk->cpqSasPhyDrvSerialNumber, serialnum, 
+                    sizeof(disk->cpqSasPhyDrvSerialNumber) - 1);
             disk->cpqSasPhyDrvSerialNumber_len = 
                 strlen(disk->cpqSasPhyDrvSerialNumber);
             free(serialnum);
@@ -971,15 +968,18 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
     for (i=0; i < NumScsiHost; i++) {
 
         memset(buffer, 0, sizeof(buffer));
-        strcpy(buffer, ScsiHostDir);
-        strcat(buffer, ScsiHostlist[i]->d_name);
+        strncpy(buffer, ScsiHostDir, sizeof(buffer) - 1);
+        strncat(buffer, ScsiHostlist[i]->d_name,
+                sizeof(buffer) - strlen(buffer) - 1);
 
-        strcpy(attribute,buffer);
-        strcat(attribute, sysfs_attr[DEVICE_SUBSYSTEM_DEVICE]);
+        strncpy(attribute, buffer, sizeof(attribute) - 1);
+        strncat(attribute, sysfs_attr[DEVICE_SUBSYSTEM_DEVICE], 
+                sizeof(attribute) - strlen(attribute) - 1);
         device = get_sysfs_shex(attribute);
 
-        strcpy(attribute,buffer);
-        strcat(attribute, sysfs_attr[DEVICE_SUBSYSTEM_VENDOR]);
+        strncpy(attribute, buffer, sizeof(attribute) - 1);
+        strncat(attribute, sysfs_attr[DEVICE_SUBSYSTEM_VENDOR], 
+                sizeof(attribute) - strlen(attribute) - 1);
         vendor = get_sysfs_shex(attribute);
 
         BoardID = device << 16;
@@ -1012,7 +1012,7 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
             sprintf(entry->host,"%d:",Host);
             entry->cpqSasHbaIndex = HbaIndex;
 
-            strcpy(attribute,buffer);
+            strcpy(attribute, buffer);
             pciSlot = pcislot_scsi_host(attribute);
 
             if (pciSlot > 0 ) {
@@ -1079,8 +1079,9 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
             }
 
             /* Get the firmware version and register it with the AgentX master */
-            strcpy(attribute, buffer);
-            strcat(attribute, sysfs_attr[CLASS_VERSION_FW]);
+            strncpy(attribute, buffer, sizeof(attribute) - 1);
+            strncat(attribute, sysfs_attr[CLASS_VERSION_FW],
+                    sizeof(attribute) - strlen(attribute) - 1);
             DEBUGMSGTL(("cpqHoFwVerTable:init",
                         "cpqHoFwVerTable fw attribute = %s\n",
                         attribute));
@@ -1098,17 +1099,20 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
                         entry->cpqSasHbaHwLocation,
                         "");
 
-                strcpy(entry->cpqSasHbaFwVersion, value);    
+                strncpy(entry->cpqSasHbaFwVersion, value, 
+                        sizeof(entry->cpqSasHbaFwVersion) - 1);    
                 entry->cpqSasHbaFwVersion_len = 
                                         strlen(entry->cpqSasHbaFwVersion);
 
                 free(value);
             }
 
-            strcpy(attribute,buffer);
-            strcat(attribute, sysfs_attr[CLASS_VERSION_BIOS]);
+            strncpy(attribute, buffer, sizeof(attribute) - 1);
+            strncat(attribute, sysfs_attr[CLASS_VERSION_BIOS],
+                    sizeof(attribute) - strlen(attribute) - 1);
             if ((value = get_sysfs_str(attribute)) != NULL) {
-                strcpy(entry->cpqSasHbaBiosVersion, value);    
+                strncpy(entry->cpqSasHbaBiosVersion, value,
+                        sizeof(entry->cpqSasHbaBiosVersion) - 1);    
                 entry->cpqSasHbaBiosVersion_len = 
                     strlen(entry->cpqSasHbaBiosVersion);
 
@@ -1128,17 +1132,20 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
                 free(value);
             }
 
-            strcpy(attribute,buffer);
-            strcat(attribute, sysfs_attr[CLASS_BOARD_TRACER]);
+            strncpy(attribute, buffer, sizeof(attribute) - 1);
+            strncat(attribute, sysfs_attr[CLASS_BOARD_TRACER],
+                    sizeof(attribute) - strlen(attribute) - 1);
             if ((value = get_sysfs_str(attribute)) != NULL) {
-                strcpy(entry->cpqSasHbaSerialNumber, value);    
+                strncpy(entry->cpqSasHbaSerialNumber, value,
+                        sizeof(entry->cpqSasHbaSerialNumber) - 1);    
                 entry->cpqSasHbaSerialNumber_len = 
                     strlen(entry->cpqSasHbaSerialNumber);
                 free(value);
             }
 
-            strcpy(attribute, buffer);
-            strcat(attribute, sysfs_attr[CLASS_STATE]);
+            strncpy(attribute, buffer, sizeof(attribute) - 1);
+            strncat(attribute, sysfs_attr[CLASS_STATE],
+                    sizeof(attribute) - strlen(attribute) - 1);
             if ((value = get_sysfs_str(attribute)) != NULL) {
                 if (strcmp(value, "running") == 0)
                     entry->cpqSasHbaStatus = SAS_HOST_STATUS_OK;
@@ -1147,8 +1154,9 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
                 entry->cpqSasHbaStatus = SAS_HOST_STATUS_FAILED;
 
             memset(buffer, 0, sizeof(buffer));
-            strcpy(buffer, SasHostDir);
-            strcat(buffer, ScsiHostlist[i]->d_name);
+            strncpy(buffer, SasHostDir, sizeof(buffer) - 1);
+            strncat(buffer, ScsiHostlist[i]->d_name,
+                    sizeof(buffer) - strlen(buffer) - 1);
             strcat(buffer, "/device/../driver");
             if ((len = readlink(buffer, lbuffer, 253)) > 0) {
                 lbuffer[len]='\0'; /* Null terminate the string */
@@ -1163,7 +1171,7 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
                 if ((hbaConfig = SasGetHbaConfig(HbaIndex, buffer)) != NULL ) {
                     strncpy(entry->cpqSasHbaSerialNumber,
                             hbaConfig->Configuration.szSerialNumber,
-                            sizeof(entry->cpqSasHbaSerialNumber));
+                            sizeof(entry->cpqSasHbaSerialNumber) - 1);
                     entry->cpqSasHbaSerialNumber_len =
                         strlen(entry->cpqSasHbaSerialNumber);
                     free(hbaConfig);
@@ -1263,10 +1271,11 @@ int netsnmp_arch_sasphydrv_container_load(netsnmp_container* container)
             char buffer[256], lbuffer[256];
             int Cntlr;
             memset(&buffer, 0, sizeof(buffer));
-            strcpy(buffer, SasDeviceDir);
-            strcat(buffer, SasDevicelist[j]->d_name);
+            strncpy(buffer, SasDeviceDir, sizeof(buffer) - 1);
+            strncat(buffer, SasDevicelist[j]->d_name,
+                    sizeof(buffer) - strlen(buffer) - 1);
 #if RHEL_MAJOR == 5
-            strcat(buffer, "/device");
+            strncat(buffer, "/device", sizeof(buffer) - strlen(buffer) - 1);
 #endif
             free(SasDevicelist[j]);
             if ((len = readlink(buffer, lbuffer, 253)) <= 0) 

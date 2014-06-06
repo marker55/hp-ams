@@ -13,14 +13,12 @@
 #include <net-snmp/net-snmp-config.h>
 #include <net-snmp/net-snmp-includes.h>
 #include <net-snmp/agent/net-snmp-agent-includes.h>
-#include <net-snmp/data_access/swrun.h>
 
 /* NOTE: fix this include later.... */
 #include <sys/statvfs.h>
 
 #include "libcpqhost/cpqhost.h"
 #include "cpqHost.h"
-#include "common/utils.h"
 #include "hpHelper.h"
 
 extern  int InitLibCpqHost(void);

@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <libgen.h>
 
 #include <sys/ioctl.h>
 #include <scsi/sg.h>

@@ -1,5 +1,4 @@
 #include <sys/types.h>
-#include <sys/stat.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,7 +9,6 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
-#include <sys/stat.h>
 #include <sys/mman.h>
 #include <netdb.h>
 #include "utils.h"

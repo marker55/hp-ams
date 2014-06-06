@@ -1,7 +1,6 @@
 #include <net-snmp/net-snmp-config.h>
 #include <net-snmp/net-snmp-includes.h>
 #include <net-snmp/agent/net-snmp-agent-includes.h>
-#include <net-snmp/agent/agent_index.h>
 #include <net-snmp/library/container.h>
 #include <net-snmp/library/snmp_debug.h>
 
@@ -10,16 +9,11 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <ctype.h>
 #include <string.h>
-#include <errno.h>
-#include <scsi/sg.h>
 #include <sys/ioctl.h>
 #include <dirent.h>
 #include <unistd.h>
-#include <sys/errno.h>
 #include <getopt.h>
-#include <scsi/sg.h>
 
 #include "cpqIde.h"
 #include "cpqIdeControllerTable.h"
@@ -91,16 +85,19 @@ int netsnmp_arch_idecntlr_container_load(netsnmp_container* container)
 
         entry = NULL;
         memset(&buffer, 0, sizeof(buffer));
-        strcpy(buffer, ScsiHostDir);
-        strcat(buffer, ScsiHostlist[i]->d_name);
+        strncpy(buffer, ScsiHostDir, sizeof(buffer) - 1);
+        strncat(buffer, ScsiHostlist[i]->d_name,
+                    sizeof(buffer) - strlen(buffer) - 1);
 
-        strcpy(attribute, buffer);
-        strcat(attribute, sysfs_attr[CLASS_PROC_NAME]);
+        strncpy(attribute, buffer, sizeof(attribute) - 1);
+        strncat(attribute, sysfs_attr[CLASS_PROC_NAME],
+            sizeof(attribute) - strlen(attribute) - 1);
         if ((value = get_sysfs_str(attribute)) != NULL) {
             if ((strcmp(value, "ahci") == 0) || 
                 (strcmp(value, "ata_piix") == 0)) {
-                strcpy(attribute, buffer);
-                strcat(attribute, sysfs_attr[CLASS_UNIQUE_ID]);
+                strncpy(attribute, buffer, sizeof(attribute) - 1);
+                strncat(attribute, sysfs_attr[CLASS_UNIQUE_ID],
+                    sizeof(attribute) - strlen(attribute) - 1);
                 CntlrIndex = get_sysfs_int(attribute);
 
                 entry = cpqIdeControllerTable_createEntry(container,
@@ -120,8 +117,9 @@ int netsnmp_arch_idecntlr_container_load(netsnmp_container* container)
     
             entry->cpqIdeControllerSlot =  pcislot_scsi_host(buffer);
 
-            strcpy(attribute, buffer);
-            strcat(attribute, sysfs_attr[CLASS_STATE]);
+            strncpy(attribute, buffer, sizeof(attribute) - 1);
+            strncat(attribute, sysfs_attr[CLASS_STATE],
+                    sizeof(attribute) - strlen(attribute) - 1);
             if ((value = get_sysfs_str(attribute)) != NULL) {
                 if (strcmp(value, "running") == 0)
                     entry->cpqIdeControllerStatus = IDE_CONTROLLER_STATUS_OK;
@@ -202,8 +200,9 @@ int netsnmp_arch_idedisk_container_load(netsnmp_container* container)
 
         for (j= 0; j< NumScsiDisk; j++) {
             memset(&buffer, 0, sizeof(buffer));
-            strcpy(buffer, ScsiDiskDir);
-            strcat(buffer, ScsiDisklist[j]->d_name);
+            strncpy(buffer, ScsiDiskDir, sizeof(buffer) - 1);
+            strncat(buffer, ScsiDisklist[j]->d_name, 
+                    sizeof(buffer) - strlen(buffer) - 1);
             DEBUGMSGTL(("idedisk:container:load", "Working on disk %s\n", 
                         ScsiDisklist[j]->d_name));
 
@@ -236,14 +235,16 @@ int netsnmp_arch_idedisk_container_load(netsnmp_container* container)
 		scsi = ScsiDisklist[j]->d_name;
 
                 if ((value = get_DiskRev(scsi)) != NULL) {
-                    strcpy(disk->cpqIdeAtaDiskFwRev, value);
+                    strncpy(disk->cpqIdeAtaDiskFwRev, value,
+                            sizeof(disk->cpqIdeAtaDiskFwRev) - 1);
                     disk->cpqIdeAtaDiskFwRev_len = 
                                                strlen(disk->cpqIdeAtaDiskFwRev);
                     free(value);
                 }
 
                 if ((value = get_DiskModel(scsi)) != NULL) {
-                    strcpy(disk->cpqIdeAtaDiskModel, value);
+                    strncpy(disk->cpqIdeAtaDiskModel, value,
+                            sizeof(disk->cpqIdeAtaDiskModel) - 1);
                     disk->cpqIdeAtaDiskModel_len = 
                                                strlen(disk->cpqIdeAtaDiskModel);
                     free(value);

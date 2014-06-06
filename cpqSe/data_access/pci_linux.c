@@ -11,7 +11,6 @@
 #include <dirent.h>
 #include "cpqSePciFunctTable.h"
 #include "cpqSePciSlotTable.h"
-#include "cpqSePciMemoryTable.h"
 #include "common/utils.h"
 #include "common/smbios.h"
 #include "pci_linux.h"
