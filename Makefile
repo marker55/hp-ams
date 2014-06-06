@@ -1,6 +1,6 @@
 # Overridden during automated builds
 COMP_NAME    ?= hp-ams
-COMP_VER     ?= 1.7.0
+COMP_VER     ?= 2.0.0
 COMP_PKG_REV ?= 1
 
 NAME         ?= $(COMP_NAME)
@@ -12,7 +12,14 @@ MAKE := make ARCH=${ARCH}
 #
 RPMSOURCES=$(shell rpm --eval %{_sourcedir})
 RPMRPMS=$(shell rpm --eval %{_rpmdir})
-RPM_OPT_FLAGS=$(shell rpm --eval %{__global_cflags})
+RPM_OPT_FLAGS=$(shell  if [ -f /etc/redhat-release ] ; then \
+						rpm --eval %{__global_cflags} ; \
+                       elif [ -f /etc/SuSE-release ] ; then \
+                        rpm --eval %{optflags} ; \
+					   else  \
+						echo "-O2" ; \
+					   fi)
+					    
 #
 INSTALL=install
 DIRINSTALL=install -d
