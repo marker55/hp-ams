@@ -1,9 +1,11 @@
+/* Structure to map PCI vendor ID to name */
 typedef struct _vendor_node {
     unsigned short vendor_id;
     unsigned char *name;
     void *  next;
 } vendor_node;
 
+/* Structure to map PCI vendor ID/Device ID to Device name */
 typedef struct _device_node {
     unsigned short vendor_id;
     unsigned short device_id;
@@ -11,6 +13,8 @@ typedef struct _device_node {
     void *  next;
 } device_node;
 
+/* Structure to map PCI vendor ID/Device ID to name 
+   sub-vendor ID/sub-device ID to sub-vendor and sub-device name */
 typedef struct _subsystem_node {
     unsigned short vendor_id;
     unsigned short device_id;

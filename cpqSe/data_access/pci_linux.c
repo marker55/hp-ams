@@ -674,7 +674,7 @@ void scan_hw_ids()
                     if ((subsystem->name = malloc(strlen(&buffer[12]) + 1))
                             != NULL) {
                         strcpy((char *)subsystem->name, &buffer[12]);
-                        subsystem->name[strlen((char *)subsystem->name) - 1] = 0;
+                        subsystem->name[strlen((char *)subsystem->name)] = 0;
                     }
                 continue;
             }
@@ -725,33 +725,29 @@ int netsnmp_arch_pcislot_container_load(netsnmp_container* container)
 
             entry->cpqSePciPhysSlot = get_pci_slot(dev);
 
+            snprintf(entry->cpqSePciSlotSubSystemID, PCISLOT_SUBSYS_SZ + 1,
+                    "%04X%04x", dev->vendor_id,dev->device_id);
+            if (dev->device->name != NULL)
+                snprintf(entry->cpqSePciSlotBoardName, 
+                        PCISLOT_BOARDNAME_SZ, "%s %s", 
+                        dev->vendor->name, dev->device->name);
+            else
+                snprintf(entry->cpqSePciSlotBoardName, 
+                        PCISLOT_BOARDNAME_SZ, "%s Device %4x", 
+                        dev->vendor->name, dev->device_id);
             if (((dev->device_class & 0xff0000) == 0x20000) && 
                     ((dev->subvendor_id == 0x103c) || 
                      (dev->subvendor_id == 0x0e11))) {
-                snprintf(entry->cpqSePciSlotSubSystemID, PCISLOT_SUBSYS_SZ + 1, 
-                        "%04X%04x", dev->subvendor_id, dev->subdevice_id);
                 if (dev->subsystem->vname == NULL) 
                     dev->subsystem->vname = get_vname(dev->subvendor_id);
 
-                if (dev->subsystem->name != NULL) 
+                if (dev->subsystem->name != NULL) {
                     snprintf(entry->cpqSePciSlotBoardName, 
                             PCISLOT_BOARDNAME_SZ, "%s %s", 
                             dev->subsystem->vname, dev->subsystem->name);
-                else
-                    snprintf(entry->cpqSePciSlotBoardName, 
-                            PCISLOT_BOARDNAME_SZ, "%s Device %4x", 
-                            dev->subsystem->vname,  dev->subdevice_id);
-            } else {
-                snprintf(entry->cpqSePciSlotSubSystemID, PCISLOT_SUBSYS_SZ + 1,
-                        "%04X%04x", dev->vendor_id,dev->device_id);
-                if (dev->device->name != NULL)
-                    snprintf(entry->cpqSePciSlotBoardName, 
-                            PCISLOT_BOARDNAME_SZ, "%s %s", 
-                            dev->vendor->name, dev->device->name);
-                else
-                    snprintf(entry->cpqSePciSlotBoardName, 
-                            PCISLOT_BOARDNAME_SZ, "%s Device %4x", 
-                            dev->vendor->name, dev->device_id);
+                    snprintf(entry->cpqSePciSlotSubSystemID, PCISLOT_SUBSYS_SZ + 1, 
+                            "%04X%04x", dev->subvendor_id, dev->subdevice_id);
+                }
             }
 
             entry->cpqSePciSlotSubSystemID_len = PCISLOT_SUBSYS_SZ;
