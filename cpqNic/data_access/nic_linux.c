@@ -258,11 +258,11 @@ int get_if_status(char *interface) {
     int link;
     unsigned short iff;
 
-    DEBUGMSGTL(("cpqnic:container:load", "%s = %x\n", 
-                attribute, get_sysfs_shex(attribute)));
-
     strcpy(attribute, interface);
     strcat(attribute, "/flags");
+
+    DEBUGMSGTL(("cpqnic:container:load", "%s = %x\n", 
+                attribute, get_sysfs_shex(attribute)));
 
     iff = get_sysfs_shex(attribute);
     if (iff & IFF_UP) {
@@ -472,14 +472,6 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
             if (get_ethtool_info(devlist[i]->d_name, &einfo) == 0) {
                 DEBUGMSGTL(("cpqnic:container:load", "Got ethtool info for %s\n", 
                             devlist[i]->d_name));  
-                DEBUGMSGTL(("cpqnic:container:load", "ethtool Duplex info for %s = %d\n",
-                            devlist[i]->d_name, einfo.duplex));
-                entry->AdapterAutoNegotiate =  einfo.autoneg; 
-                entry->cpqNicIfPhysAdapterDuplexState =  UNKNOWN_DUPLEX; 
-                if (einfo.duplex == DUPLEX_FULL)  
-                    entry->cpqNicIfPhysAdapterDuplexState =  FULL_DUPLEX; 
-                if (einfo.duplex == DUPLEX_HALF)  
-                    entry->cpqNicIfPhysAdapterDuplexState =  HALF_DUPLEX; 
 
                 /*
                  * Mellanox Card NC542m has bus, device and function 
@@ -536,15 +528,6 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
                 DEBUGMSGTL(("cpqnic:container:load", "ethtool FAILED for %s\n",
                             devlist[i]->d_name));
 
-            if (entry->cpqNicIfPhysAdapterSpeedMbps == UNKNOWN_SPEED) {
-                entry->cpqNicIfPhysAdapterSpeedMbps = einfo.link_speed;
-                if (entry->cpqNicIfPhysAdapterSpeedMbps != UNKNOWN_SPEED) {
-                    if (entry->cpqNicIfPhysAdapterSpeedMbps <= 4294 )
-                        entry->cpqNicIfPhysAdapterSpeed = 
-                                 entry->cpqNicIfPhysAdapterSpeedMbps * 1000000;
-                }
-            }
-
             for (iMacLoop=0; iMacLoop<MAC_ADDRESS_BYTES; iMacLoop++) {
                 /* If einfo.perm_addr is all 0's, the ioctl must've failed*/
                 if (einfo.perm_addr[iMacLoop]) {
@@ -556,12 +539,28 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
                     break;
                 }
             }
-
-            free_ethtool_info_members(&einfo);
-            DEBUGMSGTL(("cpqnic:container:load", 
-                        "Finished processing  ethtool info for %s\n", 
-                        devlist[i]->d_name));
         } 
+
+        if (get_ethtool_info(devlist[i]->d_name, &einfo) == 0) {
+            DEBUGMSGTL(("cpqnic:container:load", "Got ethtool info for %s\n", 
+                        devlist[i]->d_name));  
+            DEBUGMSGTL(("cpqnic:container:load", "ethtool Duplex info for %s = %d\n",
+                        devlist[i]->d_name, einfo.duplex));
+            DEBUGMSGTL(("cpqnic:container:load", "ethtool AutoNegotiate info for %s = %d\n",
+                        devlist[i]->d_name, einfo.autoneg));
+            entry->AdapterAutoNegotiate =  einfo.autoneg; 
+            entry->cpqNicIfPhysAdapterDuplexState =  UNKNOWN_DUPLEX; 
+            if (einfo.duplex == DUPLEX_FULL)  
+                entry->cpqNicIfPhysAdapterDuplexState =  FULL_DUPLEX; 
+            if (einfo.duplex == DUPLEX_HALF)  
+                entry->cpqNicIfPhysAdapterDuplexState =  HALF_DUPLEX; 
+            entry->cpqNicIfPhysAdapterSpeedMbps = einfo.link_speed;
+            if (entry->cpqNicIfPhysAdapterSpeedMbps != UNKNOWN_SPEED) {
+                if (entry->cpqNicIfPhysAdapterSpeedMbps <= 4294 )
+                    entry->cpqNicIfPhysAdapterSpeed = 
+                             entry->cpqNicIfPhysAdapterSpeedMbps * 1000000;
+            }
+        }
 
         GetConfSpeedDuplex(entry);
 
@@ -641,6 +640,11 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
                 &&
             (entry->cpqNicIfPhysAdapterStatus != STATUS_LINK_FAILURE))
             send_cpqnic_trap(LINK_UP_TRAP_OID, entry);
+
+        free_ethtool_info_members(&einfo);
+        DEBUGMSGTL(("cpqnic:container:load", 
+                    "Finished processing  ethtool info for %s\n", 
+                    devlist[i]->d_name));
     }
     numIfPhys = CONTAINER_SIZE(container);
     DEBUGMSGTL(("cpqnic:arch"," loaded %d entries\n", numIfPhys));
