@@ -407,7 +407,7 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
     char *generic;
     int disk_fd;
     char *serialnum = NULL;
-    int Health = 0, Speed = 0;
+    int Health = 0, Speed = 0, Temp = -1;
     //int j, k;
     //long  rc = 0;
 
@@ -477,7 +477,7 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
             disk->cpqSasPhyDrvLocationString_len = 
                 sprintf(disk->cpqSasPhyDrvLocationString,
                         "Port %dI Bay %d",
-                        PortID, BayID);
+                        hba->Reference[PhyID].bConnector, BayID);
             disk->cpqSasPhyDrvPlacement = SAS_PHYS_DRV_PLACE_INTERNAL;
 	}
 
@@ -572,6 +572,12 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
         if (is_unit_ssd(disk_fd)) {
             disk->cpqSasPhyDrvRotationalSpeed = SAS_PHYS_DRV_ROT_SPEED_SSD;
             disk->cpqSasPhyDrvMediaType = SAS_PHYS_DRV_SOLID_STATE;
+        }
+
+        if ((Temp = get_unit_temp(disk_fd)) >= 0) {
+            DEBUGMSGTL(("sasphydrv:container:load", "Temp is %dC\n", Temp));
+        } else {
+            DEBUGMSGTL(("sasphydrv:container:load", "Temp is %dC\n", Temp));
         }
 
         if ((Health = get_unit_health(disk_fd)) >= 0) {
