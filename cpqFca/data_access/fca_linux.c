@@ -612,9 +612,15 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
                         attribute));
         if ((value = get_sysfs_str(attribute)) != NULL) {
             DEBUGMSGTL(("fcahc:container:load", "Value = %s\n", value));
-            if (!strcmp(value, "Linkdown"))
+            if (!strcmp(value, "Linkdown")) {
                 if (entry->cpqFcaHostCntlrStatus == FC_HBA_STATUS_OK)
                     entry->cpqFcaHostCntlrStatus = FC_HBA_STATUS_NOTCONNECTED;
+            } else if (!strcmp(value, "Bypassed")) {
+                if (entry->cpqFcaHostCntlrStatus == FC_HBA_STATUS_OK)
+                    entry->cpqFcaHostCntlrStatus = FC_HBA_STATUS_LOOPDEGRADED;
+            } else if (!strcmp(value, "Error"))
+                if (entry->cpqFcaHostCntlrStatus == FC_HBA_STATUS_OK)
+                    entry->cpqFcaHostCntlrStatus = FC_HBA_STATUS_FAILED;
             free(value);
         }
 
@@ -644,7 +650,7 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
              entry->oldStatus = entry->cpqFcaHostCntlrStatus; //save Old status
         }
 
-        if( FcaCondition < entry->cpqFcaHostCntlrCondition )
+        if (FcaCondition < entry->cpqFcaHostCntlrCondition)
             FcaCondition = entry->cpqFcaHostCntlrCondition;
         DEBUGMSGTL(("fcahc:", "FcaCondition = %d\n", FcaCondition));
 
