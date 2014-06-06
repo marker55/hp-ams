@@ -270,7 +270,8 @@ static void free_list(llist *l) {
 static llist* insert_item(char *buf, llist *l) {
     llist* new_item = malloc(sizeof(llist));
     assert(NULL != new_item);
-    strncpy (new_item->entry, buf, PATH_MAX);
+    strncpy (new_item->entry, buf, 
+            sizeof(new_item->entry) - strlen(new_item->entry) - 1);
     new_item->next = l;
     return new_item;
 }
@@ -520,7 +521,7 @@ static int log_buffer_contents(char *msg) {
         len = strlen(msg);
 
         /* copy the msg contents into a fixed-size buffer, and log */
-        strncpy(buf, msg, RECORDER_MAX_BLOB_SIZE);
+        strncpy(buf, msg, sizeof(buf) - 1);
         rc = log_buffer_contents_rec(buf);
         
         /* if msg was larger than the maximum blob size, forward the

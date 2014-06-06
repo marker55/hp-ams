@@ -53,9 +53,12 @@ int getDriver()
     }
 
     strcpy(buffer, "/lib/modules/");
-    strcat(buffer,  myDistro->KernelVersion);
+    strncat(buffer,  myDistro->KernelVersion,
+            sizeof(buffer) - strlen(buffer) - 1);
+
     strcat(buffer, "/");
-    strncpy(kernel, buffer, sizeof(kernel));
+    strncpy(kernel, buffer, sizeof(kernel) - strlen(kernel) - 1);
+
     offset = &kernel[strlen(kernel)];
 
     strcat(buffer, "modules.dep");
