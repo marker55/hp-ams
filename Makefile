@@ -41,7 +41,7 @@ MANDIR:=$(shell if [ -d $(PREFIX)/share/man ] ; then \
 DISTROLIBS ?= $(shell if [ -f /etc/redhat-release ] ; then \
                      echo "-lrpmio -lrpm -lpci"; \
                   elif [ -f /etc/SuSE-release ] ; then \
-                     echo "-lrpm"; \
+                     echo "-lrpmio -lrpm -lpci"; \
                   elif [ -f /etc/lsb-release ] ; then \
                      echo "-lrt"; \
                   elif [ -f /etc/debian_version ] ; then \
