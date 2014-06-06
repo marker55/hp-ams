@@ -5,6 +5,8 @@ typedef struct _drv_entry {
     char *filename;
     char *version;
     char *timestamp;
+    char *vendor;
+    char *pci_devices;
 } drv_entry;
 
 #endif

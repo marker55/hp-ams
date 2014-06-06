@@ -4,6 +4,7 @@
 
 int file_select(const struct dirent *);
 int proc_select(const struct dirent *);
+int pci_select(const struct dirent *);
 
 typedef struct _line_tok_t {
     unsigned int count;

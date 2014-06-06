@@ -135,6 +135,15 @@ int file_select(const struct dirent *entry)
      return (1);
 }
 
+int pci_select(const struct dirent *entry)
+{
+    unsigned short dom = 0;
+    unsigned char  bus = 0, dev = 0, func = 0;
+    if (sscanf(entry->d_name, "%4hx:%2hhx:%2hhx.%1hhx", &dom, &bus, &dev, &func) == 4)
+        return (1);
+    return(0);
+}
+
 int proc_select(const struct dirent *entry)
 {
    if (entry->d_name[0] < '1')

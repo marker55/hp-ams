@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
@@ -14,12 +15,18 @@
 
 #include "driver.h"
 
+extern int pci_select(const struct dirent *);
+
 char * get_sysfs_str(char *);
 extern drv_entry **drivers;
 
 int getDriver()
 {
     int i = 0;
+    int k = 0;
+    struct dirent **devlist;
+    int pcicount;
+
     int modcount = 0;
 
     char kernel[256];
@@ -36,7 +43,7 @@ int getDriver()
 
     /* Let's get our blob */
     if ((fp =  fopen("/proc/modules","r")) == 0) {
-        DEBUGMSGTL(("record:log", "Unable to open /proc/modules\n"));
+        DEBUGMSGTL(("record:logdrvdata", "Unable to open /proc/modules\n"));
         return 0;
     }
 
@@ -46,7 +53,7 @@ int getDriver()
     rewind(fp);
 
     if ((drivers = malloc(modcount * sizeof(drv_entry *))) == NULL) {
-        DEBUGMSGTL(("record:log", "Unable to malloc() %ld bytes\n", 
+        DEBUGMSGTL(("record:logdrvdata", "Unable to malloc() %ld bytes\n", 
                                 modcount * sizeof(drv_entry)));
         fclose(fp);
         return 0;
@@ -78,6 +85,7 @@ int getDriver()
         char sysfs[80];
         int timecount = 0;
         char * version;
+        int dsize = 0;
 
         sscanf(buffer, "%s ", module);
 
@@ -111,7 +119,6 @@ int getDriver()
             strncpy(drivers[i]->filename, begin, (long) end - (long) begin);
             drivers[i]->timestamp = malloc(80);
             memset(drivers[i]->timestamp, 0, 80);
-            strcpy(offset, drivers[i]->filename);
             if (stat(kernel, &buf) == 0 ) {
                 timecount = strftime(drivers[i]->timestamp, 80, 
                                      "%Y-%m-%d %H:%M:%S %z",
@@ -128,11 +135,32 @@ int getDriver()
             } else
                 drivers[i]->version = version;
 
-            DEBUGMSGTL(("record:log", "i = %d ", i));
-            DEBUGMSGTL(("record:log", "module = %s ", drivers[i]->name));
-            DEBUGMSGTL(("record:log", "filename = %s ", drivers[i]->filename));
-            DEBUGMSGTL(("record:log", "timestamp = %s \n", drivers[i]->timestamp));
-            DEBUGMSGTL(("record:log", "version = %s\n", drivers[i]->version));
+            memset(sysfs,0,sizeof(sysfs));
+            strcpy(sysfs, "/sys/bus/pci/drivers/");
+            strcat(sysfs, module);
+
+           /* Let's get our blob */
+            pcicount = scandir(sysfs, &devlist, pci_select, alphasort);
+            if (pcicount > 0)
+                dsize = pcicount*16;
+            else
+                dsize = 16;
+            drivers[i]->pci_devices = malloc(dsize);
+            memset(drivers[i]->pci_devices, 0, dsize );
+            for (k = 0; k <pcicount; k++ ) {
+                if (k != 0)
+                    strcat(drivers[i]->pci_devices, " ");
+                strcat(drivers[i]->pci_devices, devlist[k]->d_name);
+                free(devlist[k]);
+            }
+            if (pcicount > 0) free(devlist);
+
+            DEBUGMSGTL(("record:logdrvdata", "i = %d ", i));
+            DEBUGMSG(("record:logdrvdata", "module = %s ", drivers[i]->name));
+            DEBUGMSG(("record:logdrvdata", "filename = %s ", drivers[i]->filename));
+            DEBUGMSG(("record:logdrvdata", "timestamp = %s ", drivers[i]->timestamp));
+            DEBUGMSG(("record:logdrvdata", "version = %s ", drivers[i]->version));
+            DEBUGMSG(("record:logdrvdata", "PCI Devices = %s\n", drivers[i]->pci_devices));
 
             i++;
         }

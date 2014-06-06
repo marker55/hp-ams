@@ -31,6 +31,9 @@ static field fld[]= {
     {REC_BINARY_DATA, REC_TYP_TEXT,    "Filename"},
     {REC_BINARY_DATA, REC_TYP_TEXT,    "Version"},
     {REC_BINARY_DATA, REC_TYP_TEXT,    "Timestamp"},
+    {REC_BINARY_DATA, REC_TYP_TEXT,    "Vendor"},
+    {REC_BINARY_DATA, REC_TYP_TEXT,    "PCI Devices"},
+
 };
 void LOG_DRIVER(
         /*REC_AMS_OsType Type,
@@ -71,14 +74,14 @@ void LOG_DRIVER(
 
     /* build descriptor toc */
     num_descript = sizeof(fld)/sizeof(field);
-    DEBUGMSGTL(("rec:log","Driver num_descript = %d\n", num_descript));
+    DEBUGMSGTL(("rec:logdriver","Driver num_descript = %d\n", num_descript));
     if ((toc_sz *= num_descript) > RECORDER_MAX_BLOB_SIZE) {
-        DEBUGMSGTL(("rec:log","Driver Descriptor too large %ld\n", toc_sz));
+        DEBUGMSGTL(("rec:logdriver","Driver Descriptor too large %ld\n", toc_sz));
         return;
     }
-    DEBUGMSGTL(("rec:log","Driver toc_sz = %ld\n", toc_sz));
+    DEBUGMSGTL(("rec:logdriver","Driver toc_sz = %ld\n", toc_sz));
     if ((toc = malloc(toc_sz)) == NULL) {
-        DEBUGMSGTL(("rec:log","Driver Unable to malloc() %ld bytes\n", toc_sz));
+        DEBUGMSGTL(("rec:logdriver","Driver Unable to malloc() %ld bytes\n", toc_sz));
         return;
     }
 
@@ -93,7 +96,7 @@ void LOG_DRIVER(
         toc[i].format = fld[i].sz;
         toc[i].visibility =  REC_DESC_VISIBILITY_CUSTOMER;
         strncpy(toc[i].desc, fld[i].nm, strlen(fld[i].nm));
-        DEBUGMSGTL(("rec:log", "toc[i] = %p\n", &toc[i]));
+        DEBUGMSGTL(("rec:logdriver", "toc[i] = %p\n", &toc[i]));
         dump_chunk("rec:rec_log", "descriptor", (const u_char *)&toc[i], 96);
     }
 
@@ -101,7 +104,7 @@ void LOG_DRIVER(
 
     if ((rc = rec_api4_field(s_ams_rec_handle, toc_sz, toc))
             != RECORDER_OK) {
-        DEBUGMSGTL(("rec:log","Driver register descriptor failed %d\n", rc));
+        DEBUGMSGTL(("rec:logdriver","Driver register descriptor failed %d\n", rc));
         return;
     }
     free(toc);
@@ -109,7 +112,7 @@ void LOG_DRIVER(
     /* Let's go ahead and set the code for */
     if ((rc = rec_api3(s_ams_rec_handle, REC_CODE_AMS_DRIVER))
                != RECORDER_OK) {
-        DEBUGMSGTL(("rec:log", "SetRecorderFeederCode failed (%d)\n", rc));
+        DEBUGMSGTL(("rec:logdriver", "SetRecorderFeederCode failed (%d)\n", rc));
         return;
     }
 
@@ -121,13 +124,15 @@ void LOG_DRIVER(
                  strlen(drivers[i]->filename) +
                  strlen(drivers[i]->version) +
                  strlen(drivers[i]->timestamp) +
-                 4;
+                 strlen(drivers[i]->pci_devices) +
+                 6; /* there are 6 eols including the Null Vendor */
+
         if ((blob_sz += string_list_sz) > RECORDER_MAX_BLOB_SIZE) {
-            DEBUGMSGTL(("rec:log","Driver Data too large %ld\n", blob_sz));
+            DEBUGMSGTL(("rec:logdriver","Driver Data too large %ld\n", blob_sz));
             return;
         }
         if ((blob = malloc(blob_sz)) == NULL ) {
-            DEBUGMSGTL(("rec:log","Driver Unable to malloc() %ld blob\n", blob_sz));
+            DEBUGMSGTL(("rec:logdriver","Driver Unable to malloc() %ld blob\n", blob_sz));
             goto free;
         }
         memset(blob, 0, blob_sz);
@@ -151,22 +156,29 @@ void LOG_DRIVER(
         end += strlen(drivers[i]->version) + 1;
 
         strcpy(end, drivers[i]->timestamp);
+        /* Skip over Vendor field */
+        end += strlen(drivers[i]->timestamp) + 2;
 
-        DEBUGMSGTL(("rec:log","Module name %s, Driver filename  %s\n",
+        strcpy(end, drivers[i]->pci_devices);
+
+        DEBUGMSGTL(("rec:logdriver","Module name %s, Driver filename  %s\n",
            drivers[i]->name, drivers[i]->filename));
-        DEBUGMSGTL(("rec:log","Module version %s, Driver timestamp  %s\n",
+        DEBUGMSGTL(("rec:logdriver","Module version %s, Driver timestamp  %s\n",
            drivers[i]->version, drivers[i]->timestamp));
+        DEBUGMSGTL(("rec:logdriver","PCI devices %s\n",
+           drivers[i]->pci_devices));
 
         // Log the record
         if ((rc = rec_api6(s_ams_rec_handle, (const char*)blob, blob_sz)) !=
                             RECORDER_OK) {
-            DEBUGMSGTL(("rec:log", "LogRecorderData failed (%d)\n",rc));
+            DEBUGMSGTL(("rec:logdriver", "LogRecorderData failed (%d)\n",rc));
         }
 
-        DEBUGMSGTL(("rec:log", "Logged record for code %d\n",
+        DEBUGMSGTL(("rec:logdriver", "Logged record for code %d\n",
                     REC_CODE_AMS_DRIVER));
 free:
         free(blob);
+        if (drivers[i]->pci_devices != NULL) free(drivers[i]->pci_devices);
         if (drivers[i]->timestamp != NULL) free(drivers[i]->timestamp);
         if (drivers[i]->version != NULL) free(drivers[i]->version);
         if (drivers[i]->filename != NULL) free(drivers[i]->filename);
