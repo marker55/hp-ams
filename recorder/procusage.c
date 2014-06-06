@@ -91,7 +91,7 @@ void LOG_PROCESSOR_USAGE()
         toc[j].severity_type = REC_SEV_PERIOD | fld[j%2].tp;
         toc[j].format = fld[j%2].sz;
         toc[j].visibility = REC_VIS_CUSTOMER;
-        strncpy(toc[j].desc, fld[j%2].nm, strlen(fld[j%2].nm),
+        strncpy(toc[j].desc, fld[j%2].nm, 
                 sizeof(toc[j].desc) - strlen(toc[j].desc - 1));
         strcat(toc[j].desc, cpuent[j/2]->d_name);
         DEBUGMSGTL(("rec:log", "toc[i] = %p\n", &toc[j]));
