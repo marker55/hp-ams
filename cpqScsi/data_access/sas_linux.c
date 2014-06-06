@@ -474,10 +474,18 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
                         hba->Reference[PhyID].bConnector, BoxID, BayID);
             disk->cpqSasPhyDrvPlacement = SAS_PHYS_DRV_PLACE_EXTERNAL;
         } else {
-            disk->cpqSasPhyDrvLocationString_len = 
-                sprintf(disk->cpqSasPhyDrvLocationString,
-                        "Port %dI Bay %d",
-                        hba->Reference[PhyID].bConnector, BayID);
+            /* Check to see if we were able to get CSMI connector info */
+            if (strlen(hba->Reference[PhyID].bConnector))
+                disk->cpqSasPhyDrvLocationString_len =
+                    sprintf(disk->cpqSasPhyDrvLocationString,
+                            "Port %sBay %d",
+                            hba->Reference[PhyID].bConnector, BayID);
+            else
+                disk->cpqSasPhyDrvLocationString_len =
+                    sprintf(disk->cpqSasPhyDrvLocationString,
+                            "Port %dI Bay %d",
+                            (PhyID / 4) + 1, BayID);
+
             disk->cpqSasPhyDrvPlacement = SAS_PHYS_DRV_PLACE_INTERNAL;
 	}
 
@@ -1161,6 +1169,7 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
                     free(hbaConfig);
                 }
             }
+            memset(entry->Reference, 0, sizeof(sas_connector_info) * 32);
             DEBUGMSGTL(("sashba:container:load", 
                         "getting Connector info %d, %s\n", HbaIndex, buffer));
             if ((hbaConnector = SasGetHbaConnector(HbaIndex, buffer)) != NULL ){
