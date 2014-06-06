@@ -255,6 +255,31 @@ int enumPCIid(unsigned int BoardID)
                     return (60);
                     break;
 
+                case 0x220A103C:
+                    /* Emulex 556FLR-SFP+  */
+                    return (61);
+                    break;
+
+                case 0x1934103C:
+                    /* Emulex 650M */
+                    return (62);
+                    break;
+
+                case 0x1935103C:
+                    /* Emulex 650FLB */
+                    return (63);
+                    break;
+
+                case 0x21D4103C:
+                    /* Emulex CN1200E */
+                    return (64);
+                    break;
+
+                case 0x22FA103C:
+                    /* Broadcom 536FLB */
+                    return (65);
+                    break;
+
                 default:
                     return(1);
                     break;
