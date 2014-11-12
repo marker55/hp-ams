@@ -267,7 +267,7 @@ int get_unit_temp(int fd)
     unsigned char scsiCmd[10] = {LOG_SENSE, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     struct sg_io_hdr sgiob;
     unsigned char sense_buf[32];
-    unsigned char response[1024];
+    unsigned char response[4096];
     int resp_size = 0x62;
     int temp = -1;
 
@@ -520,7 +520,7 @@ char *get_sas_temp(int fd)
     unsigned char scsiCmd[10] = {LOG_SENSE, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     struct sg_io_hdr sgiob;
     unsigned char sense_buf[32];
-    unsigned char response[1024];
+    unsigned char response[4096];
     int resp_size = 16;
     int len = 0;
 
@@ -648,7 +648,7 @@ unsigned long long  get_disk_capacity(int fd)
                                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     struct sg_io_hdr sgiob;
     unsigned char sense_buf[32];
-    unsigned char response[1024];
+    unsigned char response[4096];
     int resp_size = 1024*4;
     unsigned long long capacity = 0;
     unsigned long long capacity2 = 0;
@@ -719,7 +719,7 @@ int get_defect_data_size(int fd)
     unsigned char scsiCmd[10] = {READ_DEFECT_DATA, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     struct sg_io_hdr sgiob;
     unsigned char sense_buf[32];
-    unsigned char response[1024];
+    unsigned char response[4096];
     int resp_size = 1024*4;
     int list_sz = 0;
     int list_fmt = 0;
@@ -778,7 +778,7 @@ int get_unit_speed(int fd)
     unsigned char scsiCmd[10] = {MODE_SENSE_10, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     struct sg_io_hdr sgiob;
     unsigned char sense_buf[32];
-    unsigned char response[1024];
+    unsigned char response[4096];
     int resp_size = 1024*4;
 
     memset(&sense_buf, 0, sizeof(sense_buf));
@@ -821,7 +821,7 @@ int is_unit_smart(int fd)
     unsigned char scsiCmd[10] = {MODE_SENSE, 0, 0, 0, 0, 0};
     struct sg_io_hdr sgiob;
     unsigned char sense_buf[32];
-    unsigned char response[1024];
+    unsigned char response[4096];
     int resp_size = 252;
     int ssd = 0;
     int i;
@@ -919,7 +919,7 @@ int get_sas_ssd_wear(int fd)
     unsigned char scsiCmd[10] = {LOG_SENSE, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     struct sg_io_hdr sgiob;
     unsigned char sense_buf[32];
-    unsigned char response[1024];
+    unsigned char response[4096];
     int resp_size = 16;
     int wear = 255;
 
@@ -969,7 +969,7 @@ int get_sas_pwron(int fd)
     unsigned char scsiCmd[10] = {LOG_SENSE, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     struct sg_io_hdr sgiob;
     unsigned char sense_buf[32];
-    unsigned char response[1024];
+    unsigned char response[4096];
     int resp_size = 32;
 
     memset(&sense_buf, 0, sizeof(sense_buf));
@@ -1023,7 +1023,7 @@ int get_sata_health(int fd)
              0, ATA_SMART, 0};
     struct sg_io_hdr sgiob;
     unsigned char sense_buf[32];
-    unsigned char response[1024];
+    unsigned char response[4096];
     int resp_size = 512;
     int health = -1;
 
@@ -1069,7 +1069,7 @@ int get_sas_health(int fd)
     unsigned char scsiCmd[10] = {LOG_SENSE, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     struct sg_io_hdr sgiob;
     unsigned char sense_buf[32];
-    unsigned char response[1024];
+    unsigned char response[4096];
     int resp_size = 0x62;
     int health = -1;
 
