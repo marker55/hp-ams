@@ -3,7 +3,13 @@ NETSNMP ?= net-snmp-5.7.1
 
 OPT ?= -O2
 
-CPPFLAGS = -I. -I.. -I../../$(NETSNMP)/include -I../../ -I../../common
+LEVEL=../../
+NETSNMPDIR=$(LEVEL)$(NETSNMP)
+NETSNMPINC=$(shell if [ -f $(NETSNMPDIR)/net-snmp-config ] ; then \
+                       $(NETSNMPDIR)/net-snmp-config --build-includes $(NETSNMPDIR) ; \
+                   fi)
+
+CPPFLAGS = -I. -I.. $(NETSNMPINC) -I../../ -I../../common
 
 CFLAGS ?= -fno-strict-aliasing $(OPT) -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux 
 

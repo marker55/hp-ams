@@ -12,10 +12,6 @@
 #include "cpqSasPhyDrvTable.h"
 #include "hpHelper.h"
 
-#define CPQMIB                  5
-#define CPQMIBREVMAJOR		1
-#define CPQMIBREVMINOR		38
-
 /*
  * cpqScsiMib_oid:
  *   this is the top level oid that we want to register under.  This

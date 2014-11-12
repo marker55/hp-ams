@@ -1,0 +1,17 @@
+[Unit]
+Description=HP Agentless Management Service daemon
+After=syslog.target network.target
+
+[Service]
+Type=notify
+LimitCORE=infinity
+Environment=HPAMS_OPTIONS=
+EnvironmentFile=/etc/sysconfig/hp-ams
+ExecStart=/sbin/hpHelper -f $HPAMS_OPTIONS
+StandardError=null
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target
+
+

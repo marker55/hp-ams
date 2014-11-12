@@ -36,7 +36,6 @@ typedef struct cpqSePciSlotTable_entry_s {
     char            cpqSePciSlotBoardName[PCISLOT_BOARDNAME_SZ];
     size_t          cpqSePciSlotBoardName_len;
     long            cpqSePciSlotWidth;
-    long            cpqSePciSlotSpeed;
     long            cpqSePciSlotExtendedInfo;
     long            cpqSePciSlotType;
     long            cpqSePciSlotCurrentMode;
@@ -66,7 +65,6 @@ cpqSePciSlotTable_createEntry(netsnmp_container *, oid,  oid);
 #define COLUMN_CPQSEPCISLOTSUBSYSTEMID		4
 #define COLUMN_CPQSEPCISLOTBOARDNAME		5
 #define COLUMN_CPQSEPCISLOTWIDTH		6
-#define COLUMN_CPQSEPCISLOTSPEED		7
 #define COLUMN_CPQSEPCISLOTEXTENDEDINFO		8
 #define COLUMN_CPQSEPCISLOTTYPE		9
 #define COLUMN_CPQSEPCISLOTCURRENTMODE		10

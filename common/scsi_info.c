@@ -16,20 +16,67 @@
 
 #include <dirent.h>
 
+#define BLOCK              0x0         // Defect list formats
+#define BYTES_FROM_INDEX   0x4
+#define PHYSICAL_SECTOR    0x5
+#define VENDOR_SPECIFIC    0x6
+
+typedef struct _BLOCK_DESCRIPTOR
+{
+   unsigned int DefectiveBlockAddress;
+} BLOCK_DESCRIPTOR, *PBLOCK_DESCRIPTOR;
+
+
+typedef struct _BYTES_FROM_INDEX_DESCRIPTOR
+{
+   unsigned int Cylinder : 24;
+   unsigned int Head : 8;
+   unsigned int DefectBytesFromIndex;
+} BYTES_FROM_INDEX_DESCRIPTOR, *PBYTES_FROM_INDEX_DESCRIPTOR;
+
+
+typedef struct _PHYSICAL_SECTOR_DESCRIPTOR
+{
+   unsigned int Cylinder : 24;
+   unsigned int Head : 8;
+   unsigned int DefectSectorNumber;
+} PHYSICAL_SECTOR_DESCRIPTOR, *PPHYSICAL_SECTOR_DESCRIPTOR;
+
+
+#define ATA_PASS_THROUGH_16    0x85
+#define PROTO_PIO              8  /* 4 <<1 */
+#define T_LENGTH               1
+#define EXTEND                 1
+
+#define SERVICE_ACTION_IN      0x9e
+#define READ_CAPACITY_16       0x10
+
+#define ATA_IDENTIFY_DEVICE    0xec
+
+#define ATA_SMART              0xb0
+#define READ_SMART_LOG         0xd5
+#define SUM_SMART_ERR_LOG       1
+
+#define ATA_READ_LOG_EXT       0x2f
+#define DEV_STAT_LOG           0x04
+#define SUP_STAT_PAGE          0x00
+#define GEN_STAT_PAGE          0x01
+#define FREEFALL_STAT_PAGE     0x02
+#define ROTMEDIA_PAGE          0x03
+#define GENERR_STAT_PAGE       0x04
+#define TEMP_STAT_PAGE         0x05
+#define TRANS_STAT_PAGE        0x05
+#define SSD_STAT_PAGE          0x07
+
+#define BDC_VPD                0xb1
+#define EVPD                   0x01
 #ifdef UTTEST
 extern  int alphasort();
 static struct dirent **ScsiGenericlist;
 static char * ScsiGenericDir = "/sys/class/scsi_generic/";
 static int NumScsiGeneric;
-
-static int generic_select(const struct dirent *entry)
-{
-    if (strncmp(entry->d_name,"sg", 2) == 0)
-        return(1);
-    return 0;
-}
-
 #endif
+
 static int sd_select(const struct dirent *entry)
 {
     if (strncmp(entry->d_name,"block:", 6) == 0)
@@ -110,20 +157,24 @@ unsigned char *get_ScsiGeneric(char *scsi)
     int NumGenericDisk;
 
     memset(attribute, 0, sizeof(attribute));
-    sprintf(attribute, "/sys/class/scsi_device/%s/device/scsi_generic", scsi);
+    snprintf(attribute, sizeof(attribute) -1,
+             "/sys/class/scsi_device/%s/device/scsi_generic", scsi);
 
     NumGenericDisk = scandir(attribute, &GenericDisklist,
                                 generic_select, alphasort);
     if (NumGenericDisk  > 0) {
-        if ((generic = malloc(strlen(GenericDisklist[0]->d_name) + 1)) != NULL){
-            strcpy(generic, GenericDisklist[0]->d_name);
+        size_t gd_sz = strlen(GenericDisklist[0]->d_name);
+
+        if ((generic = malloc(gd_sz + 1)) != NULL){
+            memset(generic, 0, gd_sz + 1);
+            strncpy(generic, GenericDisklist[0]->d_name, gd_sz);
         }
         free(GenericDisklist[0]);
         free(GenericDisklist);
     } else {
     }
 #endif
-    return (generic);
+    return (unsigned char *)generic;
 }
 
 sashba_config_buf * SasGetHbaConfig (int hbaIndex, char * driver)
@@ -212,30 +263,30 @@ sas_connector_info_buf * SasGetHbaConnector (int hbaIndex, char * driver)
 
 int get_unit_temp(int fd) 
 {
-    int senseCmdLen = 10;
-    unsigned char senseCmd[10] = {LOG_SENSE, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    int scsiCmdLen = 10;
+    unsigned char scsiCmd[10] = {LOG_SENSE, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     struct sg_io_hdr sgiob;
     unsigned char sense_buf[32];
-    unsigned char response[4096];
+    unsigned char response[1024];
     int resp_size = 0x62;
     int temp = -1;
 
-    memset(&sense_buf, 0, 32);
+    memset(&sense_buf, 0, sizeof(sense_buf));
     memset(&sgiob, 0, sizeof(sgiob));
     memset(&response, 0, sizeof(response));
 
-    senseCmd[2] = (unsigned char) 0x6f;
-    senseCmd[7] = (unsigned char)((resp_size >> 8) & 0xff);
-    senseCmd[8] = (unsigned char)(resp_size & 0xff);
+    scsiCmd[2] = (unsigned char) 0x6f;
+    scsiCmd[7] = (unsigned char)((resp_size >> 8) & 0xff);
+    scsiCmd[8] = (unsigned char)(resp_size & 0xff);
 
     sgiob.interface_id = 'S';
-    sgiob.cmdp = &senseCmd[0];
-    sgiob.cmd_len = senseCmdLen;
+    sgiob.cmdp = &scsiCmd[0];
+    sgiob.cmd_len = scsiCmdLen;
 
     sgiob.timeout = 60000;
 
     sgiob.sbp = &sense_buf[0];
-    sgiob.mx_sb_len = 32;
+    sgiob.mx_sb_len = sizeof(sense_buf);
 
     sgiob.dxferp = &response;
     sgiob.dxfer_len = resp_size;
@@ -244,40 +295,62 @@ int get_unit_temp(int fd)
     if (ioctl(fd, SG_IO, &sgiob) < 0) { 
         return -1;
     }
+#ifdef UTTEST_SAS_DBG
+    fprintf(stderr, "TEMP: ");
+    fprintf(stderr, "%0x %0x %0x %0x %0x %0x %0x %0x %0x %0x %0x\n", 
+                    response[0], response[1], response[2], response[3], response[4], response[5], response[6], response[7],
+                    response[8], response[9], response[10]);
+#endif
     if ((response[0] == 0x2f) && (response[10] != 0xff)){
         temp = response[10];
     }
     return temp;
 }
 
-char *get_identify_info(int fd)
+int sata_parse_current(char *Temperature)
 {
-    int inqCmdLen = 6;
-    unsigned char inqCmd[6] = {INQUIRY, 0, 0, 0, 0, 0};
+    if (Temperature[8] != 0x80) 
+        return Temperature[8];
+    else 
+        return 0;
+}
+
+int sata_parse_mcot(char *Temperature)
+{
+    if (Temperature[88] != 0x80) 
+        return Temperature[88];
+    else 
+        return 0;
+}
+
+unsigned char * get_sata_log(int fd, int log)
+{
+    int scsiCmdLen = 16;
+    unsigned char scsiCmd[16] = 
+            {ATA_PASS_THROUGH_16, PROTO_PIO|EXTEND, 0x0e, 
+             0, 0, 0, 1, 
+             0, DEV_STAT_LOG, 0, 0, 0, 0, 
+             0, ATA_READ_LOG_EXT, 0};
     struct sg_io_hdr sgiob;
     unsigned char sense_buf[32];
-    unsigned char response[256];
-    int resp_size = 0xfc;
-    int len = 0;
-    char *ident = NULL;
+    unsigned char response[512];
+    int resp_size = 512;
+    unsigned char *statlog = NULL;
 
-    memset(&sense_buf, 0, 32);
+    memset(&sense_buf, 0, sizeof(sense_buf));
     memset(&sgiob, 0, sizeof(sgiob));
     memset(&response, 0, sizeof(response));
 
-    inqCmd[1] = (unsigned char) 0;
-    inqCmd[2] = (unsigned char) 0;
-    inqCmd[3] = (unsigned char)((resp_size >> 8) & 0xff);
-    inqCmd[4] = (unsigned char)(resp_size & 0xff);
+    scsiCmd[10] = log;
 
     sgiob.interface_id = 'S';
-    sgiob.cmdp = &inqCmd[0];
-    sgiob.cmd_len = inqCmdLen;
+    sgiob.cmdp = &scsiCmd[0];
+    sgiob.cmd_len = scsiCmdLen;
 
     sgiob.timeout = 60000;
 
     sgiob.sbp = &sense_buf[0];;
-    sgiob.mx_sb_len = 32;
+    sgiob.mx_sb_len = sizeof(sense_buf);
 
     sgiob.dxferp = &response[0];
     sgiob.dxfer_len = resp_size;
@@ -286,6 +359,278 @@ char *get_identify_info(int fd)
     if (ioctl(fd, SG_IO, &sgiob) < 0) {
         return NULL;
     }
+    statlog = malloc(512);
+    memcpy(statlog, &response[0], 512);
+    return statlog;
+}
+
+unsigned char * get_sata_DiskRev(int fd)
+{
+    int scsiCmdLen = 16;
+    unsigned char scsiCmd[16] =
+            {ATA_PASS_THROUGH_16, PROTO_PIO, 0x0e,
+             0, 0, 0, 1,
+             0, 0, 0, 0, 0, 0,
+             0, ATA_IDENTIFY_DEVICE, 0};
+    struct sg_io_hdr sgiob;
+    unsigned char sense_buf[32];
+    unsigned char response[512];
+    int resp_size = 512;
+    char *sct_fwrev = NULL;
+
+    memset(&sense_buf, 0, sizeof(sense_buf));
+    memset(&sgiob, 0, sizeof(sgiob));
+    memset(&response, 0, sizeof(response));
+
+    sgiob.interface_id = 'S';
+    sgiob.cmdp = &scsiCmd[0];
+    sgiob.cmd_len = scsiCmdLen;
+
+    sgiob.timeout = 60000;
+
+    sgiob.sbp = &sense_buf[0];;
+    sgiob.mx_sb_len = sizeof(sense_buf);
+
+    sgiob.dxferp = &response[0];
+    sgiob.dxfer_len = resp_size;
+    sgiob.dxfer_direction = SG_DXFER_FROM_DEV;
+
+    if (ioctl(fd, SG_IO, &sgiob) < 0) {
+        return NULL;
+    }
+    sct_fwrev = malloc(9);
+    sct_fwrev[0] = response[47];
+    sct_fwrev[1] = response[46];
+    sct_fwrev[2] = response[49];
+    sct_fwrev[3] = response[48];
+    sct_fwrev[4] = response[51];
+    sct_fwrev[5] = response[50];
+    sct_fwrev[6] = response[53];
+    sct_fwrev[7] = response[52];
+    sct_fwrev[8] = 0;
+    return (unsigned char *)sct_fwrev;
+}
+
+unsigned char * get_sata_sct_stat(int fd)
+{
+    int scsiCmdLen = 16;
+    unsigned char scsiCmd[16] = 
+            {ATA_PASS_THROUGH_16, PROTO_PIO, 0x0e, 
+             0, READ_SMART_LOG, 0, 1, 
+             0, 0x0e, 0, 0x4f, 0, 0xc2, 
+             0, ATA_SMART, 0};
+    struct sg_io_hdr sgiob;
+    unsigned char sense_buf[32];
+    unsigned char response[512];
+    int resp_size = 512;
+    char *sct_stat = NULL;
+
+    memset(&sense_buf, 0, sizeof(sense_buf));
+    memset(&sgiob, 0, sizeof(sgiob));
+    memset(&response, 0, sizeof(response));
+
+    sgiob.interface_id = 'S';
+    sgiob.cmdp = &scsiCmd[0];
+    sgiob.cmd_len = scsiCmdLen;
+
+    sgiob.timeout = 60000;
+
+    sgiob.sbp = &sense_buf[0];;
+    sgiob.mx_sb_len = sizeof(sense_buf);
+
+    sgiob.dxferp = &response[0];
+    sgiob.dxfer_len = resp_size;
+    sgiob.dxfer_direction = SG_DXFER_FROM_DEV;
+
+    if (ioctl(fd, SG_IO, &sgiob) < 0) {
+        return NULL;
+    }
+    sct_stat = malloc(512);
+    memcpy(sct_stat, &response[0], 512);
+    return (unsigned char *)sct_stat;
+}
+
+unsigned char * get_sata_statlog(int fd)
+{
+    return (get_sata_log(fd, GEN_STAT_PAGE));
+}
+
+unsigned char * get_sata_ssdlog(int fd)
+{
+    return (get_sata_log(fd, SSD_STAT_PAGE));
+}
+    
+unsigned char * get_sata_temp(int fd)
+{
+    return (get_sata_log(fd, TEMP_STAT_PAGE));
+}
+
+int get_sata_ssd_wear(int fd) 
+{
+    unsigned char *ssdlog = NULL;
+    int wear = 255;
+    
+    ssdlog = get_sata_ssdlog(fd);
+#ifdef UTTEST_SATA_DBG
+    if (ssdlog != NULL) {
+    fprintf(stderr, "\nWEAR: ");
+    int s, e;
+    e = 16;
+    for (s = 0; s < e;s++)
+        fprintf(stderr, "%0x ", ssdlog[s]);
+    fprintf(stderr, "\n");
+    }
+#endif
+
+    if (ssdlog != NULL) {
+        wear = ssdlog[8];
+        free (ssdlog);
+    }
+    return wear;
+}
+
+int get_sata_pwron(int fd) 
+{
+    int poweron = -1;
+    unsigned char *statlog = NULL;
+
+    statlog = get_sata_statlog(fd);
+#ifdef UTTEST_SATA_DBG
+    if (statlog != NULL) {
+    fprintf(stderr, "\nPON: ");
+    int s, e;
+    e = 24;
+    for (s = 0; s < e;s++)
+        fprintf(stderr, "%0x ", statlog[s]);
+    fprintf(stderr, "\n");
+    }
+#endif
+
+    if (statlog != NULL) {
+        poweron = (statlog[16] + (statlog[17] << 8) + 
+                   (statlog[18] << 16 ) + (statlog[19] << 24 ));
+        free (statlog);
+    }
+    return poweron;
+}
+
+char *get_sas_temp(int fd)
+{
+    int scsiCmdLen = 10;
+    unsigned char scsiCmd[10] = {LOG_SENSE, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    struct sg_io_hdr sgiob;
+    unsigned char sense_buf[32];
+    unsigned char response[1024];
+    int resp_size = 16;
+    int len = 0;
+
+    char *temp = NULL;
+
+    memset(&sense_buf, 0, sizeof(sense_buf));
+    memset(&sgiob, 0, sizeof(sgiob));
+    memset(&response, 0, sizeof(response));
+
+    scsiCmd[2] = (unsigned char) 0x4d;
+    scsiCmd[7] = (unsigned char)((resp_size >> 8) & 0xff);
+    scsiCmd[8] = (unsigned char)(resp_size & 0xff);
+
+    sgiob.interface_id = 'S';
+    sgiob.cmdp = &scsiCmd[0];
+    sgiob.cmd_len = scsiCmdLen;
+
+    sgiob.timeout = 60000;
+
+    sgiob.sbp = &sense_buf[0];;
+    sgiob.mx_sb_len = sizeof(sense_buf);
+
+    sgiob.dxferp = &response[0];
+    sgiob.dxfer_len = resp_size;
+    sgiob.dxfer_direction = SG_DXFER_FROM_DEV;
+
+    if (ioctl(fd, SG_IO, &sgiob) < 0) {
+        return NULL;
+    }
+#ifdef UTTEST_SAS_DBG
+    {
+    fprintf(stderr, "\nTEMPERATURE: ");
+    int s, e;
+    e = 16;
+    for (s = 0; s < e;s++) 
+        fprintf(stderr, "%0x ", response[s]);
+    fprintf(stderr, "\n");
+    }
+#endif
+    len = response[ 3 ] + 4;
+    temp = malloc(len);
+    memset(temp, 0, len );
+    memcpy(temp, &response[0], len);
+    return temp;
+}
+
+char *get_identify_info(int fd)
+{
+    int scsiCmdLen = 6;
+    unsigned char scsiCmd[6] = {INQUIRY, 0, 0, 0, 0, 0};
+
+    struct sg_io_hdr sgiob;
+    unsigned char sense_buf[32];
+    unsigned char response[256];
+    int resp_size = 0xfc;
+    int len = 0;
+
+    char *ident = NULL;
+
+    memset(&sense_buf, 0, sizeof(sense_buf));
+    memset(&sgiob, 0, sizeof(sgiob));
+    memset(&response, 0, sizeof(response));
+
+    scsiCmd[1] = (unsigned char) 0;
+    scsiCmd[2] = (unsigned char) 0;
+    scsiCmd[3] = (unsigned char)((resp_size >> 8) & 0xff);
+    scsiCmd[4] = (unsigned char)(resp_size & 0xff);
+
+    sgiob.interface_id = 'S';
+    sgiob.cmdp = &scsiCmd[0];
+    sgiob.cmd_len = scsiCmdLen;
+
+    sgiob.timeout = 60000;
+
+    sgiob.sbp = &sense_buf[0];;
+    sgiob.mx_sb_len = sizeof(sense_buf);
+
+    sgiob.dxferp = &response[0];
+    sgiob.dxfer_len = resp_size;
+    sgiob.dxfer_direction = SG_DXFER_FROM_DEV;
+
+    if (ioctl(fd, SG_IO, &sgiob) < 0) {
+        return NULL;
+    }
+#ifdef UTTEST_SAS_DBG
+    {
+    fprintf(stderr, "IDENTIFY: ");
+    int s, e;
+    e = 8;
+    for (s = 0; s < e;s++) 
+        fprintf(stderr, "%0x ", response[s]);
+    fprintf(stderr, "\n");
+    e = 16;
+    for (s = 8; s < e;s++) 
+        fprintf(stderr, "%c", response[s]);
+    fprintf(stderr, "\n");
+    e = 32;
+    for (s = 16; s < e;s++) 
+        fprintf(stderr, "%c", response[s]);
+    fprintf(stderr, "\n");
+    e = 36;
+    for (s = 32; s < e;s++) 
+        fprintf(stderr, "%c", response[s]);
+    fprintf(stderr, "\n");
+    e = 56;
+    for (s = 36; s < e;s++) 
+        fprintf(stderr, "%c", response[s]);
+    fprintf(stderr, "\n");
+    }
+#endif
     len = response[ 4 ] + 4;
     ident = malloc(len);
     memset(ident, 0, len );
@@ -295,29 +640,31 @@ char *get_identify_info(int fd)
 
 unsigned long long  get_disk_capacity(int fd)
 {
-    int senseCmdLen = 10;
-    unsigned char senseCmd[10] = {READ_CAPACITY, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    int senseCmd2Len = 16;
-    unsigned char senseCmd2[16] = {0x9E, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    int scsiCmdLen = 10;
+    unsigned char scsiCmd[10] = {READ_CAPACITY, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+    int scsiCmd2Len = 16;
+    unsigned char scsiCmd2[16] = {SERVICE_ACTION_IN, READ_CAPACITY_16,
+                                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     struct sg_io_hdr sgiob;
     unsigned char sense_buf[32];
-    unsigned char response[4096];
+    unsigned char response[1024];
     int resp_size = 1024*4;
     unsigned long long capacity = 0;
     unsigned long long capacity2 = 0;
 
-    memset(&sense_buf, 0, 32);
+    memset(&sense_buf, 0, sizeof(sense_buf));
     memset(&sgiob, 0, sizeof(sgiob));
     memset(&response, 0, sizeof(response));
 
     sgiob.interface_id = 'S';
-    sgiob.cmdp = &senseCmd[0];
-    sgiob.cmd_len = senseCmdLen;
+    sgiob.cmdp = &scsiCmd[0];
+    sgiob.cmd_len = scsiCmdLen;
 
     sgiob.timeout = 60000;
 
     sgiob.sbp = &sense_buf[0];
-    sgiob.mx_sb_len = 32;
+    sgiob.mx_sb_len = sizeof(sense_buf);
 
     sgiob.dxferp = &response;
     sgiob.dxfer_len = resp_size;
@@ -326,25 +673,25 @@ unsigned long long  get_disk_capacity(int fd)
     if (ioctl(fd, SG_IO, &sgiob) < 0) {
         return 0;
     }
-    capacity = ((unsigned long long)response[0] << 24) + ((unsigned long long)response[1] << 16) + 
-               ((unsigned long long)response[2] << 8) + (unsigned long long)response[3];
+    capacity = ((unsigned long long)response[0] << 24) + 
+               ((unsigned long long)response[1] << 16) + 
+               ((unsigned long long)response[2] << 8) + 
+                (unsigned long long)response[3];
     if (capacity != 0xFFFFFFFF)
         return capacity;
     else {
-        memset(&sense_buf, 0, 32);
+        memset(&sense_buf, 0, sizeof(sense_buf));
         memset(&sgiob, 0, sizeof(sgiob));
         memset(&response, 0, sizeof(response));
 
         sgiob.interface_id = 'S';
-        sgiob.cmdp = &senseCmd2[0];
-        sgiob.cmd_len = senseCmd2Len;
+        sgiob.cmdp = &scsiCmd2[0];
+        sgiob.cmd_len = scsiCmd2Len;
     
         sgiob.timeout = 60000;
 
         sgiob.sbp = &sense_buf[0];
-        sgiob.mx_sb_len = 32;
-
-        senseCmd2[1] = 0x10;
+        sgiob.mx_sb_len = sizeof(sense_buf);
 
         sgiob.dxferp = &response;
         sgiob.dxfer_len = resp_size;
@@ -354,38 +701,45 @@ unsigned long long  get_disk_capacity(int fd)
             return 0;
         }
 
-        capacity = ((unsigned long long)response[0] << 24) + ((unsigned long long)response[1] << 16) + 
-                   ((unsigned long long)response[2] << 8) + (unsigned long long)response[3] ;
-        capacity2 =((unsigned long long)response[4] << 24) + ((unsigned long long)response[5] << 16) + 
-                   ((unsigned long long)response[6] << 8) + (unsigned long long)response[7] ; 
+        capacity = ((unsigned long long)response[0] << 24) + 
+                   ((unsigned long long)response[1] << 16) + 
+                   ((unsigned long long)response[2] << 8) + 
+                    (unsigned long long)response[3] ;
+        capacity2 =((unsigned long long)response[4] << 24) + 
+                   ((unsigned long long)response[5] << 16) + 
+                   ((unsigned long long)response[6] << 8) + 
+                    (unsigned long long)response[7] ; 
         return (capacity + (capacity2 << 32));
     }
 }
+
 int get_defect_data_size(int fd)
 {
-    int senseCmdLen = 10;
-    unsigned char senseCmd[10] = {READ_DEFECT_DATA, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    int scsiCmdLen = 10;
+    unsigned char scsiCmd[10] = {READ_DEFECT_DATA, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     struct sg_io_hdr sgiob;
     unsigned char sense_buf[32];
-    unsigned char response[4096];
+    unsigned char response[1024];
     int resp_size = 1024*4;
+    int list_sz = 0;
+    int list_fmt = 0;
 
-    memset(&sense_buf, 0, 32);
+    memset(&sense_buf, 0, sizeof(sense_buf));
     memset(&sgiob, 0, sizeof(sgiob));
     memset(&response, 0, sizeof(response));
 
-    senseCmd[2] = (unsigned char) 0x0d;
-    senseCmd[7] = (unsigned char)((resp_size >> 8) & 0xff);
-    senseCmd[8] = (unsigned char)(resp_size & 0xff);
+    scsiCmd[2] = (unsigned char) 0x0d;
+    scsiCmd[7] = (unsigned char)((resp_size >> 8) & 0xff);
+    scsiCmd[8] = (unsigned char)(resp_size & 0xff);
 
     sgiob.interface_id = 'S';
-    sgiob.cmdp = &senseCmd[0];
-    sgiob.cmd_len = senseCmdLen;
+    sgiob.cmdp = &scsiCmd[0];
+    sgiob.cmd_len = scsiCmdLen;
 
     sgiob.timeout = 60000;
 
     sgiob.sbp = &sense_buf[0];
-    sgiob.mx_sb_len = 32;
+    sgiob.mx_sb_len = sizeof(sense_buf);
 
     sgiob.dxferp = &response;
     sgiob.dxfer_len = resp_size;
@@ -394,35 +748,55 @@ int get_defect_data_size(int fd)
     if (ioctl(fd, SG_IO, &sgiob) < 0) {
         return 0;
     }
-    return ( (response[2] << 8) + response[3]);
+    list_fmt = response[1] & 0x07;
+    list_sz = (response[2] << 8) + response[3];
+    if (list_sz != 0) {
+        switch (list_fmt) {
+            case BLOCK:
+            case VENDOR_SPECIFIC:
+                return (list_sz / sizeof(BLOCK_DESCRIPTOR));
+                break;
+    
+            case BYTES_FROM_INDEX:
+                return(list_sz / sizeof(BYTES_FROM_INDEX_DESCRIPTOR));
+                break;
+    
+            case PHYSICAL_SECTOR:
+                return(list_sz / sizeof(PHYSICAL_SECTOR_DESCRIPTOR));
+                break;
 
+            default:  // Unknown format
+                break;
+       }
+    }
+    return 0;
 }
 
 int get_unit_speed(int fd) 
 {
-    int senseCmdLen = 10;
-    unsigned char senseCmd[10] = {MODE_SENSE_10, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    int scsiCmdLen = 10;
+    unsigned char scsiCmd[10] = {MODE_SENSE_10, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     struct sg_io_hdr sgiob;
     unsigned char sense_buf[32];
-    unsigned char response[4096];
+    unsigned char response[1024];
     int resp_size = 1024*4;
 
-    memset(&sense_buf, 0, 32);
+    memset(&sense_buf, 0, sizeof(sense_buf));
     memset(&sgiob, 0, sizeof(sgiob));
     memset(&response, 0, sizeof(response));
 
-    senseCmd[2] = (unsigned char) 4;
-    senseCmd[7] = (unsigned char)((resp_size >> 8) & 0xff);
-    senseCmd[8] = (unsigned char)(resp_size & 0xff);
+    scsiCmd[2] = (unsigned char) 4;
+    scsiCmd[7] = (unsigned char)((resp_size >> 8) & 0xff);
+    scsiCmd[8] = (unsigned char)(resp_size & 0xff);
 
     sgiob.interface_id = 'S';
-    sgiob.cmdp = &senseCmd[0];
-    sgiob.cmd_len = senseCmdLen;
+    sgiob.cmdp = &scsiCmd[0];
+    sgiob.cmd_len = scsiCmdLen;
 
     sgiob.timeout = 60000;
 
     sgiob.sbp = &sense_buf[0];
-    sgiob.mx_sb_len = 32;
+    sgiob.mx_sb_len = sizeof(sense_buf);
 
     sgiob.dxferp = &response;
     sgiob.dxfer_len = resp_size;
@@ -431,38 +805,44 @@ int get_unit_speed(int fd)
     if (ioctl(fd, SG_IO, &sgiob) < 0) { 
         return 0;
     }
+#ifdef UTTEST_SAS_DBG
+    fprintf(stderr, "SPEED: ");
+    fprintf(stderr, "%0x %0x %0x %0x %0x %0x %0x %0x %0x %0x %0x\n", 
+                    response[0], response[1], response[2], response[3], response[4], response[5], response[6], response[7],
+                    response[8], response[9], response[10]);
+#endif
     return ( (response[37] << 8) + response[36]);
 }
 
 
 int is_unit_smart(int fd) 
 {
-    int senseCmdLen = 6;
-    unsigned char senseCmd[10] = {MODE_SENSE, 0, 0, 0, 0, 0};
+    int scsiCmdLen = 6;
+    unsigned char scsiCmd[10] = {MODE_SENSE, 0, 0, 0, 0, 0};
     struct sg_io_hdr sgiob;
     unsigned char sense_buf[32];
-    unsigned char response[4096];
+    unsigned char response[1024];
     int resp_size = 252;
     int ssd = 0;
     int i;
     int length = 0;
 
-    memset(&sense_buf, 0, 32);
+    memset(&sense_buf, 0, sizeof(sense_buf));
     memset(&sgiob, 0, sizeof(sgiob));
     memset(&response, 0, sizeof(response));
 
-    senseCmd[1] = (unsigned char) 0x08;
-    senseCmd[2] = (unsigned char) 0x1c;
-    senseCmd[4] = (unsigned char) 0xff;
+    scsiCmd[1] = (unsigned char) 0x08;
+    scsiCmd[2] = (unsigned char) 0x1c;
+    scsiCmd[4] = (unsigned char) 0xff;
 
     sgiob.interface_id = 'S';
-    sgiob.cmdp = &senseCmd[0];
-    sgiob.cmd_len = senseCmdLen;
+    sgiob.cmdp = &scsiCmd[0];
+    sgiob.cmd_len = scsiCmdLen;
 
     sgiob.timeout = 60000;
 
     sgiob.sbp = &sense_buf[0];
-    sgiob.mx_sb_len = 32;
+    sgiob.mx_sb_len = sizeof(sense_buf);
 
     sgiob.dxferp = &response;
     sgiob.dxfer_len = resp_size;
@@ -483,32 +863,30 @@ int is_unit_smart(int fd)
 
 int is_unit_ssd(int fd) 
 {
-    int inqCmdLen = 6;
-    unsigned char inqCmd[6] = {INQUIRY, 0, 0, 0, 0, 0};
+    int scsiCmdLen = 6;
+    unsigned char scsiCmd[6] = {INQUIRY, 0, 0, 0, 0, 0};
     struct sg_io_hdr sgiob;
     unsigned char sense_buf[32];
     unsigned char response[256];
     int resp_size = 0xfc;
-    int len = 0;
-    char *serial = NULL;
 
-    memset(&sense_buf, 0, 32);
+    memset(&sense_buf, 0, sizeof(sense_buf));
     memset(&sgiob, 0, sizeof(sgiob));
     memset(&response, 0, sizeof(response));
 
-    inqCmd[1] = (unsigned char) 1;
-    inqCmd[2] = (unsigned char) 0xb1;
-    inqCmd[3] = (unsigned char)((resp_size >> 8) & 0xff);
-    inqCmd[4] = (unsigned char)(resp_size & 0xff);
+    scsiCmd[1] = (unsigned char) EVPD;
+    scsiCmd[2] = (unsigned char) BDC_VPD;
+    scsiCmd[3] = (unsigned char)((resp_size >> 8) & 0xff);
+    scsiCmd[4] = (unsigned char)(resp_size & 0xff);
 
     sgiob.interface_id = 'S';
-    sgiob.cmdp = &inqCmd[0];
-    sgiob.cmd_len = inqCmdLen;
+    sgiob.cmdp = &scsiCmd[0];
+    sgiob.cmd_len = scsiCmdLen;
 
     sgiob.timeout = 60000;
 
     sgiob.sbp = &sense_buf[0];;
-    sgiob.mx_sb_len = 32;
+    sgiob.mx_sb_len = sizeof(sense_buf);
 
     sgiob.dxferp = &response[0];
     sgiob.dxfer_len = resp_size;
@@ -517,6 +895,16 @@ int is_unit_ssd(int fd)
     if (ioctl(fd, SG_IO, &sgiob) < 0) {
         return 0;
     }
+#ifdef UTTEST_SAS_DBG
+    {
+    fprintf(stderr, "\nSSD: ");
+    int s, e;
+    e = 8;
+    for (s = 0; s < e;s++)
+        fprintf(stderr, "%0x ", response[s]);
+    fprintf(stderr, "\n");
+    }
+#endif
     if (sgiob.status == 0 ) {
         if ((response[4] == 0) && (response[5] == 1 )) {
             return 1;
@@ -525,32 +913,32 @@ int is_unit_ssd(int fd)
     return 0;
 }
 
-int get_unit_health(int fd) 
+int get_sas_ssd_wear(int fd) 
 {
-    int senseCmdLen = 10;
-    unsigned char senseCmd[10] = {LOG_SENSE, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    int scsiCmdLen = 10;
+    unsigned char scsiCmd[10] = {LOG_SENSE, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     struct sg_io_hdr sgiob;
     unsigned char sense_buf[32];
-    unsigned char response[4096];
-    int resp_size = 0x62;
-    int health = -1;
+    unsigned char response[1024];
+    int resp_size = 16;
+    int wear = 255;
 
-    memset(&sense_buf, 0, 32);
+    memset(&sense_buf, 0, sizeof(sense_buf));
     memset(&sgiob, 0, sizeof(sgiob));
     memset(&response, 0, sizeof(response));
 
-    senseCmd[2] = (unsigned char) 0x6f;
-    senseCmd[7] = (unsigned char)((resp_size >> 8) & 0xff);
-    senseCmd[8] = (unsigned char)(resp_size & 0xff);
+    scsiCmd[2] = (unsigned char) 0x51;
+    scsiCmd[7] = (unsigned char)((resp_size >> 8) & 0xff);
+    scsiCmd[8] = (unsigned char)(resp_size & 0xff);
 
     sgiob.interface_id = 'S';
-    sgiob.cmdp = &senseCmd[0];
-    sgiob.cmd_len = senseCmdLen;
+    sgiob.cmdp = &scsiCmd[0];
+    sgiob.cmd_len = scsiCmdLen;
 
     sgiob.timeout = 60000;
 
     sgiob.sbp = &sense_buf[0];
-    sgiob.mx_sb_len = 32;
+    sgiob.mx_sb_len = sizeof(sense_buf);
 
     sgiob.dxferp = &response;
     sgiob.dxfer_len = resp_size;
@@ -559,6 +947,166 @@ int get_unit_health(int fd)
     if (ioctl(fd, SG_IO, &sgiob) < 0) { 
         return -1;
     }
+#ifdef UTTEST_SAS_DBG
+    {
+    fprintf(stderr, "\nWEAR: ");
+    int s, e;
+    e = 12;
+    for (s = 0; s < e;s++)
+        fprintf(stderr, "%0x ", response[s]);
+    fprintf(stderr, "\n");
+    }
+#endif
+    if ((response[0] == 0x11) && (response[3] == 8)) {
+        wear = response[11];
+    }
+    return wear;
+}
+
+int get_sas_pwron(int fd) 
+{
+    int scsiCmdLen = 10;
+    unsigned char scsiCmd[10] = {LOG_SENSE, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    struct sg_io_hdr sgiob;
+    unsigned char sense_buf[32];
+    unsigned char response[1024];
+    int resp_size = 32;
+
+    memset(&sense_buf, 0, sizeof(sense_buf));
+    memset(&sgiob, 0, sizeof(sgiob));
+    memset(&response, 0, sizeof(response));
+
+    scsiCmd[2] = (unsigned char) 0x55;
+    scsiCmd[7] = (unsigned char)((resp_size >> 8) & 0xff);
+    scsiCmd[8] = (unsigned char)(resp_size & 0xff);
+
+    sgiob.interface_id = 'S';
+    sgiob.cmdp = &scsiCmd[0];
+    sgiob.cmd_len = scsiCmdLen;
+
+    sgiob.timeout = 60000;
+
+    sgiob.sbp = &sense_buf[0];
+    sgiob.mx_sb_len = sizeof(sense_buf);
+
+    sgiob.dxferp = &response;
+    sgiob.dxfer_len = resp_size;
+    sgiob.dxfer_direction = SG_DXFER_FROM_DEV;
+
+    if (ioctl(fd, SG_IO, &sgiob) < 0) { 
+        return -1;
+    }
+#ifdef UTTEST_SAS_DBG
+    {
+    fprintf(stderr, "\nPON: ");
+    int s, e;
+    e = 20;
+    for (s = 0; s < e;s++)
+        fprintf(stderr, "%0x ", response[s]);
+    fprintf(stderr, "\n");
+    }
+#endif
+    if (response[0] == 0x15) {
+        return ((response[8] << 24) + (response[9] << 16) + 
+                (response[10] << 8) + response[11])/60;
+    }
+    return -1;
+}
+
+int get_sata_health(int fd) 
+{
+    int scsiCmdLen = 16;
+    unsigned char scsiCmd[16] = 
+            {ATA_PASS_THROUGH_16, PROTO_PIO, 0x0e, 
+             0, READ_SMART_LOG, 0, 1, 
+             0, SUM_SMART_ERR_LOG, 0, 0x4f, 0, 0xc2, 
+             0, ATA_SMART, 0};
+    struct sg_io_hdr sgiob;
+    unsigned char sense_buf[32];
+    unsigned char response[1024];
+    int resp_size = 512;
+    int health = -1;
+
+    memset(&sense_buf, 0, sizeof(sense_buf));
+    memset(&sgiob, 0, sizeof(sgiob));
+    memset(&response, 0, sizeof(response));
+
+    sgiob.timeout = 20000;
+
+    sgiob.sbp = &sense_buf[0];;
+    sgiob.mx_sb_len = sizeof(sense_buf);
+
+    sgiob.interface_id = 'S';
+    sgiob.cmdp = &scsiCmd[0];
+    sgiob.cmd_len = scsiCmdLen;
+
+    sgiob.dxferp = &response;
+    sgiob.dxfer_len = resp_size;
+    sgiob.dxfer_direction = SG_DXFER_FROM_DEV;
+
+    if (ioctl(fd, SG_IO, &sgiob) < 0) { 
+        return -1;
+    }
+#if UTTEST_SAS_DBG || UTTEST_SATA_DBG
+    {
+    fprintf(stderr, "\nHEALTH: ");
+    int s, e;
+    e = 24;
+    for (s = 0; s < e;s++)
+        fprintf(stderr, "%0x ", response[s]);
+    fprintf(stderr, "\n");
+    }
+#endif
+    if (response[0] == 1) {
+        return (response[1]);
+    }
+    return health;
+}
+
+int get_sas_health(int fd) 
+{
+    int scsiCmdLen = 10;
+    unsigned char scsiCmd[10] = {LOG_SENSE, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    struct sg_io_hdr sgiob;
+    unsigned char sense_buf[32];
+    unsigned char response[1024];
+    int resp_size = 0x62;
+    int health = -1;
+
+    memset(&sense_buf, 0, sizeof(sense_buf));
+    memset(&sgiob, 0, sizeof(sgiob));
+    memset(&response, 0, sizeof(response));
+
+    scsiCmd[2] = (unsigned char) 0x6f;
+    scsiCmd[7] = (unsigned char)((resp_size >> 8) & 0xff);
+    scsiCmd[8] = (unsigned char)(resp_size & 0xff);
+
+    sgiob.interface_id = 'S';
+    sgiob.cmdp = &scsiCmd[0];
+    sgiob.cmd_len = scsiCmdLen;
+
+    sgiob.timeout = 60000;
+
+    sgiob.sbp = &sense_buf[0];
+    sgiob.mx_sb_len = sizeof(sense_buf);
+
+    sgiob.dxferp = &response;
+    sgiob.dxfer_len = resp_size;
+    sgiob.dxfer_direction = SG_DXFER_FROM_DEV;
+
+    if (ioctl(fd, SG_IO, &sgiob) < 0) { 
+        return -1;
+    }
+#if UTTEST_SAS_DBG || UTTEST_SATA_DBG
+    {
+    fprintf(stderr, "\nHEALTH: ");
+    int s, e;
+    e = 24;
+    for (s = 0; s < e;s++)
+        fprintf(stderr, "%0x ", response[s]);
+    fprintf(stderr, "\n");
+    }
+#endif
     if (response[0] == 0x2f) {
         health = (response[8] << 8) + response[9];
     }
@@ -567,8 +1115,8 @@ int get_unit_health(int fd)
 
 char *get_unit_sn(int fd) 
 {
-    int inqCmdLen = 6;
-    unsigned char inqCmd[6] = {INQUIRY, 0, 0, 0, 0, 0};
+    int scsiCmdLen = 6;
+    unsigned char scsiCmd[6] = {INQUIRY, 0, 0, 0, 0, 0};
     struct sg_io_hdr sgiob;
     unsigned char sense_buf[32];
     unsigned char response[256];
@@ -576,23 +1124,23 @@ char *get_unit_sn(int fd)
     int len = 0;
     char *serial = NULL;
 
-    memset(&sense_buf, 0, 32);
+    memset(&sense_buf, 0, sizeof(sense_buf));
     memset(&sgiob, 0, sizeof(sgiob));
     memset(&response, 0, sizeof(response));
 
-    inqCmd[1] = (unsigned char) 1;
-    inqCmd[2] = (unsigned char) 0x80;
-    inqCmd[3] = (unsigned char)((resp_size >> 8) & 0xff);
-    inqCmd[4] = (unsigned char)(resp_size & 0xff);
+    scsiCmd[1] = (unsigned char) 1;
+    scsiCmd[2] = (unsigned char) 0x80;
+    scsiCmd[3] = (unsigned char)((resp_size >> 8) & 0xff);
+    scsiCmd[4] = (unsigned char)(resp_size & 0xff);
 
     sgiob.interface_id = 'S';
-    sgiob.cmdp = &inqCmd[0];
-    sgiob.cmd_len = inqCmdLen;
+    sgiob.cmdp = &scsiCmd[0];
+    sgiob.cmd_len = scsiCmdLen;
 
     sgiob.timeout = 60000;
 
     sgiob.sbp = &sense_buf[0];;
-    sgiob.mx_sb_len = 32;
+    sgiob.mx_sb_len = sizeof(sense_buf);
 
     sgiob.dxferp = &response[0];
     sgiob.dxfer_len = resp_size;
@@ -615,6 +1163,22 @@ char *get_unit_sn(int fd)
     return serial;
 }
 
+int sas_parse_current(char *Temperature)
+{
+    if ((Temperature[4] == 0) && (Temperature[5] == 0))
+        return Temperature[9];
+    else 
+        return 0;
+}
+
+int sas_parse_mcot(char *Temperature)
+{
+    if ((Temperature[10] == 0) && (Temperature[11] == 1))
+        return Temperature[15];
+    else 
+        return 0;
+}
+
 unsigned char *inq_parse_vendor(char *Identify)
 {
     int start = 8;
@@ -633,7 +1197,7 @@ unsigned char *inq_parse_vendor(char *Identify)
         buffer = malloc(len + 1);
         memset(buffer, 0, len + 1);
         memcpy(buffer, &Identify[start], len);
-        return (buffer);
+        return ((unsigned char *) buffer);
     }
     return NULL;
 }
@@ -656,7 +1220,7 @@ unsigned char *inq_parse_prodID(char *Identify)
         buffer = malloc(len + 1);
         memset(buffer, 0, len + 1);
         memcpy(buffer, &Identify[start], len);
-        return (buffer);
+        return ((unsigned char *) buffer);
     }
     return NULL;
 }
@@ -679,10 +1243,11 @@ unsigned char *inq_parse_rev(char *Identify)
         buffer = malloc(len + 1);
         memset(buffer, 0, len + 1);
         memcpy(buffer, &Identify[start], len);
-        return (buffer);
+        return ((unsigned char *) buffer);
     }
     return NULL;
 }
+
 unsigned char inq_parse_type(char *Identify)
 {
     if (Identify != (char *) 0)
@@ -710,7 +1275,7 @@ char * get_DiskModel(char *scsi)
     return(get_sysfs_str(attribute));
 }
 
-char * get_DiskRev(char *scsi)
+char * get_sas_DiskRev(char *scsi)
 {
     char attribute[256];
 
@@ -731,14 +1296,13 @@ char * get_DiskState(char *scsi)
 }
 
 #ifdef UTTEST
-
 int main(int argc, char **argv) 
 {
     char disk_name[256];
     int disk_fd;
     unsigned char * serialnum;
     unsigned char response[256];
-    int Health, Speed;
+    int Health, Speed, Temp, Mcot, Wear, Pon;
     unsigned long long Capacity;
     char *Vendor;
     char *ProductID;
@@ -747,6 +1311,7 @@ int main(int argc, char **argv)
     int drive_count = 4;
     int j=0;
     char *Identify;
+    char *Temperature;
     /* Look for scsi_genric:sg? */
     if ((NumScsiGeneric = scandir(ScsiGenericDir, &ScsiGenericlist,
                     generic_select, alphasort))  > 0) {
@@ -757,8 +1322,8 @@ int main(int argc, char **argv)
             if ((disk_fd = open(disk_name, O_RDWR | O_NONBLOCK)) < 0 )
             continue;
 
-            fprintf(stderr, "%s: ", disk_name);
             if ((Identify = get_identify_info(disk_fd)) != NULL ) {
+                fprintf(stderr, "%s: ", disk_name);
                 if (inq_parse_type(Identify) == 0x0d) {
                     fprintf(stderr, " Enclosure\n\n");
                     continue;
@@ -768,27 +1333,42 @@ int main(int argc, char **argv)
                     continue;
                 }
                 if ((Vendor = inq_parse_vendor(Identify)) != NULL) {
-                    fprintf(stderr," %s", Vendor);
+                    fprintf(stderr,"Vendor=%s", Vendor);
                     free(Vendor);
                 }
                 if ((ProductID = inq_parse_prodID(Identify)) != NULL) {
-                    fprintf(stderr," %s", ProductID);
+                    fprintf(stderr," Product ID=%s", ProductID);
                     free(ProductID);
                 }
                 if ((Rev = inq_parse_rev(Identify)) != NULL) {
-                    fprintf(stderr," %s", Rev);
+                    fprintf(stderr," FW rev=%s\n", Rev);
                     free(Rev);
                }
                 free(Identify);
+                if ((Capacity = get_disk_capacity(disk_fd)) > 0)
+                    fprintf(stderr,"Drive capacity = %d\n", Capacity);
+                if (is_unit_ssd(disk_fd)) {
+                    Wear = get_sata_ssd_wear(disk_fd);
+                    fprintf(stderr, " (SSD %d%% used)\n", Wear);
+                } else
+                    fprintf(stderr, "\n");
+    
             }
-            if ((Health = get_unit_health(disk_fd)) != 0 )
+            if (strncmp(Vendor, "ATA", 3) == 0) {
+                if ((Temperature = get_sas_temp(disk_fd)) != NULL ) {
+                    Temp = sas_parse_current(Temperature);
+                    Mcot = sas_parse_mcot(Temperature);
+                    fprintf(stderr, "Current Temp = %dC,  Maximum Temp = %dC\n", Temp, Mcot);
+                }
+                if ((Health = get_ssd_health(disk_fd)) != 0 )
                 fprintf(stderr," Bad Health");
         else 
                 fprintf(stderr," Good Health");
 
-            if (is_unit_ssd(disk_fd))
-                fprintf(stderr, " (SSD)\n");
-            else
+                if (is_unit_ssd(disk_fd)) {
+                    Wear = get_sas_ssd_wear(disk_fd);
+                    fprintf(stderr, " (SSD %d%% used)\n", Wear);
+                } else
                 fprintf(stderr, "\n");
 
             if ((serialnum = get_unit_sn(disk_fd)) < 0 ) {
@@ -799,16 +1379,33 @@ int main(int argc, char **argv)
             free(serialnum);
         }
 
+                Pon = get_sas_pwron(disk_fd);
+                fprintf(stderr,"Power On Hours = %d\n", Pon);
+    
+                Temp = get_unit_temp(disk_fd);
+                fprintf(stderr,"Drive temperature = %d\n", Temp);
+    
             Speed = get_unit_speed(disk_fd);
             fprintf(stderr,"Drive speed = %d\n",Speed);
-            if ((Capacity = get_disk_capacity(disk_fd)) > 0)
-                fprintf(stderr,"Drive capacity = %d\n", Capacity);
 
             fprintf(stderr, "\n");
+            } else {
+                if ((Health = get_sata_health(disk_fd)) != 0 )
+                    fprintf(stderr," Bad Health(%d)", Health);
+                else
+                    fprintf(stderr," Good Health");
+                if (is_unit_ssd(disk_fd)) {
+                    Wear = get_sata_ssd_wear(disk_fd);
+                    fprintf(stderr, " (SSD %d%% used)\n", Wear);
+                } else
+                    fprintf(stderr, "\n");
+                Pon = get_sata_pwron(disk_fd);
+                fprintf(stderr,"Power On Hours = %d\n", Pon);
+    
+            }
             close(disk_fd);
         }
         free(ScsiGenericlist);
-
     }
 
 }

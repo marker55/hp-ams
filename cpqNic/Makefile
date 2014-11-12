@@ -9,22 +9,26 @@
 MIB=Nic
 
 OS ?= linux
-NETSNMP ?= net-snmp-5.7.1
+NETSNMP ?= net-snmp-5.7.2
 CC = gcc
 
 PWD = `pwd`
 
 OPT ?= -O2
+LEVEL=../
+NETSNMPDIR=$(LEVEL)$(NETSNMP)
+NETSNMPINC=$(shell if [ -f $(NETSNMPDIR)/net-snmp-config ] ; then \
+                       $(NETSNMPDIR)/net-snmp-config --build-includes $(NETSNMPDIR) ; \
+                   fi)
 
 # shared library flags (assumes gcc)
 DLFLAGS=-fPIC -shared 
 CFLAGS          ?= -fno-strict-aliasing $(OPT) -g -pipe -Werror -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux -D_GNU_SOURCE
-CFLAGS          += -D_GNU_SOURCE
-CPPFLAGS = -I. -I..  $(shell if [ -f ../$(NETSNMP)/net-snmp-config ] ; then ../$(NETSNMP)/net-snmp-config --build-includes ../$(NETSNMP); fi)
+CPPFLAGS = -I. -I.. $(NETSNMPINC)
 OBJS=cpqNicIfLogMapTable.o cpqNicIfPhysAdapterTable.o cpqNic.o
 TARGETS=cpqNicIfLogMapTable.o cpqNicIfPhysAdapterTable.o cpqNic.o
 PROVIDES=$(shell make provides)
-NETSNMPCONFIG = ../$(NETSNMP)/net-snmp-config
+NETSNMPCONFIG = $(NETSNMPDIR)/net-snmp-config
 BUILDAGENTLIBS = $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --agent-libs ; fi)
 BUILDNETSNMPDEPS = $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --build-lib-deps ../$(NETSNMP) ; fi)
 BUILDNETSNMPCMD =  $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --build-command ;fi)

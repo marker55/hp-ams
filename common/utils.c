@@ -14,6 +14,31 @@
 #include "utils.h"
 #include "smbios.h"
 
+int get_nic_port(char * name)
+{
+    int pc = 0;
+    char *buffer[256];
+    struct dirent **filelist;
+    int i;
+
+    memset(buffer, 0, 256);
+    snprintf(buffer, 255, "/sys/class/net/%s/device/net", name);
+    if ((pc = scandir(buffer, &filelist, file_select, alphasort)) > 1) {
+        for (i = 0; i < pc; i++) {
+            if (!strcmp(name, filelist[i]->d_name)) {
+                free(filelist[i]);
+                free(filelist);
+                return(i +1);
+            } else
+                free(filelist[i]);
+        }
+    } else {
+        free(filelist[0]);
+        free(filelist);
+        return -1;
+    }
+}
+
 int getChassisPort_str(char * pci) 
 {
     unsigned short dom = 0;
@@ -33,19 +58,23 @@ int getChassisPort(int bus, int dev, int func)
         if ((bus == portInfo->byBusNumber) &&
             (dev == portInfo->byDeviceNumber) &&
             (func == portInfo->byFunctionNumber))
-            return ((int) portInfo->byDevTypeInstance);
+           return (((int) portInfo->byDevTypeInstance)&0x07);
         i++;
     }
     return 0;
 }
 
-int getPCIslot_str(char * pci)
+PSMBIOS_SYSTEM_SLOTS  getPCIslot_rec(int  bus)
 {
-    unsigned short dom = 0;
-    unsigned char  bus = 0, dev = 0, func = 0;
-    if (pci == NULL) return 0;
-    sscanf(pci, "%4hx:%2hhx:%2hhx.%1hhx", &dom, &bus, &dev, &func);
-    return getPCIslot_bus(bus);
+    int i = 0;
+    PSMBIOS_SYSTEM_SLOTS slotInfo;
+
+    while (SmbGetRecordByType(SMBIOS_SYS_SLOTS, i , (void *)&slotInfo) != 0) {
+        if (bus == slotInfo->byBusNumber) 
+            return (slotInfo);
+        i++;
+    }
+    return NULL;
 }
 
 int getPCIslot_bus(int  bus)
@@ -57,6 +86,39 @@ int getPCIslot_bus(int  bus)
         if (bus == slotInfo->byBusNumber)
             return ((int)slotInfo->wSlotID);
         i++;
+    }
+    return 0;
+}
+
+int getPCIslot_str(char * pci)
+{
+    unsigned short dom = 0;
+    unsigned char  bus = 0, dev = 0, func = 0;
+    int slot;
+    char pcilink[1025];
+    char syspci[256];
+    int i;
+    ssize_t link_sz;
+
+    if (pci == NULL) 
+        return 0;
+
+    if ((strchr(pci, '.') == NULL))
+        strcat(pci, ".0");
+    strcpy(syspci, "/sys/bus/pci/devices/");
+    strcat(syspci, pci);
+    link_sz = readlink(syspci, pcilink, 1024);
+    if (link_sz) 
+        pcilink[link_sz] = '\0';
+    else
+        return 0;
+    for (i = 0; i < link_sz; i++) {
+        if (pcilink[i] == '/') {
+            i++;
+            if (sscanf(&pci[i], "%4hx:%2hhx:%2hhx.%1hhx", &dom, &bus, &dev, &func) == 4) 
+                if ((slot = getPCIslot_bus(bus)) > 0) 
+                    return slot;
+        }
     }
     return 0;
 }
@@ -96,7 +158,7 @@ int get_pcislot(char *bus_info)
     int slotcount;
     char fname[256] = "/sys/bus/pci/slots/";
     int sysdirlen;
-    char buf[81];
+    char buf[80];
     int bc;
     int slotfd = -1;
     int i;
@@ -166,7 +228,6 @@ read_buf_t *ReadFile(char *FileName)
     int readcount, readnext;
 
     int fileFD;
-    char * file_ptr = NULL;
     read_buf_t *readbuf = NULL;
 
     if (FileName  != NULL) {
@@ -195,20 +256,18 @@ read_buf_t *ReadFile(char *FileName)
 
 read_line_t *ReadFileLines(char *FileName)
 {
-    char *str = NULL;
     unsigned int  lc = 0;
     unsigned int  lines_len = sizeof(read_line_t);
     char *addrp = NULL;
     read_buf_t *buf;
     read_line_t *lines;
-    char *splitbuf[256];
 
     if ((buf = ReadFile(FileName)) == (read_buf_t *) 0 ) {
         return NULL;
     }
     /* Change linefeeds to EOS */
     addrp = buf->buf;
-    while (addrp = strchr(addrp, '\n') ) {
+    while ((addrp = strchr(addrp, '\n'))) {
         *(addrp++) = '\0';
         lc++;
     }
@@ -314,14 +373,21 @@ char * get_sysfs_str(char * sysfs_attr)
 
     if ((fd = open(sysfs_attr,O_RDONLY)) < 0) 
         return NULL;
-    if ((string = malloc(4096)) == NULL)
+    if ((string = malloc(4096)) == NULL) {
+        close(fd);
         return NULL;
+    }
     if ((count = read(fd, string, 4096)) <= 0) {
+        close(fd);
         free(string);
         return NULL;
     } else 
         string = realloc(string, count + 1);
 
+    if (string == NULL) {
+        close(fd);
+	    return NULL;
+    }
     indx = index(string,'\n');
     if (indx < (string + count))
         *indx = 0;
@@ -400,7 +466,7 @@ unsigned long long get_sysfs_ullong(char * sysfs_attr)
 
 int get_sysfs_int(char * sysfs_attr)
 {
-    int number;
+    int number = -1;
 
     _get_sysfs_numeric(sysfs_attr, "%d", &number);
     return number;

@@ -41,10 +41,18 @@ typedef struct cpqSasPhyDrvTable_entry_s {
     char            cpqSasPhyDrvSasAddress[17];
     size_t          cpqSasPhyDrvSasAddress_len;
     long            cpqSasPhyDrvMediaType;
+    long            cpqSasPhyDrvSSDWearStatus;
+    long            cpqSasPhyDrvPowerOnHours;
+    long            cpqSasPhyDrvSSDPercntEndrnceUsed;
+    long            cpqSasPhyDrvSSDEstTimeRemainingHours;
+    long            cpqSasPhyDrvAuthenticationStatus;
+    long            cpqSasPhyDrvSmartCarrierAppFWRev;
+    long            cpqSasPhyDrvSmartCarrierBootldrFWRev;
+    unsigned long   cpqSasPhyDrvCurrTemperature;
+    unsigned long   cpqSasPhyDrvTemperatureThreshold;
 
     long            OldStatus;
     cpqSasHbaTable_entry *hba;
-    oid             FW_idx;
     int             valid;
 } cpqSasPhyDrvTable_entry;
 /*
@@ -77,4 +85,14 @@ Netsnmp_Node_Handler cpqSasPhyDrvTable_handler;
 #define COLUMN_CPQSASPHYDRVTYPE		16
 #define COLUMN_CPQSASPHYDRVSASADDRESS		17
 #define COLUMN_CPQSASPHYDRVMEDIATYPE		18
+#define COLUMN_CPQSASPHYDRVSSDWEARSTATUS            19
+#define COLUMN_CPQSASPHYDRVPOWERONHOURS             20
+#define COLUMN_CPQSASPHYDRVSSDPERCNTENDRNCEUSED     21
+#define COLUMN_CPQSASPHYDRVSSDESTTIMEREMAININGHOURS 22
+#define COLUMN_CPQSASPHYDRVAUTHENTICATIONSTATUS     23
+#define COLUMN_CPQSASPHYDRVSMARTCARRIERAPPFWREV     24
+#define COLUMN_CPQSASPHYDRVSMARTCARRIERBOOTLDRFWREV 25
+#define COLUMN_CPQSASPHYDRVCURRTEMPERATURE          26
+#define COLUMN_CPQSASPHYDRVTEMPERATURETHRESHOLD     27
+
 #endif                          /* CPQSASPHYDRVTABLE_H */

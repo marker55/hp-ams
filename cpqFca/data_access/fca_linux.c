@@ -18,7 +18,6 @@
 #include <linux/version.h>
 
 #include "cpqFcaHostCntlrTable.h"
-#include "cpqHoFwVerTable.h"
 
 #include "fcahc.h"
 #include "common/smbios.h"
@@ -28,10 +27,6 @@
 #include "fca_linux.h"
 
 extern unsigned char     cpqHoMibHealthStatusArray[];
-extern oid       cpqHoFwVerTable_oid[];
-extern size_t    cpqHoFwVerTable_oid_len;
-extern int register_FW_version(int dir, int fw_idx, int cat, int type,  int update,
-                        char *fw_version, char *name, char *location, char *key);
 
 extern int file_select(const struct dirent *);
 extern int pcislot_scsi_host(char * buffer);
@@ -54,7 +49,7 @@ static int fca_select(const struct dirent *entry)
     for (i = 0; i < NumFcaHost; i++){
         if (strncmp(entry->d_name,
                     FcaHostlist[i]->d_name,
-                    strlen(entry->d_name)) == 0)
+                    strlen(FcaHostlist[i]->d_name)) == 0)
             return(1);
     }
     return 0;
@@ -249,27 +244,27 @@ int enumPCIid(unsigned int BoardID)
                     break;
 
                 case 0x220A103C:
-                    /* Emulex 556FLR-SFP+  */
+                    /* Emulex 556FLR-SFP+ (Escargot) */
                     return (61);
                     break;
 
                 case 0x1934103C:
-                    /* Emulex 650M */
+                    /* Emulex 650M (Electra) */
                     return (62);
                     break;
 
                 case 0x1935103C:
-                    /* Emulex 650FLB */
+                    /* Emulex 650FLB (Eureka) */
                     return (63);
                     break;
 
                 case 0x21D4103C:
-                    /* Emulex CN1200E */
+                    /* Emulex CN1200E (Boxster 4) */
                     return (64);
                     break;
 
                 case 0x22FA103C:
-                    /* Broadcom 536FLB */
+                    /* Broadcom 536FLB (Breezy) */
                     return (65);
                     break;
 
@@ -368,6 +363,120 @@ char * getFcHBARomVer( char *buffer)
         value = get_sysfs_str(attribute);
     }
     return value;
+}
+
+long cpqfca_update_condition(long status) 
+{
+    switch (status) {
+        case FC_HBA_STATUS_FAILED:
+        case FC_HBA_STATUS_SHUTDOWN:
+        case FC_HBA_STATUS_LOOPFAILED:
+            return FC_HBA_CONDITION_FAILED;
+            break;
+        case FC_HBA_STATUS_LOOPDEGRADED:
+            return FC_HBA_CONDITION_DEGRADED;
+            break;
+        case FC_HBA_STATUS_NOTCONNECTED:
+        case FC_HBA_STATUS_OK:
+            return FC_HBA_CONDITION_OK;
+            break;
+        default:
+            return FC_HBA_CONDITION_OTHER;
+    }
+}
+
+long cpqfca_update_status( char * value, long status)
+{
+    if (!strcmp(value, "Online")) 
+        return FC_HBA_STATUS_OK;
+    if (!strcmp(value, "Linkdown")) 
+        if (status == FC_HBA_STATUS_OK)
+            return FC_HBA_STATUS_NOTCONNECTED;
+    if (!strcmp(value, "Bypassed")) 
+        if (status == FC_HBA_STATUS_OK)
+            return FC_HBA_STATUS_LOOPDEGRADED;
+    if (!strcmp(value, "Error"))
+        if (status == FC_HBA_STATUS_OK)
+            return FC_HBA_STATUS_FAILED;
+    return FC_HBA_STATUS_OTHER;
+}
+
+void cpqfca_update_hba_status(char *devpath, char *devname, void *data)
+{
+    cpqFcaHostCntlrTable_entry *entry;
+    cpqFcaHostCntlrTable_entry *old;
+
+    char * rport;
+    char buffer[1024];
+    size_t buf_len = 1024;
+    int NumHost;
+    static struct dirent **Hostlist;
+    char *port_state;
+    long status;
+
+    netsnmp_index tmp;
+    oid oid_index[2];
+
+    int FcaIndex, Host;
+
+    DEBUGMSGTL(("fcahc:container:load", "devpath = %s\n", devpath));
+    if (devpath == NULL)
+        return;
+    if ((rport = strstr(devpath, "rport-")) != NULL) {
+        memset(buffer, 0, buf_len);
+        strcpy(buffer, "/sys");
+        strncat(buffer, devpath,  (size_t) (rport - devpath));
+        strcat(buffer, "fc_host/");
+        if ((NumHost =
+            scandir(buffer, &Hostlist, file_select, alphasort)) == 1) {
+            sscanf(Hostlist[0]->d_name, "host%d", &Host); 
+
+            FcaIndex = Host;
+
+            oid_index[0] = FcaIndex;
+            tmp.len = 1;
+            tmp.oids = &oid_index[0];
+            DEBUGMSGTL(("fcahc:container:load", "looking for FCHBA = %d\n", FcaIndex));
+
+            old = CONTAINER_FIND((netsnmp_container *)data, &tmp);
+
+            DEBUGMSGTL(("fcahc:container:load", "Old entry=%p\n", old));
+            strcat(buffer, Hostlist[0]->d_name);
+            strcat(buffer, "/port_state");
+            DEBUGMSGTL(("fcahc:container:load", "port_state = %s\n", buffer));
+            if (old == NULL ) return;
+            old->oldStatus = old->cpqFcaHostCntlrStatus;
+            entry = old;
+            if ((port_state = get_sysfs_str(buffer)) != NULL) {
+                status =
+                    cpqfca_update_status(port_state, entry->cpqFcaHostCntlrStatus);
+                if ((status != FC_HBA_STATUS_OTHER) && (status != entry->cpqFcaHostCntlrStatus))
+                    entry->cpqFcaHostCntlrStatus = status;
+
+                free(port_state);
+
+            }
+            entry->cpqFcaHostCntlrCondition = 
+                cpqfca_update_condition(entry->cpqFcaHostCntlrStatus);
+
+            if ((entry->cpqFcaHostCntlrStatus != entry->oldStatus) &&
+                (entry->oldStatus != FC_HBA_STATUS_OTHER))  {
+                DEBUGMSGTL(("fcahc:container:load", 
+                    "SENDING FCA STATUS CHANGE TRAP status = %d old = %d\n", 
+                    entry->cpqFcaHostCntlrStatus, entry->oldStatus));
+                SendFcaTrap( FCA_TRAP_HOST_CNTLR_STATUS_CHANGE, entry );
+                entry->oldStatus = entry->cpqFcaHostCntlrStatus; //save Old status
+            }
+
+            if (FcaCondition < entry->cpqFcaHostCntlrCondition)
+                FcaCondition = entry->cpqFcaHostCntlrCondition;
+            DEBUGMSGTL(("fcahc:", "FcaCondition = %d\n", FcaCondition));
+
+            free(Hostlist[0]);
+            free(Hostlist);
+        }
+    }
+    DEBUGMSGTL(("fcahc:container:load", "cpqfca_update_hba_status() exiting\n"));
 }
 
 int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
@@ -509,17 +618,6 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
                 free(value);
             } 
     
-            if (entry->cpqFcaHostCntlrFirmwareVersion_len > 0) 
-                other_fw_idx = register_FW_version(1, /* direction */
-                                                other_fw_idx,
-                                                2, /*CATEGORY*/
-                                                4, /* type */
-                                                3, /*update method */
-                                                entry->cpqFcaHostCntlrFirmwareVersion,
-                                                "FC HBA",
-                                                entry->cpqFcaHostCntlrHwLocation,
-                                                "");
-    
             if ((value = getFcHBARomVer(buffer)) != NULL) {
                 DEBUGMSGTL(("fcahc:container:load", "Value = %s\n", value));
                 strncpy(entry->cpqFcaHostCntlrOptionRomVersion, value,
@@ -528,16 +626,6 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
                                  strlen(entry->cpqFcaHostCntlrOptionRomVersion);
                 free(value);
             }
-            if (entry->cpqFcaHostCntlrOptionRomVersion_len > 0) 
-                other_fw_idx = register_FW_version(1, /* direction */
-                                                other_fw_idx,
-                                                2, /*CATEGORY*/
-                                                4, /* type */
-                                                3, /*update method */
-                                                entry->cpqFcaHostCntlrOptionRomVersion,
-                                                "FC HBA (BIOS)",
-                                                entry->cpqFcaHostCntlrHwLocation,
-                                                "");
     
             memset(buffer, 0, sizeof(buffer));
             strncpy(buffer, FcaHostDir, sizeof(buffer) - 1);
@@ -612,39 +700,17 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
                         attribute));
         if ((value = get_sysfs_str(attribute)) != NULL) {
             DEBUGMSGTL(("fcahc:container:load", "Value = %s\n", value));
-            if (!strcmp(value, "Linkdown")) {
-                if (entry->cpqFcaHostCntlrStatus == FC_HBA_STATUS_OK)
-                    entry->cpqFcaHostCntlrStatus = FC_HBA_STATUS_NOTCONNECTED;
-            } else if (!strcmp(value, "Bypassed")) {
-                if (entry->cpqFcaHostCntlrStatus == FC_HBA_STATUS_OK)
-                    entry->cpqFcaHostCntlrStatus = FC_HBA_STATUS_LOOPDEGRADED;
-            } else if (!strcmp(value, "Error"))
-                if (entry->cpqFcaHostCntlrStatus == FC_HBA_STATUS_OK)
-                    entry->cpqFcaHostCntlrStatus = FC_HBA_STATUS_FAILED;
+            entry->cpqFcaHostCntlrStatus = 
+                cpqfca_update_status(value, entry->cpqFcaHostCntlrStatus);
             free(value);
         }
-
-        switch (entry->cpqFcaHostCntlrStatus) {
-        case FC_HBA_STATUS_FAILED:
-        case FC_HBA_STATUS_SHUTDOWN:
-        case FC_HBA_STATUS_LOOPFAILED:
-            entry->cpqFcaHostCntlrCondition = FC_HBA_CONDITION_FAILED;
-            break;
-        case FC_HBA_STATUS_LOOPDEGRADED:
-            entry->cpqFcaHostCntlrCondition = FC_HBA_CONDITION_DEGRADED;
-            break;
-        case FC_HBA_STATUS_NOTCONNECTED:
-        case FC_HBA_STATUS_OK:
-            entry->cpqFcaHostCntlrCondition = FC_HBA_CONDITION_OK;
-            break;
-        default:
-            entry->cpqFcaHostCntlrCondition = FC_HBA_CONDITION_OTHER;
-        }
+        entry->cpqFcaHostCntlrCondition = 
+                    cpqfca_update_condition(entry->cpqFcaHostCntlrStatus);
 
         if ((entry->cpqFcaHostCntlrStatus != entry->oldStatus) &&
             (entry->oldStatus != FC_HBA_STATUS_OTHER))  {
              DEBUGMSGTL(("fcahc:container:load", 
-                         "SENDING FCA STATUS CHANGE TRAP status = %ld old = %ld\n", 
+                        "SENDING FCA STATUS CHANGE TRAP status = %d old = %d\n", 
                          entry->cpqFcaHostCntlrStatus, entry->oldStatus));
              SendFcaTrap( FCA_TRAP_HOST_CNTLR_STATUS_CHANGE, entry );
              entry->oldStatus = entry->cpqFcaHostCntlrStatus; //save Old status
@@ -658,6 +724,7 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
     }
     free(ScsiHostlist);
 
+    DEBUGMSGTL(("fcahc:container:load", "exiting\n"));
     return(rc);
 }
 

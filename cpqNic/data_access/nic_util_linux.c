@@ -79,3 +79,22 @@ int name2indx(char *name)
     return (get_sysfs_int(buffer));
 }
 
+int name2pindx(char *name)
+{
+    char buffer[80];
+    char *dev;
+    char * dot;
+
+    if ((dev = malloc(strlen(name) + 1)) !=  NULL) {
+        memset(dev, 0, strlen(name) + 1);
+        strncpy(dev, name, strlen(name));
+
+        if ((dot = strchr(dev, '.')) != 0)
+            *dot = '\0';
+        snprintf(buffer, 80, "/sys/class/net/%s/ifindex", dev);
+        free(dev);
+        return (get_sysfs_int(buffer));
+    }
+    return -1;
+}
+

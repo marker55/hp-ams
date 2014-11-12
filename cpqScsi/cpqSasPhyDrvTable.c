@@ -19,7 +19,6 @@ const oid       cpqSasPhyDrvTable_oid[] =
         { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1 };
 const size_t    cpqSasPhyDrvTable_oid_len =
         OID_LENGTH(cpqSasPhyDrvTable_oid);
-extern int unregister_FW_version(int fw_idx);
 extern int      netsnmp_arch_sasphydrv_container_load(netsnmp_container*);
 static void     _cache_free(netsnmp_cache * cache, void *magic);
 static int      _cache_load(netsnmp_cache * cache, void *vmagic);
@@ -80,7 +79,7 @@ initialize_table_cpqSasPhyDrvTable(void)
                                      ASN_INTEGER,       /* index: cpqSasPhyDrvIndex */
                                      0);
     table_info->min_column = COLUMN_CPQSASPHYDRVHBAINDEX;
-    table_info->max_column = COLUMN_CPQSASPHYDRVMEDIATYPE;
+    table_info->max_column = COLUMN_CPQSASPHYDRVTEMPERATURETHRESHOLD;
 
     /*************************************************
      *
@@ -199,13 +198,9 @@ void
 cpqSasPhyDrvTable_removeEntry(netsnmp_container * container,
                               cpqSasPhyDrvTable_entry * entry)
 {
-    int fw_idx;
 
     if (!entry)
         return;                 /* Nothing to remove */
-    DEBUGMSGTL(("netlink:disk", "RE FW index to be removed = %ld\n", entry->FW_idx));
-    fw_idx = unregister_FW_version(entry->FW_idx);
-    DEBUGMSGTL(("netlink:disk", "RE unregister FW index returned = %d\n", fw_idx));
     CONTAINER_REMOVE(container, entry);
     if (entry)
         SNMP_FREE(entry);       /* XXX - release any other internal resources */
@@ -441,6 +436,97 @@ cpqSasPhyDrvTable_handler(netsnmp_mib_handler *handler,
                 snmp_set_var_typed_integer(request->requestvb, ASN_INTEGER,
                                            table_entry->cpqSasPhyDrvMediaType);
                 break;
+            case COLUMN_CPQSASPHYDRVSSDWEARSTATUS:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_integer(request->requestvb, ASN_INTEGER,
+                                           table_entry->cpqSasPhyDrvSSDWearStatus);
+                break;
+
+            case COLUMN_CPQSASPHYDRVPOWERONHOURS:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_integer(request->requestvb, ASN_COUNTER,
+                                           table_entry->cpqSasPhyDrvPowerOnHours);
+                break;
+
+            case COLUMN_CPQSASPHYDRVSSDPERCNTENDRNCEUSED:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_integer(request->requestvb, ASN_GAUGE,
+                                           table_entry->cpqSasPhyDrvSSDPercntEndrnceUsed);
+                break;
+
+            case COLUMN_CPQSASPHYDRVSSDESTTIMEREMAININGHOURS:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_integer(request->requestvb, ASN_COUNTER,
+                                           table_entry->cpqSasPhyDrvSSDEstTimeRemainingHours);
+                break;
+
+            case COLUMN_CPQSASPHYDRVAUTHENTICATIONSTATUS:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_integer(request->requestvb, ASN_INTEGER,
+                                           table_entry->cpqSasPhyDrvAuthenticationStatus);
+                break;
+
+            case COLUMN_CPQSASPHYDRVSMARTCARRIERAPPFWREV:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_integer(request->requestvb, ASN_INTEGER,
+                                           table_entry->cpqSasPhyDrvSmartCarrierAppFWRev);
+                break;
+
+            case COLUMN_CPQSASPHYDRVSMARTCARRIERBOOTLDRFWREV:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_integer(request->requestvb, ASN_INTEGER,
+                                           table_entry->cpqSasPhyDrvSmartCarrierAppFWRev);
+                break;
+
+            case COLUMN_CPQSASPHYDRVCURRTEMPERATURE:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_integer(request->requestvb, ASN_GAUGE,
+                                           table_entry->cpqSasPhyDrvCurrTemperature);
+                break;
+
+            case COLUMN_CPQSASPHYDRVTEMPERATURETHRESHOLD:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_integer(request->requestvb, ASN_GAUGE,
+                                           table_entry->cpqSasPhyDrvTemperatureThreshold);
+                break;
+
+
             default:
                 netsnmp_set_request_error(reqinfo, request,
                                           SNMP_NOSUCHOBJECT);

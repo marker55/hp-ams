@@ -3,10 +3,16 @@ NETSNMP ?= net-snmp-5.7.1
 
 OPT ?= -O2
 
-# -I/build/toolchain/lin32/RHEL5/usr/include
-CPPFLAGS = -I../$(NETSNMP)/include -I../ -I../common
+LEVEL=../
+NETSNMPDIR=$(LEVEL)$(NETSNMP)
+NETSNMPINC=$(shell if [ -f $(NETSNMPDIR)/net-snmp-config ] ; then \
+                       $(NETSNMPDIR)/net-snmp-config --build-includes $(NETSNMPDIR) ; \
+                   fi)
 
-CFLAGS ?= -fno-strict-aliasing $(OPT) -g -pipe -Werror -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux -D_GNU_SOURCE
+# -I/build/toolchain/lin32/RHEL5/usr/include
+CPPFLAGS = $(NETSNMPINC) -I../ -I../common -D_GNU_SOURCE
+
+CFLAGS ?= -fno-strict-aliasing $(OPT) -g -pipe -Werror -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux
 
 CFLAGS += -D_GNU_SOURCE
 

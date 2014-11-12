@@ -1,7 +1,7 @@
 # Overridden during automated builds
 COMP_NAME    ?= hp-ams
-COMP_VER     ?= 2.0.0
-COMP_PKG_REV ?= 1
+COMP_VER     ?= 2.1.0
+COMP_PKG_REV ?= 666
 
 NAME         ?= $(COMP_NAME)
 VERSION      ?= $(COMP_VER)
@@ -20,7 +20,6 @@ RPM_OPT_FLAGS=$(shell  if [ -f /etc/redhat-release ] ; then \
 						echo "-O2" ; \
 					   fi)
 					    
-#
 INSTALL=install
 DIRINSTALL=install -d
 ifeq "$(RPM_BUILD_ROOT)" ""
@@ -32,13 +31,9 @@ endif
 SBINDIR=$(DESTDIR)$(PREFIX)/sbin
 ETCDIR=$(DESTDIR)$(PREFIX)/etc
 INITDIR=$(ETCDIR)/init.d
+SYSTEMD= $(shell rpm --eval %{?_unitdir:1}%{\!?_unitdir:0})
+UNITDIR= $(shell rpm --eval %{?_unitdir})
 HPAMSDIR=$(DESTDIR)$(PREFIX)/opt/hp/hp-ams
-DOCDIR:=$(shell if [ -d $(PREFIX)/share/ ] ; then \
-                    echo $(DESTDIR)/$(PREFIX)/share/doc/$(NAME)-$(VERSION) ; \
-                elif [ -d $(PREFIX)/usr/share/ ] ; then \
-                    echo $(DESTDIR)/$(PREFIX)/usr/share/doc/$(NAME)-$(VERSION) ; \
-                else \
-                    echo $(DESTDIR)/$(PREFIX)/usr/doc/$(NAME)-$(VERSION); fi )
 MANDIR:=$(shell if [ -d $(PREFIX)/share/man ] ; then \
                     echo $(DESTDIR)/$(PREFIX)/share/man ; \
                 elif [ -d $(PREFIX)/usr/share/man ] ; then \
@@ -56,7 +51,6 @@ DISTROLIBS ?= $(shell if [ -f /etc/redhat-release ] ; then \
                   else \
                      echo ""; fi )
 
-#
 export SHELL=/bin/bash
 
 OS = linux
@@ -64,21 +58,23 @@ NETSNMP ?= net-snmp-5.7.2
 NETSNMPCONFIG = $(NETSNMP)/net-snmp-config
 export OS NETSNMP VERSION
 NETSNMPVERSIONMIN = $(shell echo $(NETSNMP)| cut -f2 -d\.  )
-ifeq "$(NETSNMPVERSIONMIN)" "7"
-MIBS="host agentx/subagent mibII mibII/ipv6"
-NOTMIBS="mibII/vacm_vars mibII/vacm_conf target agent_mibs cd_snmp notification notification-log-mib disman/event disman/schedule snmpv3mibs mibII/vacm utilities/execute mibII/tcpTable" 
-OPTIONS=--enable-read-only --disable-set-support --disable-agent --disable-privacy --without-openssl
-else
-MIBS="hardware/fsys"
-NOTMIBS="target agent_mibs cd_snmp notification notification-log-mib disman/event disman/schedule snmpv3mibs" 
-OPTIONS=""
-endif
+MIBS="host agentx/subagent mibII hardware/memory"
+NOTMIBS="mibII/system_mib mibII/snmp_mib_5_5 mibII/vacm_vars mibII/vacm_conf mibII/snmp mibII/tcp mibII/udp mibII/at mibII/sysORTable mibII/icmp mibII/ipv6 mibII/setSerialNo ip-mib/inetNetToMediaTable host/hrh_storage host/hr_disk host/hrh_filesys host/hr_network host/hr_other host/hr_partition host/hr_print target agent_mibs cd_snmp notification notification-log-mib disman/event disman/schedule snmpv3mibs mibII/vacm utilities/execute mibII/tcpTable ucd-snmp/dlmod" 
+CONF_OPTIONS=--enable-read-only --disable-set-support --disable-agent --disable-privacy --without-openssl $(shell if [ $(SYSTEMD) = 1 ] ; then echo "--with-systemd" ; fi)
+LEVEL=./
+NETSNMPDIR=$(LEVEL)$(NETSNMP)
+NETSNMPINC=$(shell if [ -f $(NETSNMPCONFIG) ] ; then \
+                       $(NETSNMPCONFIG) --build-includes $(NETSNMPDIR) ; \
+                   fi)
 
 NETSNMPTAR = $(NETSNMP).tar.gz
 CC = gcc
 
 PWD = `pwd`
-CPPFLAGS = -I. -I ./include  $(shell  if [ -f $(NETSNMPCONFIG) ] ; then $(NETSNMPCONFIG) --build-includes $(NETSNMP); fi) -I$(NETSNMP)/agent/mibgroup/mibII
+CPPFLAGS = -I. -I ./include $(NETSNMPINC)  -I$(NETSNMP)/agent/mibgroup/mibII
+CFLAGS=$(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --cflags ; fi)
+LDFLAGS=$(shell if [ -f $(NETSNMPCONFIG) ] ; then $(NETSNMPCONFIG) --ldflags ; fi)
+
 BUILDAGENTLIBS = $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --agent-libs ; fi)   
 BUILDNETSNMPDEPS = $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --build-lib-deps $(NETSNMP) ; fi)
 BUILDNETSNMPCMD =  $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --build-command ;fi)
@@ -90,7 +86,7 @@ OBJS=hpHelper.o
 
 TARGETS=hpHelper
 
-AMSDIRS = cpqHost cpqNic cpqSe cpqFca cpqScsi cpqIde common recorder
+AMSDIRS = cpqHost cpqNic cpqSe cpqFca cpqScsi cpqIde cpqPerf common recorder
 
 SUBDIRS = $(NETSNMP) $(AMSDIRS)
  
@@ -122,15 +118,16 @@ net-snmp-untar-stamp: $(NETSNMPTAR)
 net-snmp-configure: net-snmp-configure-stamp
 net-snmp-configure-stamp: net-snmp-patch-stamp
 	cd $(NETSNMP) ; ./configure \
-            --enable-static --disable-shared \
             --with-cflags="$(RPM_OPT_FLAGS)  -D_RPM_4_4_COMPAT -DNETSNMP_NO_INLINE" \
-            --with-ldflags="-Wl,-z,relro -Wl,-z,now" \
             --with-sys-location=Unknown \
+            --with-ldflags="-Wl,-z,relro -Wl,-z,now" \
             --with-sys-contact=root@localhost \
             --with-logfile=/var/log/snmpd.log \
             --with-nl \
-            --with-persistent-directory=/var/lib/net-snmp \
+            --with-persistent-directory=/var/net-snmp \
             --enable-ucd-snmp-compatibility \
+            --enable-static \
+            --disable-shared \
             --with-pic \
             --disable-embedded-perl \
             --without-perl-modules \
@@ -139,12 +136,12 @@ net-snmp-configure-stamp: net-snmp-patch-stamp
             --with-out-mib-modules=$(NOTMIBS) \
 	    --with-mib-modules=$(MIBS) \
             --with-out-transports="TCPIPv6 UDPIPv6 SSH TCP Alias" \
-            --with-transports="HPILO Unix" \
+            --with-transports="HPILO UDP Unix" \
 	    --disable-manuals \
 	    --disable-applications \
 	    --disable-md5 \
 	    --disable-scripts \
-	    --disable-mib-loading $(OPTIONS)
+	    --disable-mib-loading $(CONF_OPTIONS)
 	touch $@
 
 subdirs: $(SUBDIRS) net-snmp-configure-stamp
@@ -153,7 +150,6 @@ subdirs: $(SUBDIRS) net-snmp-configure-stamp
 		for i in $$it ; do \
 			echo "making all in `pwd`/$$i"; \
 			export CFLAGS=`$(NETSNMPCONFIG) --cflags`; \
-			export LDFLAGS=`$(NETSNMPCONFIG) --ldflags`; \
 			( cd $$i ; $(MAKE)  OS=$(OS) VERSION=$(VERSION)) ; \
 			if test $$? != 0 ; then \
 				exit 1 ; \
@@ -167,8 +163,11 @@ test: hpHelper $(SUBDIRS) net-snmp-configure-stamp
 testHelper: testHelper.o $(BUILDNETSNMPDEPS)
 	(CC) -o testHelper testHelper.o $(BUILDLIBS)
 
+hpHelper.o: hpHelper.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -o hpHelper.o -c hpHelper.c
+
 hpHelper: $(OBJS) $(OBJS2) $(BUILDNETSNMPDEPS)
-	$(CC) -o hpHelper `${NETSNMPCONFIG} --cflags` `${NETSNMPCONFIG} --ldflags` $(OBJS) $(OBJS2) $(BUILDLIBS)
+	$(CC) -o hpHelper $(LDFLAGS) $(OBJS) $(OBJS2) $(BUILDLIBS)
 
 clean:
 	rm -f $(TARGETS) $(OBJS) 
@@ -198,14 +197,21 @@ debian/changelog: debian/changelog.in
 	mv $<.tmp $@
 
 install: all
-	$(DIRINSTALL) -m 755 $(SBINDIR) $(INITDIR) $(HPAMSDIR) $(DOCDIR)
+	$(DIRINSTALL) -m 755 $(SBINDIR) $(ETCDIR)/sysconfig $(HPAMSDIR)
 	$(DIRINSTALL) -m 755 $(MANDIR)/man8
 	$(INSTALL) -m 755 ./hpHelper $(SBINDIR)
-	$(INSTALL) -m 755 ./hp-ams.sh $(INITDIR)/hp-ams
 	$(INSTALL) -m 644 ./doc/hpHelper.8 $(MANDIR)/man8
-	$(INSTALL) -m 644 ./LICENSE $(DOCDIR)
-	$(INSTALL) -m 644 $(NETSNMP)/COPYING $(DOCDIR)
-
+	$(INSTALL) -m 644 ./hp-ams.license $(HPAMSDIR)
+	$(INSTALL) -m 644 ./hp-ams.config $(ETCDIR)/sysconfig/hp-ams 
+	if [ $(SYSTEMD) = 1 ] ; then \
+		   echo UNITDIR=$(UNITDIR). ; \
+	       $(DIRINSTALL) -m 755 $(DESTDIR)/$(UNITDIR) ; \
+           $(INSTALL) -m 644 ./hp-ams.service $(DESTDIR)/$(UNITDIR)/hp-ams.service ; \
+	else \
+		   echo NOT UNITDIR=$(UNITDIR). ; \
+	       $(DIRINSTALL) -m 755 $(INITDIR) ; \
+           $(INSTALL) -m 755 ./hp-ams.sh $(INITDIR)/hp-ams ; \
+	fi
 	gzip -f $(MANDIR)/man8/hpHelper.8
 
 
@@ -222,13 +228,8 @@ $(TARFILE): debian/changelog $(NAME).spec
 	$(MAKE) -C tmp/$(NAME)-$(VERSION) \
           COMP_NAME=$(COMP_NAME) COMP_VER=$(COMP_VER) \
           COMP_PKG_REV=$(COMP_PKG_REV) $(NAME).spec
-	tar -C tmp/$(NAME)-$(VERSION) -xozf $(NETSNMPTAR)
-	if [ -f tmp/$(NAME)-$(VERSION)/$(NETSNMP)/agent/mibgroup/host/data_access/swrun_darwin.c ] ; then \
-	     rm -rf tmp/$(NAME)-$(VERSION)/$(NETSNMP)/agent/mibgroup/host/data_access/swrun_darwin.c ;\
-         tar -C  tmp/$(NAME)-$(VERSION) -cz $(NETSNMP) > $(NETSNMPTAR) ; \
-	fi     
-	rm -rf tmp/$(NAME)-$(VERSION)/$(NETSNMP)
 	tar -C tmp -cz $(NAME)-$(VERSION) > $@
+
 
 provides:
 	@echo $(OBJS2)

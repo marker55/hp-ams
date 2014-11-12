@@ -76,7 +76,7 @@ initialize_table_cpqIdeAtaDiskTable(void)
                                      ASN_INTEGER,       /* index: cpqIdeAtaDiskIndex */
                                      0);
     table_info->min_column = COLUMN_CPQIDEATADISKCONTROLLERINDEX;
-    table_info->max_column = COLUMN_CPQIDEATADISKSATAVERSION;
+    table_info->max_column = COLUMN_CPQIDEATADISKTEMPERATURETHRESHOLD;
 
     /*************************************************
      *
@@ -412,6 +412,77 @@ cpqIdeAtaDiskTable_handler(netsnmp_mib_handler *handler,
                                            table_entry->
                                            cpqIdeAtaDiskSataVersion);
                 break;
+            case COLUMN_CPQIDEATADISKMEDIATYPE:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_integer(request->requestvb, ASN_INTEGER,
+                                           table_entry->
+                                           cpqIdeAtaDiskMediaType);
+                break;
+            case COLUMN_CPQIDEATADISKSSDWEARSTATUS:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_integer(request->requestvb, ASN_INTEGER,
+                                           table_entry->
+                                           cpqIdeAtaDiskSSDWearStatus);
+                break;
+            case COLUMN_CPQIDEATADISKPOWERONHOURS:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_integer(request->requestvb, ASN_COUNTER,
+                                           table_entry->
+                                           cpqIdeAtaDiskPowerOnHours);
+                break;
+            case COLUMN_CPQIDEATADISKSSDPERCNTENDRNCEUSED:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_integer(request->requestvb, ASN_GAUGE,
+                                           table_entry->
+                                           cpqIdeAtaDiskSSDPercntEndrnceUsed);
+                break;
+            case COLUMN_CPQIDEATADISKSSDESTTIMEREMAININGHOURS:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_integer(request->requestvb, ASN_COUNTER,
+                                           table_entry->
+                                           cpqIdeAtaDiskSSDEstTimeRemainingHours);
+                break;
+            case COLUMN_CPQIDEATADISKCURRTEMPERATURE:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_integer(request->requestvb, ASN_INTEGER,
+                                           table_entry->
+                                           cpqIdeAtaDiskCurrTemperature);
+                break;
+            case COLUMN_CPQIDEATADISKTEMPERATURETHRESHOLD:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_integer(request->requestvb, ASN_INTEGER,
+                                           table_entry->
+                                           cpqIdeAtaDiskTemperatureThreshold);
+                break;
+
             default:
                 netsnmp_set_request_error(reqinfo, request,
                                           SNMP_NOSUCHOBJECT);

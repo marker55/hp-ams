@@ -15,10 +15,15 @@ OPT ?= -O2
 
 PWD = `pwd`
 
+LEVEL=../
+NETSNMPDIR=$(LEVEL)$(NETSNMP)
+NETSNMPINC=$(shell if [ -f $(NETSNMPDIR)/net-snmp-config ] ; then \
+                       $(NETSNMPDIR)/net-snmp-config --build-includes $(NETSNMPDIR) ; \
+                   fi)
 
 # shared library flags (assumes gcc)
 CFLAGS          ?= -fno-strict-aliasing $(OPT) -g -pipe -Werror -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux 
-CPPFLAGS = -I. -I..  $(shell if [ -f ../$(NETSNMP)/net-snmp-config ] ; then ../$(NETSNMP)/net-snmp-config --build-includes ../$(NETSNMP); fi)
+CPPFLAGS = -I. -I.. $(NETSNMPINC)
 DLFLAGS=-fPIC -shared 
 OBJS=cpqStdPciTable.o cpqSePciSlotTable.o cpqSePciFunctTable.o 
 PROVIDES=$(shell make provides)
@@ -28,7 +33,6 @@ BUILDNETSNMPDEPS = $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) -
 BUILDNETSNMPCMD =  $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --build-command ;fi)
 BUILDLIBS = $(BUILDNETSNMPDEPS)  -lm -lresolv -lcrypt $(DISTROLIBS)
 EXTRAS = ../common/utils.o ../common/smbios.o
-
 
 SUBDIRS = data_access
 

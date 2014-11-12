@@ -43,7 +43,6 @@ typedef __u8 u8;
 #include <net-snmp/library/container.h>
 #include <net-snmp/library/snmp_debug.h>
 
-#include "cpqHoFwVerTable.h"
 #include "cpqNicIfLogMapTable.h"
 #include "cpqNicIfPhysAdapterTable.h"
 
@@ -51,6 +50,7 @@ typedef __u8 u8;
 #include "cpqNic.h"
 #include "cpqnic.h"
 #include "nic_linux.h"
+#include "nic_db.h"
 #include "utils.h"
 #include "smbios.h"
 
@@ -68,9 +68,8 @@ typedef __u8 u8;
 #define MAX_UINT_32 0xffffffff
 
 extern unsigned char cpqHoMibHealthStatusArray[];
-extern oid       cpqHoFwVerTable_oid[];
-extern size_t    cpqHoFwVerTable_oid_len;
 
+static struct ifconf ifc;
 static struct ifreq  ifr;
 char    ifLogMapOverallStatus = 2;
 
@@ -81,6 +80,9 @@ char *nic_names[] = {"eth",
     "em",
     "peth",
     "vmnic",
+    "eno",
+    "enp",
+    "ens",
     (char *) 0};
 
 /* below array corresponds to above _BOND defines*/
@@ -96,6 +98,18 @@ char *(MapGroupType[]) =
     "Adaptive Load Balancing"
 };
 
+char *(MapNicType[]) = 
+{
+    "Unknown interface",
+    "Bridge - Physical",
+    "Bridge - Logical",
+    "Team ",
+    "Loopback",
+    "IPV6inV4",
+    "Virtual NIC",
+    "NIC",
+    "VLAN"
+};
 #define BRIDGE 1
 #define VBRIDGE 2
 #define BOND 3
@@ -103,6 +117,7 @@ char *(MapGroupType[]) =
 #define SIT  5
 #define VNIC  6
 #define NIC  7
+#define VLAN 8
 
 #define UNKNOWN_BOND        -1
 #define ROUND_ROBIN_BOND    0
@@ -144,26 +159,88 @@ static void GetConfSpeedDuplex(cpqNicIfPhysAdapterTable_entry *);
 
 oid sysUpTimeOid[] = {1, 3, 6, 1, 2, 1, 1, 3, 0};
 
-extern int name2indx(char *name);
-extern int register_FW_version(int dir, int fw_idx, int cat, int type,  int update,
-                        char *fw_version, char *name, char *location, char *key);
 void free_ethtool_info_members(ethtool_info *); 
 int32_t get_ethtool_info(char *, ethtool_info *);
 static int send_cpqnic_trap(int, cpqNicIfPhysAdapterTable_entry*);
 
-int get_bondtype(char *netdev)
+int get_bondtype(char *netdev, cpqNicIfLogMapTable_entry *row)
 {
     char buffer[256];
     char *mode;
-    int ret = -1;
+    int bt = -1;
 
     sprintf(buffer, "/sys/class/net/%s/bonding/mode", netdev);
 
     if ((mode = get_sysfs_str(buffer)) == NULL)
-        return ret;
-    sscanf(mode, "%s %d", buffer, &ret);
+        return bt;
+    sscanf(mode, "%s %d", buffer, &bt);
     free(mode);
-    return ret;
+
+    if (bt < 7){
+        strcpy(row->cpqNicIfLogMapDescription, MapGroupType[bt + 1]);
+        row->cpqNicIfLogMapDescription_len = strlen(MapGroupType[bt + 1]);
+    }
+
+    switch (bt) {
+        case ROUND_ROBIN_BOND:
+        case XOR_BOND:
+        case BROADCAST_BOND:
+            row->cpqNicIfLogMapGroupType = MAP_GROUP_TYPE_SLB;
+            row->cpqNicIfLogMapSwitchoverMode = SWITCHOVER_MODE_SWITCH_ON_FAIL;
+            break;
+
+        case ACTIVE_BACKUP_BOND:
+            row->cpqNicIfLogMapGroupType = MAP_GROUP_TYPE_NFT;
+            row->cpqNicIfLogMapSwitchoverMode = SWITCHOVER_MODE_SWITCH_ON_FAIL;
+            break;
+
+        case IEEE_8023AD_BOND:
+            row->cpqNicIfLogMapGroupType = MAP_GROUP_TYPE_AD;
+            row->cpqNicIfLogMapSwitchoverMode = SWITCHOVER_MODE_SWITCH_ON_FAIL;
+            break;
+
+        case TLB_BOND:
+            row->cpqNicIfLogMapGroupType = MAP_GROUP_TYPE_TLB;
+            row->cpqNicIfLogMapSwitchoverMode = SWITCHOVER_MODE_SWITCH_ON_FAIL;
+            break;
+
+        case ALB_BOND:
+            row->cpqNicIfLogMapGroupType = MAP_GROUP_TYPE_ALB;
+            row->cpqNicIfLogMapSwitchoverMode = SWITCHOVER_MODE_SWITCH_ON_FAIL;
+            break;
+
+        case UNKNOWN_BOND:
+            row->cpqNicIfLogMapGroupType = MAP_GROUP_TYPE_NOT_IDENTIFIABLE;
+            row->cpqNicIfLogMapSwitchoverMode = SWITCHOVER_MODE_UNKNOWN;
+            break;
+        default:
+            DEBUGMSGTL(("cpqnic:arch",
+                        "ERROR: cmanic, unknown bonding mode "
+                        "for %s\n",
+                        netdev));
+            break;
+    }
+    return bt;
+}
+
+int get_ifrole(char *netdev)
+{
+    struct dirent **filelist;
+    struct stat sb;
+    char buffer[256];
+    char *value;
+
+    sprintf(buffer, "/sys/class/net/%s/master", netdev);
+    if (stat(buffer, &sb) == 0) {
+        strcat(buffer,"/bonding/primary");
+        value = get_sysfs_str(buffer);
+        if ((value != NULL) && (strcmp(value, netdev) == 0)) {
+            free(value);
+            return 2;
+        } else
+            return 4;
+    }
+        return 255;
 }
 
 int get_iftype(char *netdev) 
@@ -173,14 +250,26 @@ int get_iftype(char *netdev)
     char buffer[256];
 
     int count;
-    int i=0;
+    int i = 0;
 
+    if (!strcmp(netdev, "lo"))
+        return LOOP;
+
+    if (!strncmp(netdev, "sit", 3))
+        return SIT;
 
     while (nic_names[i] != (char *) 0) {
         if (!strncmp(netdev, nic_names[i], strlen(nic_names[i]))) 
+            if (strchr(netdev, '.') == NULL)
             return NIC;
+            else
+                return VLAN;
         i++;
     }
+    sprintf(buffer, "/sys/class/net/%s/bonding", netdev);
+    if (stat(buffer, &sb) == 0)
+        return BOND;
+
     sprintf(buffer, "/sys/class/net/%s/brport", netdev);
     if (stat(buffer, &sb) == 0) {
         sprintf(buffer, "/sys/class/net/%s/device", netdev);
@@ -189,10 +278,6 @@ int get_iftype(char *netdev)
         else 
             return NIC;
     }
-
-    sprintf(buffer, "/sys/class/net/%s/bonding", netdev);
-    if (stat(buffer, &sb) == 0)
-        return BOND;
 
     sprintf(buffer, "/sys/class/net/%s/brif/", netdev);
     if (stat(buffer, &sb) == 0) {
@@ -214,12 +299,6 @@ int get_iftype(char *netdev)
         else 
             return VBRIDGE;
     }
-    if (!strcmp(netdev, "lo"))
-        return LOOP;
-
-    if (!strncmp(netdev, "sit", 3))
-        return SIT;
-
     return 0;
 }
 
@@ -251,6 +330,21 @@ int setMACaddr(char * name, unsigned char * MacAddr) {
     return (len);
 }
 
+unsigned int get_if_speed(char *interface) {
+
+    char attribute[256];
+    unsigned int speed;
+
+    strcpy(attribute, interface);
+    strcat(attribute, "/speed");
+
+    speed = get_sysfs_uint(attribute);
+    if (((int)speed == -1) ||((short)speed == -1)) speed = 0;
+    DEBUGMSGTL(("cpqnic:arch", "Speed (%s) = %d\n", attribute, speed));
+
+    return speed;
+}
+
 int get_if_status(char *interface) {
 
     char attribute[256];
@@ -261,21 +355,21 @@ int get_if_status(char *interface) {
     strcpy(attribute, interface);
     strcat(attribute, "/flags");
 
-    DEBUGMSGTL(("cpqnic:container:load", "%s = %x\n", 
-                attribute, get_sysfs_shex(attribute)));
-
     iff = get_sysfs_shex(attribute);
+    DEBUGMSGTL(("cpqnic:arch", "Flags (%s) = %x\n", attribute, iff));
+
     if (iff & IFF_UP) {
         strcpy(attribute, interface);
         strcat(attribute, "/carrier");
         link = get_sysfs_int(attribute);
+        DEBUGMSGTL(("cpqnic:arch", "Links (%s) = %x\n", attribute, link));
         if (link) 
             return ADAPTER_CONDITION_OK;
 
         strcpy(attribute, interface);
         strcat(attribute, "/operstate");
         if ((value = get_sysfs_str(attribute)) != NULL) {
-            DEBUGMSGTL(("cpqnic:container:load", "%s = %s\n", attribute, value));
+            DEBUGMSGTL(("cpqnic:arch", "Operstate (%s) = %s\n", attribute, value));
             if (strcmp(value, "up") == 0) 
                 return ADAPTER_CONDITION_OK;
              else if ((strcmp(value, "unknown") == 0) && (iff & IFF_LOOPBACK))
@@ -286,11 +380,20 @@ int get_if_status(char *interface) {
                 return ADAPTER_CONDITION_OTHER;
             
             free(value);
-            return ADAPTER_CONDITION_OTHER;
         }
     } else 
         return ADAPTER_CONDITION_OTHER;
 }
+
+unsigned long long get_nic_memaddr(char * name)
+{
+    char *buffer[256];
+
+    memset(buffer, 0, 256);
+    snprintf(buffer, 255, "/sys/class/net/%s/device/resource", name);
+    return get_sysfs_llhex(buffer);
+}
+
 
 
 /*----------------------------------------------------------------------*\
@@ -308,6 +411,7 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
 
     char buffer[256];
     char attribute[256];
+    char *value;
     int     iMacLoop;
     oid     Index;
     netsnmp_index tmp;
@@ -318,13 +422,13 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
 
     nic_hw_db *pnic_hw_db;
     ethtool_info einfo;
-    static int32_t mlxport = -1;
 
     static int devcount = -1;
     struct dirent **devlist;
     int     i, j = 0;
     int     domain,bus,device,function;
-    char    linkBuf[1025];
+    char    sysfsDir[1024];
+    char    linkBuf[1024];
     char    mibStatus =  MIB_CONDITION_OK;
     ssize_t link_sz;
     cpqNicIfPhysAdapterTable_entry* entry;
@@ -412,19 +516,26 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
             entry->cpqNicIfPhysAdapterIfNumber[7] = 0;
             entry->cpqNicIfPhysAdapterIfNumber_len = 8;
 
+            entry->cpqNicIfPhysAdapterPrevCondition = ADAPTER_CONDITION_OTHER;
+            entry->cpqNicIfPhysAdapterCondition = ADAPTER_CONDITION_OTHER;
+            entry->cpqNicIfPhysAdapterPrevStatus = STATUS_UNKNOWN;
+            entry->cpqNicIfPhysAdapterStatus = STATUS_UNKNOWN;
+
+            entry->cpqNicIfPhysAdapterPrevState = ADAPTER_STATE_UNKNOWN;
+            entry->cpqNicIfPhysAdapterState = ADAPTER_STATE_UNKNOWN;
+
+            entry->cpqNicIfPhysAdapterMemAddr = (int) get_nic_memaddr(devlist[i]->d_name);
+
             if (sock < 0) 
                 sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
             if (sock >= 0) {
                 memset(&ifr,0,sizeof(ifr));
                 ifr.ifr_data = (char*)0;
+                strncpy(ifr.ifr_name, devlist[i]->d_name, IFNAMSIZ - 1);
                 if (ioctl(sock, SIOCGIFMAP, &ifr) >= 0) {
                     entry->cpqNicIfPhysAdapterIoAddr = ifr.ifr_map.base_addr;
                     entry->cpqNicIfPhysAdapterDma = ((int)ifr.ifr_map.dma == 0)?
                         -1:(int)ifr.ifr_map.dma;
-
-                    if (ifr.ifr_map.mem_start) 
-                        entry->cpqNicIfPhysAdapterMemAddr = 
-                            ifr.ifr_map.mem_start;
                 }
             }
 
@@ -469,19 +580,19 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
             strcat(attribute, "/device/irq");
             entry->cpqNicIfPhysAdapterIrq = get_sysfs_int(attribute);
 
+            strcpy(attribute, buffer);
+            strcat(attribute, "/master/ifindex");
+            entry->cpqNicIfPhysAdapterAggregationGID = get_sysfs_int(attribute);
+
+            entry->cpqNicIfPhysAdapterRole = get_ifrole(devlist[i]->d_name);
+
             if (get_ethtool_info(devlist[i]->d_name, &einfo) == 0) {
+                int nic_port;	
                 DEBUGMSGTL(("cpqnic:container:load", "Got ethtool info for %s\n", 
                             devlist[i]->d_name));  
 
-                /*
-                 * Mellanox Card NC542m has bus, device and function 
-                 * same for both  the ports.  
-                 */
-
-                if ((VendorID == 0x15B3) && (DeviceID == 0x5A44) && 
-                        (SubsysVendorID == 0x3107) && (SubsysDeviceID == 0x103C)) {
-                    mlxport++;
-                }		
+                if ((nic_port = get_nic_port(devlist[i]->d_name)) > 0)
+                    entry->cpqNicIfPhysAdapterPort = nic_port;
 
                 entry->cpqNicIfPhysAdapterSlot = getPCIslot_str(einfo.bus_info);
 
@@ -503,10 +614,6 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
                                     256,
                                     "Slot %u",
                                     entry->cpqNicIfPhysAdapterSlot);
-                } else {
-                    entry->cpqNicIfPhysAdapterPort = getChassisPort_str(einfo.bus_info);
-                    entry->cpqNicIfPhysAdapterHwLocation[0] = '\0';
-                    entry->cpqNicIfPhysAdapterHwLocation_len = 0;
                 }
 
                 if ( einfo.firmware_version ) {
@@ -514,21 +621,12 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
                             einfo.firmware_version);
                     entry->cpqNicIfPhysAdapterFWVersion_len = 
                         strlen(entry->cpqNicIfPhysAdapterFWVersion);
-                    nic_fw_idx = register_FW_version(-1,  /* direction */
-                                                     nic_fw_idx, 
-                                                     3, /* Category */
-                                                     24,  /*type */
-                                                     3, /*update method */
-                                                     einfo.firmware_version,
-                                                     entry->cpqNicIfPhysAdapterName,
-                                                     entry->cpqNicIfPhysAdapterHwLocation,
-                                                     "");
                 }
             } else 
                 DEBUGMSGTL(("cpqnic:container:load", "ethtool FAILED for %s\n",
                             devlist[i]->d_name));
 
-            for (iMacLoop=0; iMacLoop<MAC_ADDRESS_BYTES; iMacLoop++) {
+            for (iMacLoop = 0; iMacLoop<MAC_ADDRESS_BYTES; iMacLoop++) {
                 /* If einfo.perm_addr is all 0's, the ioctl must've failed*/
                 if (einfo.perm_addr[iMacLoop]) {
                     memcpy(entry->cpqNicIfPhysAdapterMACAddress, 
@@ -572,9 +670,11 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
         mibStatus = get_if_status(buffer);
         entry->cpqNicIfPhysAdapterCondition = 
                 MAKE_CONDITION(entry->cpqNicIfPhysAdapterCondition, mibStatus);
+
         entry->cpqNicIfPhysAdapterStatus = entry->cpqNicIfPhysAdapterCondition;
 
         entry->cpqNicIfPhysAdapterPrevState = entry->cpqNicIfPhysAdapterState;
+
         if (entry->cpqNicIfPhysAdapterStatus == STATUS_OK)
             entry->cpqNicIfPhysAdapterState = ADAPTER_STATE_ACTIVE;
         else 
@@ -627,18 +727,17 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
                         devlist[i]->d_name));
             j++;
         }
-        DEBUGMSGTL(("cpqnic:arch","Check NIC trap = %s Status = %ld, Prev = %ld\n",
+        DEBUGMSGTL(("cpqnic:arch","Check NIC trap = %s Status = %d, Prev = %d\n",
                         devlist[i]->d_name,
                         entry->cpqNicIfPhysAdapterStatus,
                         entry->cpqNicIfPhysAdapterPrevStatus));
         free(devlist[i]);
 
-        if ((entry->cpqNicIfPhysAdapterStatus == STATUS_LINK_FAILURE) &&
-            (entry->cpqNicIfPhysAdapterPrevStatus != STATUS_LINK_FAILURE))
+        if ((entry->cpqNicIfPhysAdapterStatus >= STATUS_GENERAL_FAILURE) &&
+                (entry->cpqNicIfPhysAdapterPrevStatus == STATUS_OK))  
             send_cpqnic_trap(LINK_DOWN_TRAP_OID, entry);
-        else if ((entry->cpqNicIfPhysAdapterPrevStatus == STATUS_LINK_FAILURE) 
-                &&
-            (entry->cpqNicIfPhysAdapterStatus != STATUS_LINK_FAILURE))
+        else if ((entry->cpqNicIfPhysAdapterStatus == STATUS_OK) &&
+                (entry->cpqNicIfPhysAdapterPrevStatus >= STATUS_GENERAL_FAILURE))
             send_cpqnic_trap(LINK_UP_TRAP_OID, entry);
 
         free_ethtool_info_members(&einfo);
@@ -650,6 +749,64 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
     DEBUGMSGTL(("cpqnic:arch"," loaded %d entries\n", numIfPhys));
     free(devlist);
     return(0);
+}
+
+
+int get_bond_status(char * netdev, cpqNicIfLogMapTable_entry *row)
+{
+    int status;
+    status = get_if_status(netdev);
+    DEBUGMSGTL(("cpqnic:arch","if = %s, status = %d, cpqNicIfLogMapCondition = %d\n", netdev, status, row->cpqNicIfLogMapCondition));
+    switch (status) {
+        case ADAPTER_CONDITION_OK:
+            row->cpqNicIfLogMapAdapterOKCount++;
+            switch (row->cpqNicIfLogMapCondition) {
+
+                case MAP_CONDITION_OK:
+                    row->cpqNicIfLogMapCondition = MAP_CONDITION_OK;
+                    row->cpqNicIfLogMapStatus = MAP_STATUS_OK;
+                    break;
+                case MAP_CONDITION_DEGRADED:
+                    row->cpqNicIfLogMapCondition = MAP_CONDITION_DEGRADED;
+                    row->cpqNicIfLogMapStatus = MAP_STATUS_PRIMARY_FAILED;
+                    break;
+                case MAP_CONDITION_FAILED:
+                    row->cpqNicIfLogMapCondition = MAP_CONDITION_DEGRADED;
+                    row->cpqNicIfLogMapStatus = MAP_STATUS_STANDBY_FAILED;
+                    break;
+                case MAP_CONDITION_OTHER:
+                default:
+                    row->cpqNicIfLogMapCondition = MAP_CONDITION_OK;
+                    row->cpqNicIfLogMapStatus = MAP_STATUS_OK;
+                    break;
+            }
+
+            /* OTHER in bonds is probably a NIC that is not up
+               treat as FAILED */
+        case ADAPTER_CONDITION_OTHER:
+        case ADAPTER_CONDITION_FAILED:
+        default:
+            switch (row->cpqNicIfLogMapCondition) {
+                case MAP_CONDITION_OK:
+                    row->cpqNicIfLogMapCondition = MAP_CONDITION_DEGRADED;
+                    row->cpqNicIfLogMapStatus = MAP_STATUS_PRIMARY_FAILED;
+                    break;
+                case MAP_CONDITION_DEGRADED:
+                    row->cpqNicIfLogMapCondition = MAP_CONDITION_DEGRADED;
+                    row->cpqNicIfLogMapStatus = MAP_STATUS_STANDBY_FAILED;
+                    break;
+                case MAP_CONDITION_FAILED:
+                    row->cpqNicIfLogMapCondition = MAP_CONDITION_FAILED;
+                    row->cpqNicIfLogMapStatus = MAP_STATUS_GROUP_FAILED;
+                    break;
+                case MAP_CONDITION_OTHER:
+                default:
+                    row->cpqNicIfLogMapCondition = MAP_CONDITION_FAILED;
+                    row->cpqNicIfLogMapStatus = MAP_STATUS_GROUP_FAILED;
+                    break;
+            }
+    }
+    return status;
 }
 
 
@@ -667,12 +824,14 @@ int netsnmp_arch_iflog_container_load(netsnmp_container *container)
     int map = 0;
     int rc;
     char chTemp[256];
+    char *pchTemp;
     int bondtype;
     int mapStatus;
     netsnmp_index tmp;
     oid oid_index[2];
     netsnmp_container *ifphys_container;
     netsnmp_iterator  *it;
+    netsnmp_cache *ifphys_cache;
     cpqNicIfPhysAdapterTable_entry* ifphys_entry;
 
     cpqNicIfLogMapTable_entry *entry;
@@ -690,8 +849,11 @@ int netsnmp_arch_iflog_container_load(netsnmp_container *container)
 
     netdev_sz = strlen(netdev);
     if ((iCount = scandir(netdev, &filelist, file_select, versionsort))
-            == 0)
+            <= 0) {
+        if (iCount == -1)
+            DEBUGMSGTL(("cpqnic:arch","ERRNO = %d\n", errno));
         return(iCount);
+    }
     DEBUGMSGTL(("cpqnic:arch","iflog_container_load %d devs\n",iCount));
     for (i = 0; i < iCount; i++) {
         if ((ifIndex = name2indx(filelist[i]->d_name)) == -1) {
@@ -731,6 +893,7 @@ int netsnmp_arch_iflog_container_load(netsnmp_container *container)
                 entry->cpqNicIfLogMapIfNumber_len = 4;
 
                 entry->cpqNicIfLogMapPhysicalAdapters[0] = (char)ifIndex;
+                entry->cpqNicIfLogMapPhysicalAdapters[1] = (char)0;
                 entry->cpqNicIfLogMapPhysicalAdapters_len = 1;
                 entry->cpqNicIfLogMapGroupType = MAP_GROUP_TYPE_NONE;
                 entry->cpqNicIfLogMapAdapterCount = 1;
@@ -756,22 +919,23 @@ int netsnmp_arch_iflog_container_load(netsnmp_container *container)
             entry->cpqNicIfLogMapStatus = entry->cpqNicIfLogMapCondition;
 
             bondtype = -1;
-            entry->cpqNicIfLogMapDescription[0] = (char)0;
-            entry->cpqNicIfLogMapDescription_len = 0; 
 
             entry->cpqNicIfLogMapLACNumber_len = strlen(filelist[i]->d_name);
             strncpy(entry->cpqNicIfLogMapLACNumber, filelist[i]->d_name,
                     entry->cpqNicIfLogMapLACNumber_len);
+            strcpy(entry->cpqNicIfLogMapDescription, MapNicType[ifType]);
+            entry->cpqNicIfLogMapDescription_len = strlen(MapNicType[ifType]); 
             switch (ifType) {
                 case LOOP:
                 case SIT:
                     break;
                 case NIC:
                 case VNIC:
-                    phys_index = name2indx(filelist[i]->d_name);
+                case VLAN:
+                    phys_index = name2pindx(filelist[i]->d_name);
                     entry->cpqNicIfLogMapPhysicalAdapters[0] = 
                         (char)phys_index;
-                    entry->cpqNicIfLogMapPhysicalAdapters[1] =0;
+                    entry->cpqNicIfLogMapPhysicalAdapters[1] = 0;
                     entry->cpqNicIfLogMapPhysicalAdapters_len = 1;
                     entry->cpqNicIfLogMapAdapterCount = 1;
                     break;
@@ -781,79 +945,25 @@ int netsnmp_arch_iflog_container_load(netsnmp_container *container)
                     strcat(netdev, "/brif");
                     if ((dCount = scandir(netdev, &devlist, 
                                     file_select, alphasort)) == 1) {
-                        phys_index = name2indx(devlist[0]->d_name);
+                        phys_index = name2pindx(devlist[0]->d_name);
 
                         /* logical interface name is used for bonding/teaming */
                         entry->cpqNicIfLogMapPhysicalAdapters[0] = 
                             (char)phys_index;
                         entry->cpqNicIfLogMapPhysicalAdapters_len = 1;
-                        entry->cpqNicIfLogMapPhysicalAdapters[1] =0;
+                        entry->cpqNicIfLogMapPhysicalAdapters[1] = 0;
                         entry->cpqNicIfLogMapAdapterCount = 1;
                         free(devlist[0]);
                         free(devlist);
                     } 
                     break;
                 case BOND:
-                    bondtype = get_bondtype(filelist[i]->d_name);
-                    if (bondtype < 7){
-                        strcpy(entry->cpqNicIfLogMapDescription,
-                                MapGroupType[bondtype + 1]);
-                        entry->cpqNicIfLogMapDescription_len = 
-                            strlen(MapGroupType[bondtype + 1]);
-                    } 
-                    switch (bondtype) {
-                        case ACTIVE_BACKUP_BOND:
-                            entry->cpqNicIfLogMapGroupType = MAP_GROUP_TYPE_NFT;
-                            entry->cpqNicIfLogMapSwitchoverMode =
-                                SWITCHOVER_MODE_SWITCH_ON_FAIL;
-                            break;
-
-                        case ROUND_ROBIN_BOND:
-                        case XOR_BOND:
-                        case BROADCAST_BOND:
-                            entry->cpqNicIfLogMapGroupType = MAP_GROUP_TYPE_SLB;
-
-                            /* due to a lack of other values for this 
-                               mib object, we must assign the switchover mode
-                               to the "best fit" value of switch on fail.
-                               */
-                            entry->cpqNicIfLogMapSwitchoverMode =
-                                SWITCHOVER_MODE_SWITCH_ON_FAIL;
-                            break;
-
-                        case IEEE_8023AD_BOND:
-                            entry->cpqNicIfLogMapGroupType = MAP_GROUP_TYPE_AD;
-                            entry->cpqNicIfLogMapSwitchoverMode =
-                                SWITCHOVER_MODE_SWITCH_ON_FAIL;
-                            break;
-
-                        case TLB_BOND:
-                            entry->cpqNicIfLogMapGroupType = MAP_GROUP_TYPE_TLB;
-                            entry->cpqNicIfLogMapSwitchoverMode =
-                                SWITCHOVER_MODE_SWITCH_ON_FAIL;
-                            break;
-
-                        case ALB_BOND:
-                            entry->cpqNicIfLogMapGroupType = MAP_GROUP_TYPE_ALB;
-                            entry->cpqNicIfLogMapSwitchoverMode =
-                                SWITCHOVER_MODE_SWITCH_ON_FAIL;
-                            break;
-
-                        case UNKNOWN_BOND:
-                            entry->cpqNicIfLogMapGroupType = 
-                                MAP_GROUP_TYPE_NOT_IDENTIFIABLE;
-                            entry->cpqNicIfLogMapSwitchoverMode =
-                                SWITCHOVER_MODE_UNKNOWN;
-                            break;
-                        default:
-                            DEBUGMSGTL(("cpqnic:arch",
-                                        "ERROR: cmanic, unknown bonding mode "
-                                        "for %s\n",
-                                        filelist[i]->d_name));
-                            break;
-                    }
+                    map = 0;
+                    bondtype = get_bondtype(filelist[i]->d_name, entry);
+                    entry->cpqNicIfLogMapAdapterOKCount = 0;
 
                     strcpy(&netdev[netdev_sz], filelist[i]->d_name);
+                    /* looking for /sys/class/net/<bond>/slav_* */
                     if ((dCount = scandir(netdev, &devlist, 
                                     file_select, alphasort))  != 0) {
                         for (j = 0; j < dCount; j++) {
@@ -864,46 +974,29 @@ int netsnmp_arch_iflog_container_load(netsnmp_container *container)
                                 free(devlist[j]);
                                 continue;
                             }
-                            phys_index = name2indx(&devlist[j]->d_name[6]);
+                            DEBUGMSGTL(("cpqnic:arch", "Found slave = %s\n",
+                                        devlist[j]->d_name));
+                            /* now grab the bits after slave_ */
+                            phys_index = name2pindx(&devlist[j]->d_name[6]);
+
                             entry->cpqNicIfLogMapPhysicalAdapters[map] =
                                 (char)phys_index;
-                            entry->cpqNicIfLogMapPhysicalAdapters_len = map + 1;
                             map++;
-                            sprintf(chTemp, "/sys/class/net/%s", devlist[j]->d_name);
-                            if_status = get_if_status(chTemp);
-                            if ((if_status == ADAPTER_CONDITION_OK) && 
-                                (entry->cpqNicIfLogMapCondition == ADAPTER_CONDITION_OK)) {
-                                entry->cpqNicIfLogMapCondition = ADAPTER_CONDITION_OK;
-                                entry->cpqNicIfLogMapStatus = STATUS_OK;
-
-                            } else if ((if_status == ADAPTER_CONDITION_OK) &&
-                                ((entry->cpqNicIfLogMapCondition == ADAPTER_CONDITION_DEGRADED) ||
-                                 (entry->cpqNicIfLogMapCondition == ADAPTER_CONDITION_FAILED))) {
-                                entry->cpqNicIfLogMapCondition = ADAPTER_CONDITION_DEGRADED;
-                                entry->cpqNicIfLogMapStatus = STATUS_GENERAL_FAILURE;
-                            }  else if ((if_status == ADAPTER_CONDITION_FAILED) &&
-                                ((entry->cpqNicIfLogMapCondition == ADAPTER_CONDITION_DEGRADED) ||
-                                 (entry->cpqNicIfLogMapCondition == ADAPTER_CONDITION_OK))) {
-                                entry->cpqNicIfLogMapCondition = ADAPTER_CONDITION_DEGRADED;
-                                entry->cpqNicIfLogMapStatus = STATUS_GENERAL_FAILURE;
-                            }
+                            entry->cpqNicIfLogMapPhysicalAdapters_len = map + 1;
+#ifdef NOTDEF
+                            /* get status of Bond member */
+                            sprintf(chTemp, 
+                                    "/sys/class/net/%s", 
+                                    &devlist[j]->d_name[6]);
+                            if_status = get_bond_status(chTemp, entry);
+#endif
                             free(devlist[j]);
                         }
                         entry->cpqNicIfLogMapAdapterCount = map;
                         free(devlist);
                     }
-                    if (entry->cpqNicIfLogMapCondition == ADAPTER_CONDITION_OK)
-                        entry->cpqNicIfLogMapStatus = MAP_STATUS_OK;
-                    else if (entry->cpqNicIfLogMapCondition == 
-                            ADAPTER_CONDITION_FAILED)
-                        entry->cpqNicIfLogMapStatus = MAP_STATUS_GROUP_FAILED;
-                    else
-                        entry->cpqNicIfLogMapStatus = MAP_STATUS_UNKNOWN;
-
-                    break;
             } 
 
-            map = 0;
             /* get IPv4/6 address info */
             if (get_dynamic_interface_info(filelist[i]->d_name, &dyn_if_info) 
                     != -1) {
@@ -921,28 +1014,44 @@ int netsnmp_arch_iflog_container_load(netsnmp_container *container)
                 free_dynamic_interface_info(&dyn_if_info);
             }
 
-            entry->cpqNicIfLogMapSpeedMbps = UNKNOWN_SPEED;
+            entry->cpqNicIfLogMapSpeedMbps = get_if_speed(chTemp);
             entry->cpqNicIfLogMapSpeed = UNKNOWN_SPEED;
-            /* calculate interface speeds from cpqNicIfPhysAdapterTable */
             if (cpqNicIfPhysAdapterTable_cache != NULL) {
                 ifphys_container = cpqNicIfPhysAdapterTable_cache->magic;
                 it = CONTAINER_ITERATOR( ifphys_container );
+
+                entry->cpqNicIfLogMapAdapterOKCount = entry->cpqNicIfLogMapAdapterCount;
                 ifphys_entry = ITERATOR_FIRST( it );
-                for (k = 0; k < entry->cpqNicIfLogMapAdapterCount; k++) {
                     while ( ifphys_entry != NULL ) {
-                        if (entry->cpqNicIfLogMapPhysicalAdapters[0] ==
+                    for (k = 0; k < entry->cpqNicIfLogMapAdapterCount; k++) {
+                        if (entry->cpqNicIfLogMapPhysicalAdapters[k] ==
                             (char) ifphys_entry->cpqNicIfPhysAdapterIndex) {
-                            entry->cpqNicIfLogMapSpeedMbps += 
-                                ifphys_entry->cpqNicIfPhysAdapterSpeedMbps;
+                            if (ifphys_entry->cpqNicIfPhysAdapterStatus != STATUS_OK)
+                                entry->cpqNicIfLogMapAdapterOKCount--;
                         }
-                        ifphys_entry = ITERATOR_NEXT( it );
                     }
+                    ifphys_entry = ITERATOR_NEXT( it );
                 }
                 if (entry->cpqNicIfLogMapSpeedMbps != UNKNOWN_SPEED) {
                     if (entry->cpqNicIfLogMapSpeedMbps <= 4294 )
                         entry->cpqNicIfLogMapSpeed = 
                                     entry->cpqNicIfLogMapSpeedMbps * 1000000;
                 }
+                if (entry->cpqNicIfLogMapAdapterOKCount == entry->cpqNicIfLogMapAdapterCount)
+                    entry->cpqNicIfLogMapStatus = MAP_STATUS_OK;
+                else 
+                    if (entry->cpqNicIfLogMapAdapterCount > 2)
+                        if (entry->cpqNicIfLogMapAdapterOKCount == 1)
+                            entry->cpqNicIfLogMapStatus = MAP_STATUS_REDUNDANCY_LOST;
+                        else
+                           entry-> cpqNicIfLogMapStatus = MAP_STATUS_REDUNDANCY_REDUCED;
+                    else
+                        if (entry->cpqNicIfLogMapAdapterCount == 2)
+                            entry->cpqNicIfLogMapStatus = MAP_STATUS_PRIMARY_FAILED;
+                        else
+                            entry->cpqNicIfLogMapStatus = MAP_STATUS_GROUP_FAILED;
+
+
                 ITERATOR_RELEASE( it );
             }
 
@@ -1081,7 +1190,8 @@ static int send_cpqnic_trap(int specific_type,
 
     unsigned char *pRecord = NULL;
     PCQSMBIOS_SERV_SYS_ID pServSysId;
-    int recCount = 0;
+    int recCount = 0, iLoop;
+    cpqNicIfLogical_t *pIfLog;
     netsnmp_variable_list *var_list = NULL;
 
     static oid compaq[] = { 1, 3, 6, 1, 4, 1, 232 };

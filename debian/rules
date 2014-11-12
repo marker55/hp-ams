@@ -2,7 +2,7 @@
 # debian/rules for hp-ams
 
 # Uncomment this to turn on verbose mode.
-#export DH_VERBOSE=1
+export DH_VERBOSE=1
 
 export EFS_VER=$(shell dpkg-parsechangelog | grep ^Version: | cut -d' ' -f2)
 export SPECIFIC_LINUX= -DDEBIAN
@@ -43,7 +43,7 @@ build-stamp: configure-stamp
         # The 'clean' here is intentional - files are copied about during
         # this stage
 	cd debian/build && \
-          $(LINUX32) make EFS_VER="$(EFS_VER)" clean all
+          make EFS_VER="$(EFS_VER)" clean all
 	touch build-stamp
 
 clean:
@@ -101,7 +101,7 @@ binary-arch: build install
 #       dh_installinfo
 	dh_installman $(HPAMS_MANPAGES)
 	dh_link
-	dh_strip
+	dh_strip --dbg-package=hp-ams-dbg
 	dh_compress
 	dh_fixperms
 #       dh_perl
@@ -118,3 +118,6 @@ binary-arch: build install
 binary: binary-indep binary-arch
 .PHONY: build clean binary-indep binary-arch binary install configure
 
+.PHONY: override_dh_strip
+override_dh_strip:
+	dh_strip --dbg-package=hp-ams-dbg

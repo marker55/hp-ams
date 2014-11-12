@@ -362,7 +362,6 @@ cpqSePciSlotTable_handler(netsnmp_mib_handler *handler,
                                            table_entry->
                                            cpqSePciCurrentSlotSpeed);
                 break;
-            case COLUMN_CPQSEPCISLOTSPEED:
             default:
                 netsnmp_set_request_error(reqinfo, request,
                                           SNMP_NOSUCHOBJECT);

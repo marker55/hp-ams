@@ -24,57 +24,23 @@
 #include "cpqScsi.h"
 #include "cpqSasHbaTable.h"
 #include "cpqSasPhyDrvTable.h"
-#include "cpqHoFwVerTable.h"
 
 #include "sashba.h"
 #include "sasphydrv.h"
 #include "common/smbios.h"
 #include "common/utils.h"
+#include "common/nl_udev.h"
 #include <linux/netlink.h>
 
 #include "sas_linux.h"
 
-#define UDEV_MONITOR_KERNEL 1
-#define UDEV_MONITOR_UDEV   2
-#define UDEV_MONITOR_MAGIC      0xcafe1dea
-struct udev_monitor_netlink_header {
-    /* udev version text */
-    char version[16];
-    /*
-     * magic to protect against daemon <-> library message format mismatch
-     * used in the kernel from socket filter rules; needs to be stored in network order
-     */
-    unsigned int magic;
-    /* properties buffer */
-    unsigned short properties_off;
-    unsigned short properties_len;
-    /*
-     * hashes of some common device properties strings to filter with socket filters in
-     * the client used in the kernel from socket filter rules; needs to be stored in
-     * network order
-     */
-    unsigned int filter_subsystem;
-    unsigned int filter_devtype;
-};
-
 extern unsigned char     cpqHoMibHealthStatusArray[];
-extern oid       cpqHoFwVerTable_oid[];
-extern size_t    cpqHoFwVerTable_oid_len;
-extern unsigned char*get_ScsiGeneric(char*);
-extern unsigned long long get_BlockSize(char*);
-extern int is_unit_ssd(int fd);
+extern unsigned char*get_ScsiGeneric(unsigned char*);
+extern unsigned long long get_BlockSize(unsigned char*);
 extern int get_DiskType(char *);
 extern char * get_DiskModel(char *);
-extern char * get_DiskRev(char *);
+extern char * get_sas_DiskRev(char *);
 extern char * get_DiskState(char *);
-extern int pcislot_scsi_host(char * buffer);
-
-extern int register_FW_version(int dir, int fw_idx, int cat, int type,  int update,
-                        char *fw_version, char *name, char *location, char *key);
-
-extern int unregister_FW_version(int fw_idx);
-
-static int cpqsas_disk_listen(netsnmp_container* container);
 
 extern int file_select(const struct dirent *);
 void SendSasTrap(int, 
@@ -125,7 +91,7 @@ static int hba_select(const struct dirent *entry)
     for (i = 0; i < NumSasHost; i++){
         if (strncmp(entry->d_name,
                     SasHostlist[i]->d_name,
-                    strlen(entry->d_name)) == 0)
+                    strlen(SasHostlist[i]->d_name)) == 0)
             return(1);
     }
     return 0;
@@ -398,12 +364,12 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
     oid oid_index[2];
     cpqSasPhyDrvTable_entry *old;
     cpqSasPhyDrvTable_entry *disk;
-    int PortID = 0;
     char *value;
     char *generic;
     int disk_fd;
     char *serialnum = NULL;
-    int Health = 0, Speed = 0, Temp = -1;
+    int Health = 0, Speed = 0, Temp = -1, Mcot = -1, Wear = -1;
+    unsigned char *Temperature;
     //int j, k;
     //long  rc = 0;
 
@@ -416,10 +382,13 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
         PhyID = get_ExpPhyID(deviceLink);
         BoxID = get_BoxID(deviceLink);
     } else
-        PortID = get_PortID(deviceLink) + 1;
+        PhyID = get_DevPhyID(deviceLink);
 
     if (BoxID == 0) 
-        BayID = get_DevPhyID(dname) + 1;
+        if (PhyID > 3)
+            BayID = (PhyID % 4) + 1;
+        else
+            BayID = PhyID  + 5;
     else 
         BayID = get_DevBayID(dname);
 
@@ -463,6 +432,12 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
         disk->hba = hba;
         DEBUGMSGTL(("sasphydrv:container:load", "Entry created\n"));
 
+        disk->cpqSasPhyDrvSSDPercntEndrnceUsed = -1;
+        disk->cpqSasPhyDrvSSDWearStatus = SSD_WEAR_OTHER;
+        disk->cpqSasPhyDrvPowerOnHours = -1;
+        disk->cpqSasPhyDrvSSDEstTimeRemainingHours = -1;
+        disk->cpqSasPhyDrvAuthenticationStatus = 1;
+
         if (Exp >=0) {
             disk->cpqSasPhyDrvLocationString_len =
                 sprintf(disk->cpqSasPhyDrvLocationString,
@@ -496,17 +471,7 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
             free(value);
         }
 
-        if ((value = get_DiskRev(scsi)) != NULL) {
-            disk->FW_idx = other_fw_idx;
-            other_fw_idx = register_FW_version(1, /* direction */
-                    other_fw_idx,
-                    2, /*CATEGORY*/
-                    10, /* type */
-                    3, /*update method */
-                    value,
-                    "SAS Attached Disk",
-                    disk->cpqSasPhyDrvLocationString,
-                    disk->cpqSasPhyDrvModel);
+        if ((value = get_sas_DiskRev(scsi)) != NULL) {
             strncpy(disk->cpqSasPhyDrvFWRev, value, sizeof(disk->cpqSasPhyDrvFWRev) - 1);
             disk->cpqSasPhyDrvFWRev_len = 
                                 strlen(disk->cpqSasPhyDrvFWRev);
@@ -528,7 +493,7 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
 
         disk->cpqSasPhyDrvSize = get_BlockSize(scsi) >> 11;
 
-        generic = (char *)get_ScsiGeneric(scsi);
+        generic = get_ScsiGeneric(scsi);
         if (generic != NULL) {
             memset(disk->cpqSasPhyDrvOsName, 0, 256);
             disk->cpqSasPhyDrvOsName_len = 
@@ -549,13 +514,9 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
         free(protocol);
     }
 
-    disk->cpqSasPhyDrvMediaType = SAS_PHYS_DRV_ROTATING_PLATTERS;
+    disk->cpqSasPhyDrvMediaType = PHYS_DRV_ROTATING_PLATTERS;
     disk_fd = open(disk->cpqSasPhyDrvOsName, O_RDWR | O_NONBLOCK);
     if (disk_fd >= 0) {
-        disk->cpqSasPhyDrvUsedReallocs = get_defect_data_size(disk_fd);
-        if (disk->cpqSasPhyDrvUsedReallocs == -1) 
-            disk->cpqSasPhyDrvUsedReallocs = 0;
-
         if ((serialnum = get_unit_sn(disk_fd)) != NULL  ) {
             memset(disk->cpqSasPhyDrvSerialNumber, 0, 41);
             strncpy(disk->cpqSasPhyDrvSerialNumber, serialnum, 
@@ -574,26 +535,81 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
             if (Speed > ROT_SPEED_15K_MIN)
                 disk->cpqSasPhyDrvRotationalSpeed++;
         }
+
+        if (disk->cpqSasPhyDrvType == 3)
+            disk->cpqSasPhyDrvPowerOnHours = get_sata_pwron(disk_fd);
+        else
+            disk->cpqSasPhyDrvPowerOnHours = get_sas_pwron(disk_fd);
+
         if (is_unit_ssd(disk_fd)) {
             disk->cpqSasPhyDrvRotationalSpeed = SAS_PHYS_DRV_ROT_SPEED_SSD;
-            disk->cpqSasPhyDrvMediaType = SAS_PHYS_DRV_SOLID_STATE;
+            disk->cpqSasPhyDrvMediaType = PHYS_DRV_SOLID_STATE;
+            if (disk->cpqSasPhyDrvType == 3)
+                Wear = get_sata_ssd_wear(disk_fd);
+            else
+                Wear = get_sas_ssd_wear(disk_fd);
+            disk->cpqSasPhyDrvSSDPercntEndrnceUsed = Wear;
+            disk->cpqSasPhyDrvSSDWearStatus = SSD_WEAR_OK;
+            DEBUGMSGTL(("sasphydrv:container:load", "Wear is %d%%\n", Wear));
+            if (disk->cpqSasPhyDrvSSDPercntEndrnceUsed >= 95)
+                disk->cpqSasPhyDrvSSDWearStatus = SSD_WEAR_5PERCENT_LEFT;
+            if (disk->cpqSasPhyDrvSSDPercntEndrnceUsed >= 98)
+                disk->cpqSasPhyDrvSSDWearStatus = SSD_WEAR_2PERCENT_LEFT;
+            if (disk->cpqSasPhyDrvSSDPercntEndrnceUsed >= 100)
+                disk->cpqSasPhyDrvSSDWearStatus = SSD_WEAR_OUT;
         }
 
-        if ((Temp = get_unit_temp(disk_fd)) >= 0) {
-            DEBUGMSGTL(("sasphydrv:container:load", "Temp is %dC\n", Temp));
+        if (disk->cpqSasPhyDrvType == 3) {
+            if ((Temperature = get_sata_temp(disk_fd)) != NULL ) {
+                Temp = sata_parse_current(Temperature);
+                Mcot = sata_parse_mcot(Temperature);
+                disk->cpqSasPhyDrvCurrTemperature = Temp;
+                disk->cpqSasPhyDrvTemperatureThreshold = Mcot;
+                free(Temperature);
+        }
+
+            if ((Health = get_sata_health(disk_fd)) >= 0) {
+                if (((Health != 0) && (Wear >= 95)) || (Temp > Mcot)) {
+                    disk->cpqSasPhyDrvStatus = SAS_PHYS_STATUS_PREDICTIVEFAILURE;
         } else {
-            DEBUGMSGTL(("sasphydrv:container:load", "Temp is %dC\n", Temp));
-        }
-
-        if ((Health = get_unit_health(disk_fd)) >= 0) {
-            if (Health == 0) {
                 disk->cpqSasPhyDrvStatus = SAS_PHYS_STATUS_OK;
+                }
             } else {
+                disk->cpqSasPhyDrvStatus = SAS_PHYS_STATUS_FAILED;
+            }
+            } else {
+            if ((Temperature = get_sas_temp(disk_fd)) != NULL ) {
+                Temp = sas_parse_current(Temperature);
+                Mcot = sas_parse_mcot(Temperature);
+                disk->cpqSasPhyDrvCurrTemperature = Temp;
+                disk->cpqSasPhyDrvTemperatureThreshold = Mcot;
+                free(Temperature);
+            } else {
+                if ((Temp = get_unit_temp(disk_fd)) >= 0) 
+                    disk->cpqSasPhyDrvCurrTemperature = Temp;
+            }
+
+            if ((Health = get_sas_health(disk_fd)) >= 0) {
+                if (((Health != 0) && (Wear >= 95)) || (Temp > Mcot)) {
                 disk->cpqSasPhyDrvStatus = SAS_PHYS_STATUS_PREDICTIVEFAILURE;
+                } else {
+                    disk->cpqSasPhyDrvStatus = SAS_PHYS_STATUS_OK;
             }
         } else {
             disk->cpqSasPhyDrvStatus = SAS_PHYS_STATUS_FAILED;
         }
+
+        }
+        if ((disk->cpqSasPhyDrvType == 2) && 
+            (disk->cpqSasPhyDrvStatus != SAS_PHYS_STATUS_FAILED)){
+            disk->cpqSasPhyDrvUsedReallocs = get_defect_data_size(disk_fd);
+            if (disk->cpqSasPhyDrvUsedReallocs == -1) 
+                disk->cpqSasPhyDrvUsedReallocs = 0;
+        } else
+            disk->cpqSasPhyDrvUsedReallocs = 0;
+
+        DEBUGMSGTL(("sasphydrv:container:load", 
+                    "Current Temp = %dC,  Maximum Temp = %dC\n", Temp, Mcot));
 
         close(disk_fd);
     }
@@ -663,139 +679,65 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
     return disk;
 }
 
-/* taken from netlink patch for if-mib */
-static int cpqsas_netlink_listen(unsigned subscriptions)
+static void cpqsas_add_sas_end_device(char *devpath, char *devname, void *data) 
 {
-    struct sockaddr_nl localaddrinfo;
-    int fd;
-    DEBUGMSGTL(("netlink:disk", "cpqsas_netlink_listen()\n"));
-    fd = socket(PF_NETLINK, SOCK_DGRAM, NETLINK_KOBJECT_UEVENT);
-    if (fd < 0) {
-       snmp_log(LOG_ERR, "cpqsas_netlink_listen: Cannot create socket.\n");
-        return -1;
+    cpqSasPhyDrvTable_entry *disk;
+
+    int  Cntlr, Bus, Target, Lun;
+
+    if (devname != NULL)
+        if (sscanf(devname, "bsg/%d:%d:%d:%d", &Cntlr, &Bus, &Target, &Lun) != 4)
+            return;
+    if (devpath != NULL) {
+
+        cpqSasHbaTable_entry *hba;
+        netsnmp_container *hba_container;
+        netsnmp_iterator  *it;
+        netsnmp_cache *hba_cache;
+        if (strstr(devpath, "end_device-") == NULL)
+            return;
+        hba_cache = netsnmp_cache_find_by_oid(cpqSasHbaTable_oid,
+                cpqSasHbaTable_oid_len);
+        if (hba_cache == NULL) {
+            return ;
     }
+        hba_container = hba_cache->magic;
+        it = CONTAINER_ITERATOR(hba_container);
+        hba = ITERATOR_FIRST(it);
 
-    memset(&localaddrinfo, 0, sizeof(struct sockaddr_nl));
-
-    localaddrinfo.nl_family = AF_NETLINK;
-    localaddrinfo.nl_groups = subscriptions;
-
-    if (bind(fd, (struct sockaddr*)&localaddrinfo, sizeof(localaddrinfo)) < 0) {
-        snmp_log(LOG_ERR,"cpqsas_netlink_listen: Bind failed.\n");
-        close(fd);
-        return -1;
+        while ( hba != NULL ) {
+            if (Cntlr == hba->cpqSasHbaIndex) {
+                DEBUGMSGTL(("sasphydrv:container:load", 
+                            "\nNew disk inserted %s\n", devpath));
+                disk = sas_add_disk(devpath, 
+                                    hba, 
+                                    (netsnmp_container *)data);
+                if (disk != NULL) {
+                    disk->cpqSasPhyDrvStatus = SAS_PHYS_STATUS_OK;
+                    disk->cpqSasPhyDrvCondition = SAS_PHYS_COND_OK;
+                    SendSasTrap(SAS_TRAP_PHYSDRV_STATUS_CHANGE, disk);
+                }
+            }
+            hba = ITERATOR_NEXT( it );
+        }
+        ITERATOR_RELEASE( it );
     }
-
-    DEBUGMSGTL(("netlink:disk", "Bind succeeded\n"));
-    return fd;
 }
 
-static void cpqsas_disk_process(int fd, void *data) {
-    struct msghdr smsg;
-    struct iovec iov;
-    char cred_msg[CMSG_SPACE(sizeof(struct ucred))];
-    struct udev_monitor_netlink_header *nlh;
- 
-    int                buflen, bufpos;
-    char               buf[16394];
-    char *action = NULL;
-    char *subsystem = NULL;
-    char *devpath = NULL;
-    char *devname = NULL;
-
+static void cpqsas_remove_sas_end_device(char *devpath, char *devname, void *data)
+{
     netsnmp_index tmp;
     oid oid_index[2];
     cpqSasPhyDrvTable_entry *disk;
 
+    int  Cntlr, Bus, Target, Lun;
 
-    DEBUGMSGTL(("netlink:disk", "cpqsas_disk_process()\n"));
-    memset(buf, 0x00, sizeof(buf));
-    iov.iov_base = &buf;
-    iov.iov_len = sizeof(buf);
-    memset (&smsg, 0x00, sizeof(struct msghdr));
-    smsg.msg_iov = &iov;
-    smsg.msg_iovlen = 1;
-    smsg.msg_control = cred_msg;
-    smsg.msg_controllen = sizeof(cred_msg);
-
-    buflen = recvmsg(fd, &smsg, 0);
-    DEBUGMSGTL(("netlink:disk", "recvmsg()\n"));
-    if (buflen < 0) {
-        if (errno != EINTR)
-            snmp_log(LOG_ERR,"cpqsas_disk_process: Receive failed.\n");
-        return;
-    }
-
-    if (buflen < 32 || (size_t)buflen >= sizeof(buf)) {
-        snmp_log(LOG_ERR, "invalid message length\n");
-        return;
-    }
-
-    if (strncmp(buf, "udev-", 5) == 0) {
-        /* udev message needs proper version magic */
-        nlh = (struct udev_monitor_netlink_header *) buf;
-        if (nlh->magic != htonl(UDEV_MONITOR_MAGIC))
-            return;
-        if (nlh->properties_off < sizeof(struct udev_monitor_netlink_header))
-            return;
-        if (nlh->properties_off+32 > buflen)
-            return;
-        bufpos = nlh->properties_off;
-    } else {
-        /* kernel message with header */
-        bufpos = strlen(buf) + 1;
-        if ((size_t)bufpos < sizeof("a@/d") || bufpos >= buflen) {
-            snmp_log(LOG_ERR, "invalid message length\n");
-            return;
-        }
-
-        /* check message header */
-        if (strstr(buf, "@/") == NULL) {
-            snmp_log(LOG_ERR, "unrecognized message header\n");
-            return ;
-        }
-    }
-    while (bufpos < buflen) {
-        char *key;
-        size_t keylen;
-
-        key = &buf[bufpos];
-        if (!strncmp(key, "ACTION=", 7)) 
-             action = key + 7;
-        else if (!strncmp(key, "DEVPATH=", 8))
-             devpath = key + 8;
-        else if (!strncmp(key, "DEVNAME=", 8))
-             devname = key + 8;
-        else if (!strncmp(key, "SUBSYSTEM=", 10))
-             subsystem = key + 10;
-        
-        keylen = strlen(key);
-        if (keylen == 0)
-            break;
-        bufpos += keylen + 1;
-    }
-    if (action != NULL)
-        DEBUGMSGTL(("netlink:disk", "Action = %s\n", action));
-    if (devpath != NULL)
-        DEBUGMSGTL(("netlink:disk", "DevPath = %s\n", devpath));
     if (devname != NULL)
-        DEBUGMSGTL(("netlink:disk", "DevName = %s\n", devname));
-    if (subsystem != NULL)
-        DEBUGMSGTL(("netlink:disk", "SubSystem = %s\n", subsystem));
+        if (sscanf(devname, "bsg/%d:%d:%d:%d", &Cntlr, &Bus, &Target, &Lun) != 4)
+            return;
+    if (strstr(devpath, "end_device-") == NULL)
+            return;
 
-    if ((subsystem != NULL) && 
-#if RHEL_MAJOR == 5
-        !strcmp(subsystem,"scsi_device") &&
-        (devpath != NULL)) {
-        int  Cntlr, Bus, Target, Lun;
-        sscanf(devpath, "/class/scsi_device/%d:%d:%d:%d", &Cntlr, &Bus, &Target, &Lun);
-#else
-        !strcmp(subsystem,"bsg") &&
-        (devname != NULL)) {
-        int  Cntlr, Bus, Target, Lun;
-        sscanf(devname, "bsg/%d:%d:%d:%d", &Cntlr, &Bus, &Target, &Lun);
-#endif
-        if ((action != NULL) && (!strncmp(action, "remove", 6))) {
             oid_index[0] = Cntlr;
             oid_index[1] = Target;
             tmp.len = 2;
@@ -803,10 +745,6 @@ static void cpqsas_disk_process(int fd, void *data) {
             disk = CONTAINER_FIND((netsnmp_container *)data, &tmp);
    
             if (disk != NULL) {
-                int fw_idx;
-                oid fw_oid[] = 
-                    { 1, 3, 6, 1, 4, 1, 232, 11, 2, 14, 1, 1, 1, 0};
-                const size_t    fw_oid_len = OID_LENGTH(fw_oid);
 
                 switch (disk->cpqSasPhyDrvStatus) {
                 case 2:  /* ok(2) */
@@ -828,100 +766,10 @@ static void cpqsas_disk_process(int fd, void *data) {
                 }
                 disk->cpqSasPhyDrvCondition = SAS_PHYS_COND_FAILED;
                 SendSasTrap(SAS_TRAP_PHYSDRV_STATUS_CHANGE, disk);
-                DEBUGMSGTL(("netlink:disk", 
-                            "FW index to be removed = %ld\n", 
-                            disk->FW_idx));
-                fw_oid[fw_oid_len -1] = disk->FW_idx;
 
-                netsnmp_unregister_mib_table_row(fw_oid, fw_oid_len, 0,
-                                fw_oid_len - 1, 9,
-                                "");
-
-                fw_idx = unregister_FW_version(disk->FW_idx);
-                DEBUGMSGTL(("netlink:disk", 
-                            "unregister FW index returned = %d\n", 
-                            fw_idx));
-                CONTAINER_REMOVE((netsnmp_container *)data, disk);
-            }
-        }   
-        if ((action != NULL) && 
-             !strncmp(action, "add", 3) &&
-            (devpath != NULL)) {
-#if RHEL_MAJOR == 5
-	        char buffer[256];
-            char lbuffer[256];
-            int len;
-            strcpy(buffer, "/sys/");
-            strcat(buffer, devpath);
-            strcat(buffer, "/device");
-
-            if ((len = readlink(buffer, lbuffer, 253)) <= 0) 
-                return;
-            lbuffer[len]='\0'; /* Null terminate the string */
-#endif
-
-            cpqSasHbaTable_entry *hba;
-            cpqSasPhyDrvTable_entry *disk;
-            netsnmp_container *hba_container;
-            netsnmp_iterator  *it;
-            netsnmp_cache *hba_cache;
-
-            hba_cache = netsnmp_cache_find_by_oid(cpqSasHbaTable_oid,
-                    cpqSasHbaTable_oid_len);
-            if (hba_cache == NULL) {
-                return ;
-            }
-            hba_container = hba_cache->magic;
-            it = CONTAINER_ITERATOR(hba_container);
-            hba = ITERATOR_FIRST(it);
-
-            while ( hba != NULL ) {
-		        sleep(1);
-                if (Cntlr == hba->cpqSasHbaIndex) {
-#if RHEL_MAJOR == 5
-                    DEBUGMSGTL(("sasphydrv:container:load", 
-                                "\nNew disk inserted %s\n", lbuffer));
-                    disk = sas_add_disk(lbuffer, 
-#else
-                    DEBUGMSGTL(("sasphydrv:container:load", 
-                                "\nNew disk inserted %s\n", devpath));
-                    disk = sas_add_disk(devpath, 
-#endif
-                                        hba, 
-                                        (netsnmp_container *)data);
-                    if (disk != NULL) {
-                        disk->cpqSasPhyDrvStatus = SAS_PHYS_STATUS_OK;
-                        disk->cpqSasPhyDrvCondition = SAS_PHYS_COND_OK;
-                        SendSasTrap(SAS_TRAP_PHYSDRV_STATUS_CHANGE, disk);
-                    }
-                }
-                hba = ITERATOR_NEXT( it );
-            }
-            ITERATOR_RELEASE( it );
-        }
+        CONTAINER_REMOVE((netsnmp_container *)data, disk);
     }
 }
-
-static int cpqsas_disk_listen(netsnmp_container* container)
-{
-    static int fd = -1;
-
-    if (fd >= 0)
-        return 0;
-    DEBUGMSGTL(("netlink:disk", "cpqsas_disk_listen()\n"));
-    fd = cpqsas_netlink_listen(UDEV_MONITOR_KERNEL);
-    if (fd < 0) return -1;
-
-    if (register_readfd(fd, cpqsas_disk_process, container) != 0) {
-        snmp_log(LOG_ERR,
-                 "cpqsas_disk_listen: error registering netlink socket\n");
-        close(fd);
-        return -1;
-    }
-    return 0;
-
-}
-
 
 int netsnmp_arch_sashba_container_load(netsnmp_container* container)
 {
@@ -1082,22 +930,7 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
             strncpy(attribute, buffer, sizeof(attribute) - 1);
             strncat(attribute, sysfs_attr[CLASS_VERSION_FW],
                     sizeof(attribute) - strlen(attribute) - 1);
-            DEBUGMSGTL(("cpqHoFwVerTable:init",
-                        "cpqHoFwVerTable fw attribute = %s\n",
-                        attribute));
             if ((value = get_sysfs_str(attribute)) != NULL) {
-                DEBUGMSGTL(("cpqHoFwVerTable:init",
-                            "cpqHoFwVerTable HBA register idx  = %d\n", 
-                            other_fw_idx));
-                other_fw_idx = register_FW_version(1, /* direction */
-                        other_fw_idx,
-                        2, /*CATEGORY*/
-                        4, /* type */
-                        3, /*update method */
-                        value,
-                        "SAS HBA",
-                        entry->cpqSasHbaHwLocation,
-                        "");
 
                 strncpy(entry->cpqSasHbaFwVersion, value, 
                         sizeof(entry->cpqSasHbaFwVersion) - 1);    
@@ -1115,19 +948,6 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
                         sizeof(entry->cpqSasHbaBiosVersion) - 1);    
                 entry->cpqSasHbaBiosVersion_len = 
                     strlen(entry->cpqSasHbaBiosVersion);
-
-                DEBUGMSGTL(("cpqHoFwVerTable:init",
-                            "cpqHoFwVerTable disk register idx  = %d\n", 
-                            other_fw_idx));
-                other_fw_idx = register_FW_version(1, /* direction */
-                        other_fw_idx,
-                        2, /*CATEGORY*/
-                        4, /* type */
-                        3, /*update method */
-                        value,
-                        "SAS HBA (BIOS)",
-                        entry->cpqSasHbaHwLocation,
-                        "");
 
                 free(value);
             }
@@ -1186,7 +1006,7 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
                        sizeof(sas_connector_info) * 32);
                 free(hbaConnector);
                 for (iii = 0; iii < 32; iii++) {
-                    int conlen = strlen((char *)entry->Reference[iii].bConnector) - 1;
+                    int conlen = strlen(entry->Reference[iii].bConnector) - 1;
                     if (entry->Reference[iii].bConnector[conlen] == 0x20 ) 
                         entry->Reference[iii].bConnector[conlen] = 0;
                     DEBUGMSGTL(("sashba:container:load", "Connector= %s\n",
@@ -1231,11 +1051,10 @@ int netsnmp_arch_sasphydrv_container_load(netsnmp_container* container)
     netsnmp_container *hba_container;
     netsnmp_iterator  *it;
     netsnmp_cache *hba_cache;
-
     int len;
-
     int j;
     int SasCondition = CPQ_REG_OK;
+
     DEBUGMSGTL(("sasphydrv:container:load", "loading\n"));
     /*
      * find  the HBa container.
@@ -1303,7 +1122,8 @@ int netsnmp_arch_sasphydrv_container_load(netsnmp_container* container)
     cpqHoMibHealthStatusArray[CPQMIBHEALTHINDEX] = SasCondition;
 
     DEBUGMSGTL(("sasphydrv:container", "init\n"));
-    cpqsas_disk_listen(container);
+    udev_register("bsg","add", cpqsas_add_sas_end_device, container);
+    udev_register("bsg","remove", cpqsas_remove_sas_end_device, container);
     return  1;
 }
 

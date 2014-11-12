@@ -55,24 +55,6 @@ unsigned int pci_get_caps(unsigned char *config)
     return cap;
 }
 
-
-int get_pci_speed(pci_node *dev)
-{
-    int i;
-    if (slotcount > 0) {
-        for (i = 0; i < slotcount; i++) {
-            if ((slots[i]->dom == dev->domain) &&
-                    (slots[i]->bus == dev->bus) &&
-                    (slots[i]->dev == dev->dev))
-                return (slots[i]->speed);
-        }
-        return 3;
-    } else {
-        /* tricky stuff that we need to get from ACPI ourself */
-        return 3;
-    }
-}
-
 int get_pci_width(pci_node *dev)
 {
     int i;
@@ -121,25 +103,6 @@ int get_pci_type(pci_node *dev)
     }
 }
 
-#ifdef NOT_NEEDED
-int get_pci_current_speed(pci_node *dev)
-{
-    int i;
-    if (slotcount > 0) {
-        for (i = 0; i < slotcount; i++) {
-            if ((slots[i]->dom == dev->domain) &&
-                    (slots[i]->bus == dev->bus) &&
-                    (slots[i]->dev == dev->dev))
-                return 33;
-        }
-        return 0;
-    } else {
-        /* tricky stuff that we need to get from ACPI ourself */
-        return 0;
-    }
-}
-#endif
-
 int get_pci_extended_info(pci_node *dev)
 {
     int i;
@@ -158,24 +121,6 @@ int get_pci_extended_info(pci_node *dev)
     }
 }
 
-
-int get_pci_max_Pci_Speed(pci_node *dev)
-{
-    int i;
-    if (slotcount > 0) {
-        for (i = 0; i < slotcount; i++) {
-            if ((slots[i]->dom == dev->domain) &&
-                    (slots[i]->bus == dev->bus) &&
-                    (slots[i]->dev == dev->dev))
-                return 133;
-        }
-        return 0;
-    } else {
-        /* tricky stuff that we need to get from ACPI ourself */
-        return 0;
-    }
-}
-
 #define SYSBUSPCISLOTS "/sys/bus/pci/slots/"
 int get_pci_slot_info(netsnmp_container* container)
 {
@@ -185,7 +130,7 @@ int get_pci_slot_info(netsnmp_container* container)
     int i , rc, bc, dom = 0, bus = 0, device = 0;
     PSMBIOS_SYSTEM_SLOTS slotInfo;
 
-    char buf[81];
+    char buf[80];
     char fname[256];
     int slotfd = -1;
     if (slots)
@@ -195,15 +140,17 @@ int get_pci_slot_info(netsnmp_container* container)
     if ((slotcount = scandir(SYSBUSPCISLOTS,
                     &filelist, file_select, alphasort)) > 0) {
         slots = malloc(slotcount * sizeof(slot_info *));
-        for (i=0;i <slotcount; i++) {
+        for (i = 0; i < slotcount; i++) {
+            int slotid = 0;
+            slotid = atoi(filelist[i]->d_name);
             slots[i] =  malloc(sizeof(slot_info ));
-            memset(slots[i],0,sizeof(slot_info ));
-            strcpy(fname,SYSBUSPCISLOTS);
-            strcat(fname,filelist[i]->d_name);
-            strcat(fname,"/address");
-            if ((slotfd = open(fname,O_RDONLY)) != -1 ) {
+            memset(slots[i], 0, sizeof(slot_info ));
+            strcpy(fname, SYSBUSPCISLOTS);
+            strcat(fname, filelist[i]->d_name);
+            strcat(fname, "/address");
+            if ((slotfd = open(fname, O_RDONLY)) != -1 ) {
                 bc = read(slotfd, buf, 80); 
-                DEBUGMSGTL(("pci:arch","bc=%d buf=%s\n", bc,buf));
+                DEBUGMSGTL(("pci:arch","bc=%d buf=%s\n", bc, buf));
                 if (bc  > 0)  {
                     buf[bc] = 0;
                     sscanf(buf,"%x:%x:%x", &dom, &bus, &device);
@@ -213,40 +160,45 @@ int get_pci_slot_info(netsnmp_container* container)
                 slots[i]->dev = device;
                 close (slotfd);
 
-                SmbGetRecordByType(SMBIOS_SYS_SLOTS, i , (void *)&slotInfo);
-
+                if ((slotInfo = getPCIslot_rec(bus)) != NULL) {
                 slots[i]->width = slotInfo->bySlotDataBusWidth;
-                slots[i]->speed = 1; /* Other for now */
                 if (slotInfo->byCurrentUsage == sluAvailable) {
                     entry = cpqSePciSlotTable_createEntry(container, 
                             (oid)bus, (oid)device);
                     if (NULL != entry) {
                         entry->cpqSePciSlotBusNumberIndex = bus;
                         entry->cpqSePciSlotDeviceNumberIndex = device;
-                        entry->cpqSePciPhysSlot = i + 1;
-                        entry->cpqSePciSlotWidth = slotInfo->bySlotDataBusWidth -2;
+                            entry->cpqSePciPhysSlot = slotInfo->wSlotID;
+                            strcpy(entry->cpqSePciSlotBoardName, "(Empty)");
+                            entry->cpqSePciSlotBoardName_len = 7;
+                            entry->cpqSePciSlotExtendedInfo = 0;
+                            entry->cpqSePciMaxSlotSpeed = 0;
+                            entry->cpqSePciXMaxSlotSpeed = -1;
+                            entry->cpqSePciCurrentSlotSpeed = 0;
+    
+                            memset(&entry->cpqSePciSlotSubSystemID, 
+                                   0xff, 
+                                   PCISLOT_SUBSYS_SZ);
+
+                            entry->cpqSePciSlotSubSystemID_len = 
+                                    PCISLOT_SUBSYS_SZ;
+    
+                            entry->cpqSePciSlotWidth = 
+                                            slotInfo->bySlotDataBusWidth - 2;
 
                         if ( slotInfo->bySlotType >= SMBIOS_PCIE_GEN2)
-                            entry->cpqSePciSlotType = PCI_SLOT_TYPE_PCIEXPRESS;
+                                entry->cpqSePciSlotType = 
+                                                    PCI_SLOT_TYPE_PCIEXPRESS;
                         else
                             entry->cpqSePciSlotType = slotInfo->bySlotType;
-                        entry->cpqSePciSlotSpeed = PCI_SLOT_SPEED_OTHER;  /* Other for now */
-                        entry->cpqSePciSlotExtendedInfo = 2;
-                        entry->cpqSePciMaxSlotSpeed = 133;
-                        entry->cpqSePciXMaxSlotSpeed = 0;
-                        entry->cpqSePciSlotCurrentMode = PCI_SLOT_TYPE_UNKNOWN;
-                        entry->cpqSePciCurrentSlotSpeed = 0;
 
-                        strcpy(entry->cpqSePciSlotBoardName,"(Empty)");                            
-                        entry->cpqSePciSlotBoardName_len = 7;
-
-                        memset(&entry->cpqSePciSlotSubSystemID, 0xff, PCISLOT_SUBSYS_SZ);
-                        entry->cpqSePciSlotSubSystemID_len = PCISLOT_SUBSYS_SZ;
+                            entry->cpqSePciSlotCurrentMode = 
+                                                        PCI_SLOT_TYPE_UNKNOWN;
 
                         rc = CONTAINER_INSERT(container, entry);
                     }
                 }
-
+                }
             }
             free(filelist[i]);
         }
@@ -587,7 +539,7 @@ void scan_hw_ids()
             class_id = (int)strtol(&buffer[2], NULL, 16) << 16;
             class_looking = 1;
             memset(&class_id_str[0], 0, 80);
-            strcpy((char *)&class_id_str[0], &buffer[6]);
+            strcpy(&class_id_str[0], &buffer[6]);
             continue;
         }
 
@@ -600,8 +552,8 @@ void scan_hw_ids()
             for (pciclass = class_root; 
                     pciclass != NULL; pciclass = pciclass->next) {
                 if (class_id == (pciclass->device_class & 0xffff00) ) {
-                    if ((pciclass->super = malloc(strlen((char *)&class_id_str[0]) + 1)) != NULL) 
-                        strcpy((char *)pciclass->super, (char *)&class_id_str[0]);
+                    if ((pciclass->super = malloc(strlen(&class_id_str[0]) + 1)) != NULL) 
+                        strcpy((char *)pciclass->super, &class_id_str[0]);
                     if ((pciclass->name = malloc(strlen(&buffer[5]) + 1)) != NULL) 
                         strcpy((char *)pciclass->name, &buffer[5]);
                 }
@@ -632,7 +584,7 @@ void scan_hw_ids()
                 if (vendor->name == NULL)
                     if ((vendor->name = malloc(strlen(&buffer[6]) + 1)) != NULL) {
                         strcpy((char *)vendor->name, &buffer[6]);
-                        vendor->name[strlen((char *)vendor->name) - 1] = 0;
+                        vendor->name[strlen((char *)vendor->name)] = 0;
                     }
                 device_looking = 1;
             } else
@@ -651,7 +603,7 @@ void scan_hw_ids()
                     if ((device->name = malloc(strlen(&buffer[7]) + 1))
                             != NULL) {
                         strcpy((char *)device->name, &buffer[7]);
-                        device->name[strlen((char *)device->name) - 1] = 0;
+                        device->name[strlen((char *)device->name)] = 0;
                     }
                 subsystem_looking = 1;
             } else
@@ -734,6 +686,7 @@ int netsnmp_arch_pcislot_container_load(netsnmp_container* container)
                 snprintf(entry->cpqSePciSlotBoardName, 
                         PCISLOT_BOARDNAME_SZ, "%s Device %4x", 
                         dev->vendor->name, dev->device_id);
+
             if (((dev->device_class & 0xff0000) == 0x20000) && 
                     ((dev->subvendor_id == 0x103c) || 
                      (dev->subvendor_id == 0x0e11))) {
@@ -748,19 +701,20 @@ int netsnmp_arch_pcislot_container_load(netsnmp_container* container)
                             "%04X%04x", dev->subvendor_id, dev->subdevice_id);
                 }
             }
-
             entry->cpqSePciSlotSubSystemID_len = PCISLOT_SUBSYS_SZ;
-
-            entry->cpqSePciSlotBoardName_len = strlen(entry->cpqSePciSlotBoardName);
+            entry->cpqSePciSlotBoardName_len = 
+                            strlen(entry->cpqSePciSlotBoardName);
 
             entry->cpqSePciSlotWidth = get_pci_width(dev); /* Unknown for now */
-            entry->cpqSePciSlotSpeed = get_pci_speed(dev);
+
             entry->cpqSePciSlotExtendedInfo = get_pci_extended_info(dev);
+
             entry->cpqSePciSlotType = get_pci_type(dev); /* Unknown for now */
+
             entry->cpqSePciSlotCurrentMode = PCI_SLOT_TYPE_UNKNOWN;
-            entry->cpqSePciMaxSlotSpeed = get_pci_max_Pci_Speed(dev);
-            entry->cpqSePciXMaxSlotSpeed = 0;
-            entry->cpqSePciCurrentSlotSpeed = 33;
+            entry->cpqSePciMaxSlotSpeed = 0;
+            entry->cpqSePciXMaxSlotSpeed = -1;
+            entry->cpqSePciCurrentSlotSpeed = 0;
 
             rc = CONTAINER_INSERT(container, entry);
         }

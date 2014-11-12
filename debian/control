@@ -2,7 +2,7 @@ Source: hp-ams
 Section: admin
 Priority: optional
 Maintainer: mark rusk <mark.rusk@hp.com>
-Build-Depends: debhelper (>= 7.4.1)
+Build-Depends: debhelper (>= 7.0.50)
 Standards-Version: 3.9.2
 Homepage: http://linux.hp.com
 #Vcs-Git: git://git.debian.org/collab-maint/hp-ams.git
@@ -12,3 +12,13 @@ Package: hp-ams
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description:  Agentless Monitoring Service for HP ProLiant Gen8 Systems 
+
+Package: hp-ams-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends:
+    hp-ams (= ${binary:Version}),
+    ${misc:Depends}
+Description: debugging symbols for hp-ams
+ This package contains the debugging symbols for hp-ams.

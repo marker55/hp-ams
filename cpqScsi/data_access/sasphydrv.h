@@ -39,9 +39,6 @@
 #define SAS_DISK_IS_SPARE              3
 #define SAS_DISK_NOT_ARRAY_MEMBER      4
 
-#define SAS_PHYS_DRV_PLACE_INTERNAL             2
-#define SAS_PHYS_DRV_PLACE_EXTERNAL             3
-
 #define SAS_PHYS_DRV_ROTATING_PLATTERS          2
 #define SAS_PHYS_DRV_SOLID_STATE                3
 

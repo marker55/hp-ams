@@ -7,7 +7,7 @@
 
 #define CPQMIB                  14
 #define CPQMIBREVMAJOR          1
-#define CPQMIBREVMINOR          9
+#define CPQMIBREVMINOR          12
 #define CPQMIBHEALTHINDEX       12
 
 #define CPQIDEMIBREVMAJOR               1

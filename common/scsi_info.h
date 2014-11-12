@@ -13,6 +13,16 @@
 #define SAS_DATA_READ    0
 #define SAS_DATA_WRITE   1
 
+#define SSD_WEAR_OTHER          1
+#define SSD_WEAR_OK             2
+#define SSD_WEAR_5PERCENT_LEFT  4
+#define SSD_WEAR_2PERCENT_LEFT  5
+#define SSD_WEAR_OUT            6
+
+#define PHYS_DRV_ROTATING_PLATTERS          2
+#define PHYS_DRV_SOLID_STATE                3
+
+
 #pragma pack(8)
 
 typedef struct _ioctl_hdr {

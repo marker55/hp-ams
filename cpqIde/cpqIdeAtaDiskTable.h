@@ -38,6 +38,14 @@ typedef struct cpqIdeAtaDiskTable_entry_s {
     size_t          cpqIdeAtaDiskOsName_len;
     long            cpqIdeAtaDiskType;
     long            cpqIdeAtaDiskSataVersion;
+    long            cpqIdeAtaDiskMediaType;
+    long            cpqIdeAtaDiskSSDWearStatus;
+    long            cpqIdeAtaDiskPowerOnHours;
+    long            cpqIdeAtaDiskSSDPercntEndrnceUsed;
+    long            cpqIdeAtaDiskSSDEstTimeRemainingHours;
+    long            cpqIdeAtaDiskCurrTemperature;
+    long            cpqIdeAtaDiskTemperatureThreshold;
+
 
     int             OldStatus;
     int             valid;
@@ -72,4 +80,12 @@ Netsnmp_Node_Handler cpqIdeAtaDiskTable_handler;
 #define COLUMN_CPQIDEATADISKOSNAME		15
 #define COLUMN_CPQIDEATADISKTYPE		16
 #define COLUMN_CPQIDEATADISKSATAVERSION		17
+#define COLUMN_CPQIDEATADISKMEDIATYPE               18
+#define COLUMN_CPQIDEATADISKSSDWEARSTATUS           19
+#define COLUMN_CPQIDEATADISKPOWERONHOURS            20
+#define COLUMN_CPQIDEATADISKSSDPERCNTENDRNCEUSED    21
+#define COLUMN_CPQIDEATADISKSSDESTTIMEREMAININGHOURS 22
+#define COLUMN_CPQIDEATADISKCURRTEMPERATURE         23
+#define COLUMN_CPQIDEATADISKTEMPERATURETHRESHOLD    24
+
 #endif                          /* CPQIDEATADISKTABLE_H */

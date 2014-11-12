@@ -13,8 +13,9 @@
 
 int FcaCondition;
 static  netsnmp_container *gContainer = NULL;
-#define STATUS_POLL_TIME 60
+#define STATUS_POLL_TIME 600
 
+extern void cpqfca_update_hba_status(char *devpath, char *devname, void *data);
 extern int netsnmp_arch_fcahc_container_load(netsnmp_container*);
 static void     _cache_free(netsnmp_cache * cache, void *magic);
 static int      _cache_load(netsnmp_cache * cache, void *vmagic);
@@ -110,8 +111,7 @@ initialize_table_cpqFcaHostCntlrTable(void)
         snmp_log(LOG_ERR, "error creating cache for cpqFcaHostCntlrTable\n");
         goto bail;
     }
-    cache->flags = NETSNMP_CACHE_PRELOAD |
-                   NETSNMP_CACHE_DONT_FREE_EXPIRED |
+    cache->flags = NETSNMP_CACHE_DONT_FREE_EXPIRED |
                    NETSNMP_CACHE_DONT_AUTO_RELEASE |
                    NETSNMP_CACHE_AUTO_RELOAD |
                    NETSNMP_CACHE_DONT_FREE_BEFORE_LOAD |
@@ -142,6 +142,8 @@ initialize_table_cpqFcaHostCntlrTable(void)
                  "error registering table handler for cpqFcaHostCntlrTable\n");
         goto bail;
     }
+
+    udev_register("fc_transport", "add:remove", cpqfca_update_hba_status, container);
 
     return;                     /* ok */
 

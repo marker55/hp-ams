@@ -44,8 +44,8 @@ netsnmp_cpqHoSwVer_arch_init(void)
 void
 netsnmp_cpqHoSwVer_arch_shutdown(void)
 {
-     /* Nothing to do */
-     return;
+    /* Nothing to do */
+    return;
 }
 
 
@@ -79,18 +79,12 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
         headerGet(h, RPMTAG_VENDOR, &tag_data, HEADERGET_DEFAULT);
         vendor = rpmtdGetString(&tag_data);
         rpmtdFreeData(&tag_data);
-
-        headerGet(h, RPMTAG_NAME,        &tag_data, HEADERGET_DEFAULT);
-        n = rpmtdGetString(&tag_data);
-        rpmtdFreeData(&tag_data);
 #else
         headerGetEntry(h, RPMTAG_VENDOR, NULL, (void **) &vendor, NULL);
-        headerGetEntry( h, RPMTAG_NAME,        NULL, (void**)&n, NULL);
 #endif
-        if (((vendor != NULL) && 
-                (!strncmp(vendor, "Hewlett", 7) || !strcmp(vendor, "HP")) ) || 
-            ((n != NULL) && 
-                !strcmp(n, "hp-ams"))) {
+        if ((vendor != NULL) &&
+                ((strncmp(vendor, "Hewlett", 7) == 0) || 
+                 (strcmp(vendor, "HP") == 0))) {
             entry = cpqHoSwVerTable_createEntry( container,(oid) i++ );
             if (NULL == entry) {
 #ifdef NEWRPM
@@ -101,6 +95,10 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
             }
 
 #ifdef NEWRPM
+            headerGet(h, RPMTAG_NAME,        &tag_data, HEADERGET_DEFAULT);
+            n = rpmtdGetString(&tag_data);
+            rpmtdFreeData(&tag_data);
+
             headerGet(h, RPMTAG_VERSION,     &tag_data, HEADERGET_DEFAULT);
             v = rpmtdGetString(&tag_data);
             rpmtdFreeData(&tag_data);
@@ -121,38 +119,38 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
             t = rpmtdGetUint32(&tag_data);
             rpmtdFreeData(&tag_data);
 #else
+            headerGetEntry( h, RPMTAG_NAME,        NULL, (void**)&n, NULL);
             headerGetEntry( h, RPMTAG_VERSION,     NULL, (void**)&v, NULL);
             headerGetEntry( h, RPMTAG_RELEASE,     NULL, (void**)&r, NULL);
             headerGetEntry( h, RPMTAG_GROUP,       NULL, (void**)&g, NULL);
             headerGetEntry( h, RPMTAG_INSTALLTIME, NULL, (void**)&t, NULL);
             headerGetEntry( h, RPMTAG_SUMMARY,     NULL,
-                                            (void **) &description, NULL);
+                    (void **) &description, NULL);
 #endif
 
             strncpy(entry->cpqHoSwVerName, n, sizeof(entry->cpqHoSwVerName) - 1);
-                entry->cpqHoSwVerName_len = strlen(entry->cpqHoSwVerName);
-
-            entry->cpqHoSwVerType = (NULL != strstr(g, "System Environment"))
-                                    ? 2 /* operatingSystem */
-                                    : 5;     /*  application    */
+            entry->cpqHoSwVerName_len = strlen(entry->cpqHoSwVerName);
+            entry->cpqHoSwVerType = (NULL != strstr( g, "System Environment"))
+                ? 2 /* operatingSystem */
+                : 5;     /*  application    */
 
             if (description != NULL ) {
                 DEBUGMSGTL(("cpqHoSwVerTable:load:arch", "description = %s\n",
-                    description));
+                            description));
                 strncpy(entry->cpqHoSwVerDescription, description,
-                            sizeof(entry->cpqHoSwVerDescription - 1));
+                        sizeof(entry->cpqHoSwVerDescription) - 1);
                 entry->cpqHoSwVerDescription_len = 
-                        strlen(entry->cpqHoSwVerDescription);
+                    strlen(entry->cpqHoSwVerDescription);
             }
 
-	        entry->timestamp = 0;
+            entry->timestamp = 0;
             memset(&entry->cpqHoSwVerDate[0], 0, 8);
             entry->cpqHoSwVerDate_len = 0;
             if ( t ) {
                 DEBUGMSGTL(("cpqHoSwVerTable:load:arch", "date = %d\n", *t));
                 if ((td = localtime((time_t *)t)) != NULL) {
                     entry->cpqHoSwVerDate[0] = (char)
-                                (SWAP_BYTES(td->tm_year + 1900));
+                        (SWAP_BYTES(td->tm_year + 1900));
                     entry->cpqHoSwVerDate[1] = (char) (td->tm_year + 1900);
                     entry->cpqHoSwVerDate[2] = (char)(td->tm_mon + 1);
                     entry->cpqHoSwVerDate[3] = (char)td->tm_mday;
@@ -160,7 +158,7 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
                     entry->cpqHoSwVerDate[5] = (char)td->tm_min;
                     entry->cpqHoSwVerDate[6] = (char)td->tm_sec;
                     entry->cpqHoSwVerDate_len = 7;
-	                entry->timestamp = *t;
+                    entry->timestamp = *t;
                 }
             }
 
@@ -168,29 +166,24 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
                 DEBUGMSGTL(("cpqHoSwVerTable:load:arch", "version = %s\n", v));
                 entry->cpqHoSwVerVersion_len = strlen(v);
                 strncpy(entry->cpqHoSwVerVersion, v,
-                            sizeof(entry->cpqHoSwVerVersion - 1));
+                        sizeof(entry->cpqHoSwVerVersion) - 1);
                 entry->cpqHoSwVerVersion_len = 
-                        strlen(entry->cpqHoSwVerVersion);
+                    strlen(entry->cpqHoSwVerVersion);
 
                 if (r != NULL ) {
                     DEBUGMSGTL(("cpqHoSwVerTable:load:arch", "release = %s\n", r));
                     entry->cpqHoSwVerVersionBinary_len = snprintf(entry->cpqHoSwVerVersionBinary, 
-                                         sizeof(entry->cpqHoSwVerVersionBinary),
-                                         "%s-%s", v, r);
+                            sizeof(entry->cpqHoSwVerVersionBinary),
+                            "%s-%s", v, r);
                 } else
                     entry->cpqHoSwVerVersionBinary_len = snprintf(entry->cpqHoSwVerVersionBinary, 
-                                         sizeof(entry->cpqHoSwVerVersionBinary),
-                                         "%s", v);
+                            sizeof(entry->cpqHoSwVerVersionBinary),
+                            "%s", v);
             }
 
-            if (vendor != NULL) { 
-                strncpy(entry->vendor, vendor, sizeof(entry->vendor_len) - 1);
-                entry->vendor_len = strlen(entry->vendor);
-            } else {
-                entry->vendor_len = 0;
-                entry->vendor[0] = 0;
-            }
-            
+            strncpy(entry->vendor, vendor, sizeof(entry->vendor) - 1);
+            entry->vendor_len = strlen(entry->vendor);
+
             entry->cpqHoSwVerLocation[0] = '\0';
             entry->cpqHoSwVerLocation_len = 0;
 
@@ -205,7 +198,7 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
 
     cpqHoSwVerNextIndex = (oid)CONTAINER_SIZE(container);
     DEBUGMSGTL(("cpqHoSwVerTable:load:arch", "loaded %d entries\n",
-            (int)cpqHoSwVerNextIndex));
+                (int)cpqHoSwVerNextIndex));
 
     return rc;
 }

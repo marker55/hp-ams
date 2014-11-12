@@ -21,6 +21,7 @@
 
 #include "idecntlr.h"
 #include "idedisk.h"
+#include "common/scsi_info.h"
 #include "common/smbios.h"
 #include "common/utils.h"
 
@@ -28,7 +29,6 @@
 
 extern unsigned char     cpqHoMibHealthStatusArray[];
 
-extern int pcislot_scsi_host(char * buffer);
 extern int file_select(const struct dirent *);
 void SendIdeTrap(int, cpqIdeAtaDiskTable_entry *);
 
@@ -36,11 +36,11 @@ void netsnmp_arch_idecntlr_init(void);
 void netsnmp_arch_idedisk_init(void);
 
 extern  int alphasort();
-extern unsigned char*get_ScsiGeneric(char*);
-extern unsigned long long get_BlockSize(char*);
+extern unsigned char*get_ScsiGeneric(unsigned char*);
+extern unsigned long long get_BlockSize(unsigned char*);
 extern int get_DiskType(char *);
 extern char * get_DiskModel(char *);
-extern char * get_DiskRev(char *);
+extern char * get_sata_DiskRev(char *);
 extern char * get_DiskState(char *);
 
 static struct dirent **ScsiHostlist;
@@ -51,11 +51,17 @@ static struct dirent **ScsiDisklist;
 static char * ScsiDiskDir = "/sys/class/scsi_disk/";
 static int NumScsiDisk;
 
+static struct dirent **BlockDisklist;
+static int NumBlockDisk;
+
+static struct dirent **GenericDisklist;
+static int NumGenericDisk;
+
 static char *current_Cntlr;
 
 static int disk_select(const struct dirent *entry)
 {
-    if (strncmp(entry->d_name,current_Cntlr,strlen(current_Cntlr)) == 0)
+    if (strncmp(entry->d_name, current_Cntlr, strlen(current_Cntlr)) == 0)
             return(1);
     return 0;
 }
@@ -95,10 +101,9 @@ int netsnmp_arch_idecntlr_container_load(netsnmp_container* container)
         if ((value = get_sysfs_str(attribute)) != NULL) {
             if ((strcmp(value, "ahci") == 0) || 
                 (strcmp(value, "ata_piix") == 0)) {
-                strncpy(attribute, buffer, sizeof(attribute) - 1);
-                strncat(attribute, sysfs_attr[CLASS_UNIQUE_ID],
-                    sizeof(attribute) - strlen(attribute) - 1);
-                CntlrIndex = get_sysfs_int(attribute);
+               /*  We will need the host name later on */
+                sscanf(ScsiHostlist[i]->d_name, "host%d", &Host);
+                CntlrIndex = Host;
 
                 entry = cpqIdeControllerTable_createEntry(container,
                                                           (oid)CntlrIndex);
@@ -109,9 +114,7 @@ int netsnmp_arch_idecntlr_container_load(netsnmp_container* container)
         if (NULL != entry) {
             DEBUGMSGTL(("idecntlr:container:load", "Entry created %d\n", CntlrIndex));
             /*  We will need the host name later on */
-            sscanf(ScsiHostlist[i]->d_name, "host%d", &Host); 
-
-            sprintf(entry->host,"%d:",Host);
+            sprintf(entry->host, "%d:", Host);
             entry->cpqIdeControllerOverallCondition = IDE_CONTROLLER_STATUS_OK;
             entry->cpqIdeControllerStatus = CPQ_REG_OTHER;
     
@@ -151,18 +154,25 @@ int netsnmp_arch_idedisk_container_load(netsnmp_container* container)
     netsnmp_container *cntlr_container;
     netsnmp_iterator  *it;
     netsnmp_cache *cntlr_cache;
+    netsnmp_container *fw_container = NULL;
+    netsnmp_cache *fw_cache = NULL;
 
     char buffer[256];
+    char attribute[256];
     char *value;
+    long long size;
     char *scsi;
     char *generic;
 
     int Cntlr, Bus, Index, Target;
+    char * OS_name;
     char *serialnum = NULL;
     int j;
     long  rc = 0;
     int disk_fd;
-    int Health;
+    int Health = 0, Temp = -1, Mcot = -1, Wear = -1;
+    unsigned char *Temperature;
+
     netsnmp_index tmp;
     oid oid_index[2];
 
@@ -187,15 +197,16 @@ int netsnmp_arch_idedisk_container_load(netsnmp_container* container)
     while ( cntlr != NULL ) {
         current_Cntlr = cntlr->host;
         DEBUGMSGTL(("idedisk:container:load", 
-                    "Starting Loop i%s\n", current_Cntlr));
+                    "Starting Loop %s\n", current_Cntlr));
         cntlr->cpqIdeControllerOverallCondition =
                   MAKE_CONDITION(cntlr->cpqIdeControllerOverallCondition,
                                  cntlr->cpqIdeControllerCondition);
         /* Now chack for those HBA's in  the SCSI diskss */
         if ((NumScsiDisk = scandir(ScsiDiskDir, &ScsiDisklist, 
                                    disk_select, alphasort)) <= 0) {
-            ITERATOR_RELEASE( it );
-            return -1;
+            free(ScsiDisklist);
+            cntlr = ITERATOR_NEXT( it );
+            continue;
         }	
 
         for (j= 0; j< NumScsiDisk; j++) {
@@ -234,14 +245,6 @@ int netsnmp_arch_idedisk_container_load(netsnmp_container* container)
 
 		scsi = ScsiDisklist[j]->d_name;
 
-                if ((value = get_DiskRev(scsi)) != NULL) {
-                    strncpy(disk->cpqIdeAtaDiskFwRev, value,
-                            sizeof(disk->cpqIdeAtaDiskFwRev) - 1);
-                    disk->cpqIdeAtaDiskFwRev_len = 
-                                               strlen(disk->cpqIdeAtaDiskFwRev);
-                    free(value);
-                }
-
                 if ((value = get_DiskModel(scsi)) != NULL) {
                     strncpy(disk->cpqIdeAtaDiskModel, value,
                             sizeof(disk->cpqIdeAtaDiskModel) - 1);
@@ -258,7 +261,7 @@ int netsnmp_arch_idedisk_container_load(netsnmp_container* container)
 
                 disk->cpqIdeAtaDiskCapacity = get_BlockSize(scsi) >> 11;
 
-                generic = (char *)get_ScsiGeneric(scsi);
+                generic = get_ScsiGeneric(scsi);
                 if (generic != NULL) {
                     memset(disk->cpqIdeAtaDiskOsName, 0, 256);
                     disk->cpqIdeAtaDiskOsName_len =
@@ -279,7 +282,47 @@ int netsnmp_arch_idedisk_container_load(netsnmp_container* container)
                     free(serialnum);
                 }
 
-                if ((Health = get_unit_health(disk_fd)) >= 0) {
+                if ((value = get_sata_DiskRev(disk_fd)) != NULL) {
+                    strncpy(disk->cpqIdeAtaDiskFwRev, value,
+                            sizeof(disk->cpqIdeAtaDiskFwRev) - 1);
+                    disk->cpqIdeAtaDiskFwRev_len = 
+                                               strlen(disk->cpqIdeAtaDiskFwRev);
+                    free(value);
+                }
+
+                disk->cpqIdeAtaDiskPowerOnHours = get_sata_pwron(disk_fd);
+
+                disk->cpqIdeAtaDiskSSDEstTimeRemainingHours = -1;
+
+                if ((Temperature = get_sata_temp(disk_fd)) != NULL ) {
+                    Temp = sata_parse_current(Temperature);
+                    Mcot = sata_parse_mcot(Temperature);
+                    disk->cpqIdeAtaDiskCurrTemperature = Temp;
+                    disk->cpqIdeAtaDiskTemperatureThreshold = Mcot;
+                    free(Temperature);
+                }
+
+                if (is_unit_ssd(disk_fd)) {
+                    disk->cpqIdeAtaDiskMediaType = PHYS_DRV_SOLID_STATE;
+                    Wear = get_sata_ssd_wear(disk_fd);
+                    disk->cpqIdeAtaDiskSSDPercntEndrnceUsed = Wear;
+                    disk->cpqIdeAtaDiskSSDWearStatus = SSD_WEAR_OK;
+                    if (disk->cpqIdeAtaDiskSSDPercntEndrnceUsed >= 95)
+                        disk->cpqIdeAtaDiskSSDWearStatus = 
+                                                        SSD_WEAR_5PERCENT_LEFT;
+                    if (disk->cpqIdeAtaDiskSSDPercntEndrnceUsed >= 98)
+                        disk->cpqIdeAtaDiskSSDWearStatus = 
+                                                        SSD_WEAR_2PERCENT_LEFT;
+                    if (disk->cpqIdeAtaDiskSSDPercntEndrnceUsed >= 100)
+                        disk->cpqIdeAtaDiskSSDWearStatus = SSD_WEAR_OUT;
+                } else {
+                    disk->cpqIdeAtaDiskMediaType = PHYS_DRV_ROTATING_PLATTERS;
+                    disk->cpqIdeAtaDiskSSDPercntEndrnceUsed = 
+                                                    get_sata_ssd_wear(disk_fd);
+                    disk->cpqIdeAtaDiskSSDWearStatus = SSD_WEAR_OTHER;
+                } 
+
+                if ((Health = get_sata_health(disk_fd)) >= 0) {
                     disk->cpqIdeAtaDiskSmartEnabled = 2;
                     if (Health == 0) {
                         disk->cpqIdeAtaDiskStatus = 2; /* OK */
@@ -295,7 +338,7 @@ int netsnmp_arch_idedisk_container_load(netsnmp_container* container)
                 }
                 close(disk_fd);
             }
-            disk->cpqIdeAtaDiskChannel = 4; /* Unknown */
+            disk->cpqIdeAtaDiskChannel = 4; /* Serial */
             disk->cpqIdeAtaDiskTransferMode = 1;
             disk->cpqIdeAtaDiskLogicalDriveMember = 1;
             disk->cpqIdeAtaDiskIsSpare = 1;

@@ -7,10 +7,13 @@
 # file.
 #
 OS ?= linux
-NETSNMP ?= net-snmp-5.7.1
-CC = gcc
+NETSNMP ?= net-snmp-5.7.2
+LEVEL = ../../
+NETSNMPDIR = $(LEVEL)$(NETSNMP)
+NETSNMPINC = $(shell if [ -f $(NETSNMPDIR)/net-snmp-config ] ; then  \
+                        $(NETSNMPDIR)/net-snmp-config --build-includes $(NETSNMPDIR) ;\
+                        fi)
 
-OPT ?= -O2
 
 pkg ?= $(shell if [ -f /etc/redhat-release ] ; then \
                      echo "_rpm"; \
@@ -29,8 +32,8 @@ PWD = `pwd`
 
 # shared library flags (assumes gcc)
 DLFLAGS=-fPIC -shared 
-CFLAGS    ?= -fno-strict-aliasing $(OPT) -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux $(NEWRPM)
-CPPFLAGS = -I../.. -I. -I.. $(shell if [ -f ../../$(NETSNMP)/net-snmp-config ] ; then  ../../$(NETSNMP)/net-snmp-config --build-includes ../../$(NETSNMP); fi)
+CFLAGS    ?= -fno-strict-aliasing $(OPT) -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux
+CPPFLAGS = -I../.. -I. -I.. $(NETSNMPINC) $(NEWRPM)
 OBJS=swrun_$(OS).o swver.o fsys_$(OS).o
 
 #SUBDIRS := libcpqnic
@@ -41,7 +44,7 @@ OBJS=swrun_$(OS).o swver.o fsys_$(OS).o
 all: $(OBJS)
 
 swver.o:        swver$(pkg).c
-	gcc -c  $(CFLAGS) $(CPPFLAGS) $(NEWRPM) swver$(pkg).c  -o swver.o
+	gcc -c  $(CFLAGS) $(CPPFLAGS) swver$(pkg).c  -o swver.o
 
 
 subdirs:

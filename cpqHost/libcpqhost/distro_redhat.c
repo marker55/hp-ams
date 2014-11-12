@@ -85,9 +85,9 @@ distro_id_t  *getDistroInfo()
 
     Dup = strdup(distrolines->line[0]);
 
-    if (strncmp((char *)linux_distro_name[i],
-                (char *)distrolines->line[0],
-                strlen((char *)linux_distro_name[i]))) 
+    if (strncmp((const char *)linux_distro_name[i],
+                distrolines->line[0],
+                strlen(linux_distro_name[i]))) 
     i++;
         distro_id->Vendor = (unsigned char *)linux_distro_name[i];
     switch (i) {

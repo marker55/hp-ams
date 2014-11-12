@@ -46,5 +46,6 @@ unsigned char  get_sysfs_chex(char *);
 int get_sysfs_hex(char *);
 int get_sysfs_hex(char *);
 int get_sysfs_int(char *);
+unsigned int get_sysfs_uint(char *);
 long long get_sysfs_llong(char *);
 

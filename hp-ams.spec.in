@@ -1,17 +1,22 @@
-summary         : Agentless Monitoring Service for HP ProLiant Gen8 Systems
+summary         : Agentless Monitoring Service for HP ProLiant Gen8 and Gen9 Systems
 name            : hp-ams
 Version         : %VERSION%
-Release         : 1%{?dist}
+Release         : %RELEASE%
 group           : System Environment/Daemons
-Source0         : %{tardir}.tar.gz
+source          : %{tardir}.tar.gz
 license         : MIT and BSD
+packager        : Hewlett-Packard Company
+vendor          : Hewlett-Packard Company
 url             : http://www.hp.com/go/proliantlinux
 autoreqprov     : yes 
 Requires(post)  : coreutils, pciutils, bash, lsof
 buildroot       : %{_tmppath}/%{name}-%{version}-%{release}-%(%{__id} -un)
 BuildRequires   : glibc-devel, rpm-devel, pciutils-devel
-ExclusiveArch   : x86_64 i686
+ExclusiveArch   : x86_64 i586 i686
 %if 0%{?suse_version}
+%if %{suse_version} > 1300
+%systemd_requires
+%endif
 %if %{suse_version} > 1100
 %if %(%{__id} -un) == abuild
 BuildRequires   : -post-build-checks -rpmlint-Factorys -brp-check-suse
@@ -55,9 +60,10 @@ export RPM_MAKE_ROOT=.
 export RPM_NAME=%{name}   
 
 #master make step
-    export DEBUGFLAGS="-O2"
-if [ -f /etc/debian_version ]; then
-    export OS=debian
+export DEBUGFLAGS="-O2"
+if [ -d /etc/vmware ]; then
+    export SPECIFIC_LINUX="-DVMWARE"
+    export OS=vmware
 else 
     export OS=linux
 fi
@@ -84,7 +90,19 @@ echo %(%{__id} -un)
 
 %pre
 ##########################################################################
-
+%if %{?_unitdir:1}%{!?mymacro:0}
+    if [ -f /etc/init.d/hp-ams ]; then
+        /etc/init.d/hp-ams stop
+        if [ -x /sbin/insserv ]; then
+            /sbin/insserv -f -r hp-ams 2>/dev/null
+        elif [ -x /sbin/chkconfig ]; then
+            /sbin/chkconfig --del hp-ams
+        fi
+    fi
+%if 0%{?suse_version}
+%service_add_pre hp-ams.service
+%endif
+%else
 #Upgrade - stop everything
 if [ "$1" = "2" ]; then
    echo "Upgrade"
@@ -93,9 +111,9 @@ if [ "$1" = "2" ]; then
             /etc/init.d/hp-ams stop
         fi
    fi
-   exit 0
 fi
 exit 0
+%endif
 
 %post
 ##########################################################################
@@ -106,23 +124,25 @@ sync
 #
 echo "Please read the Licence Agreement for this software at"
 echo
-echo "         /usr/share/doc/%{name}-%{version}/LICENSE"
+echo "         /opt/hp/hp-ams/hp-ams.license"
 echo
 echo "By not removing this package, you are accepting the terms"
 echo "of the \"HP Proliant Essentials Software End User License Agreement\"."
 
+%if %{?_unitdir:1}%{!?mymacro:0}
+%if 0%{?suse_version}
+%service_add_post hp-ams.service
+%else
+%systemd_post hp-ams.service
+%endif
+systemctl -q enable hp-ams.service
+systemctl start hp-ams.service
+%else
 #install the init scripts
 if [ -x /sbin/insserv ]; then
    /sbin/insserv -f hp-ams 2>/dev/null
 elif [ -x /sbin/chkconfig ]; then
    /sbin/chkconfig --add hp-ams
-fi
-
-#This gives us a chance to override EVs etc.
-if [ -f /etc/hp-ams.conf.rpmorig ]; then
-    source /etc/hp-ams.conf.rpmorig
-elif [ -f /etc/hp-ams.conf ]; then
-    source /etc/hp-ams.conf
 fi
 
 STARTUP=""
@@ -141,39 +161,78 @@ RC=0
 if [ "${#INITLEVEL}" = "1" ] || [ -n "$STARTUP" ]; then
     /etc/init.d/hp-ams start
 fi
+if [ -x /sbin/insserv ]; then
+   /sbin/insserv -f hp-ams 2>/dev/null
+elif [ -x /sbin/chkconfig ]; then
+   /sbin/chkconfig --add hp-ams
+fi
+
 exit 0
+%endif
 ##########################################################################
 
 %preun
 ##########################################################################
+%if %{?_unitdir:1}%{!?mymacro:0}
+%if 0%{?suse_version}
+%service_del_preun hp-ams.service
+%else
+%systemd_preun hp-ams.service
+%endif
+%else
 sync
 #
 # We might be upgrading which in that case, we really do
 # not want to do this.
 #
-if [ $1 -ne 0 -a $1 != "remove" ]; then
-   exit 0
-fi
+if [ "$1" = 0 ]; then
 
-#disable
-if [ -f /var/lock/subsys/hp-ams ]; then
+    #disable
+    if [ -f /var/lock/subsys/hp-ams ]; then
     /etc/init.d/hp-ams stop
-fi
+    fi
 
-#remove the init scripts
-if [ -x /sbin/insserv ]; then
+    #remove the init scripts
+    if [ -x /sbin/insserv ]; then
    /sbin/insserv -f -r hp-ams 2>/dev/null
-elif [ -x /sbin/chkconfig ]; then
+    elif [ -x /sbin/chkconfig ]; then
    /sbin/chkconfig --del hp-ams
+    fi
 fi
 
 exit 0
+%endif
 ##########################################################################
 
 %postun
 ##########################################################################
+%if %{?_unitdir:1}%{!?mymacro:0}
+%if 0%{?suse_version}
+%service_del_postun hp-ams.service
+%else
+%systemd_postun_with_restart hp-ams.service
+%endif
+%endif
+
 exit 0
 ##########################################################################
+
+%if %{?_unitdir:1}%{!?mymacro:0}
+%triggerun -- hp-ams < 1:2.1.0
+    # Convert SysV -> systemd.
+    # Save the current service runlevel info,
+    # User must manually run systemd-sysv-convert --apply hp-ams
+    # to migrate them to systemd targets
+    /usr/bin/systemd-sysv-convert --save hp-ams >/dev/null 2>&1 ||:
+    if [ -f /etc/init.d/hp-ams ]; then
+        if [ -x /sbin/insserv ]; then
+            /sbin/insserv -f -r hp-ams 2>/dev/null
+        elif [ -x /sbin/chkconfig ]; then
+            /sbin/chkconfig --del hp-ams
+        fi
+    fi 
+    #/bin/systemctl try-restart hp-ams.service >/dev/null 2>&1 || :
+%endif
 
 %clean
 ##########################################################################
@@ -187,15 +246,16 @@ fi
 
 %defattr(755,root,root)
 /sbin/hpHelper
-/etc/init.d/hp-ams
 /opt/hp/hp-ams
+/etc/sysconfig/hp-ams
+%if %{?_unitdir:1}%{!?mymacro:0}
+%{_unitdir}/hp-ams.service
+%else
+/etc/init.d/hp-ams
+%endif
 
 %defattr(644,root,root)
 /usr/share/man/man8/hpHelper.8.gz
-
-%defattr(644,root,root)
-/usr/share/doc/hp-ams-%{version}/LICENSE
-/usr/share/doc/hp-ams-%{version}/COPYING
 
 %changelog
 * Wed Jul 28 2010 HP Linux Development <Linux_SWdeliverables@external.groups.hp.com> %VERSION%-%RELEASE%

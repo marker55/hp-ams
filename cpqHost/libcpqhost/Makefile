@@ -1,7 +1,10 @@
 OS ?= linux
-NETSNMP ?= net-snmp-5.7.1
-
-CPQ_INCLUDES = -I../..
+NETSNMP ?= net-snmp-5.7.2
+LEVEL = ../../
+NETSNMPDIR = $(LEVEL)$(NETSNMP)
+NETSNMPINC = $(shell if [ -f $(NETSNMPDIR)/net-snmp-config ] ; then  \
+						$(NETSNMPDIR)/net-snmp-config --build-includes $(NETSNMPDIR) ;\
+						fi)
 
 distro ?= $(shell if [ -f /etc/redhat-release ] ; then \
                      echo "_redhat"; \
@@ -17,8 +20,8 @@ distro ?= $(shell if [ -f /etc/redhat-release ] ; then \
 OPT ?= -O2
 
 OBJS = distro.o
-CFLAGS  ?= -fno-strict-aliasing $(OPT) -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux -D$(distro)
-CPPFLAGS = -I../.. $(shell if [ -f ../../$(NETSNMP)/net-snmp-config ] ; then  ../../$(NETSNMP)/net-snmp-config --build-includes ../../$(NETSNMP); fi)
+CFLAGS  ?= -fno-strict-aliasing $(OPT) -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux
+CPPFLAGS = -I../.. $(NETSNMPINC) -D$(distro)
 
 all:	$(OBJS)
 

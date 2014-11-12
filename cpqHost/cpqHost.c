@@ -30,6 +30,8 @@ extern void init_cpqHoSwVerTable(void);
 extern void init_cpqHoSWRunningTable(void);
 extern void init_cpqHoFwVerTable(void);
 
+extern char *GenericData;
+extern int testtrap_interval;
 distro_id_t *myDistro = NULL;
 #ifndef HELPER_VERSION
 #define HELPER_VERSION "0.0.0"
@@ -54,6 +56,7 @@ oid             cpqHostMib_oid[] = { 1, 3, 6, 1, 4, 1, 232, 11, 1 };
 oid             cpqHostInfo_oid[] = { 1, 3, 6, 1, 4, 1, 232, 11, 2, 2 };
 oid             sysDescr_oid[] = { 1, 3, 6, 1, 2, 1, 1, 1 };
 
+void SendcpqHostGenericTrap();
 /*
  * variable4 cpqHostOs_variables:
  *   this variable defines function callbacks and type return information 
@@ -196,6 +199,15 @@ init_cpqHost(void)
 
     cpqHostMibStatusArray[CPQMIB].stat = MIB_STATUS_AVAILABLE;
     cpqHostMibStatusArray[CPQMIB].cond = MIB_CONDITION_OK;
+
+    if (testtrap_interval)  {
+        if (snmp_alarm_register(testtrap_interval, 
+                             SA_REPEAT, 
+                             (SNMPAlarmCallback *) &SendcpqHostGenericTrap, 
+                             NULL) < 0 )
+            DEBUGMSGTL(("cpqHost", "Alarm register failed\n"));
+    } else 
+        SendcpqHostGenericTrap();
 }
 
 int
@@ -363,7 +375,7 @@ var_cpqHostOs(struct variable *vp,
         return (unsigned char *) string;
 
     case CPQHO_GENERICDATA:
-        strcpy(string, "generic trap data");
+        strncpy(string, GenericData, sizeof(string) - 1);
         *var_len = strlen(string) + 1;
         return (unsigned char *) string;
 
@@ -388,106 +400,47 @@ var_cpqHostOs(struct variable *vp,
     return NULL;
 }
 
-#ifdef DEFERRED
-/*
- * var_cpqHoFwVerTable():
- *   Handle this table separately from the scalar value case.
- *   The workings of this are basically the same as for var_cpqHostOs above.
- */
-unsigned char  *
-var_cpqHoFwVerTable(struct variable *vp,
-                    oid * name,
-                    size_t *length,
-                    int exact,
-                    size_t *var_len, WriteMethod ** write_method)
+void SendcpqHostGenericTrap()
 {
-    /*
-     * variables we may use later 
-     */
-    static long     long_ret;
-    static u_long   ulong_ret;
-    static unsigned char string[SPRINT_MAX_LEN];
-    static oid      objid[MAX_OID_LEN];
+    static oid compaq[] = { 1, 3, 6, 1, 4, 1, 232 };
+    static oid compaq_len = 7;
+    static oid sysName[] = { 1, 3, 6, 1, 2, 1, 1, 5, 0 };
+    static oid cpqHoTrapFlags[] = { 1, 3, 6, 1, 4, 1, 232, 11, 2, 11, 1, 0 };
+    static oid cpqHoGenericData[] = { 1, 3, 6, 1, 4, 1, 232, 11, 2, 8, 1, 0 };
 
-    int index;
-    cpqHost_t* pcpq_host_info;
+    netsnmp_variable_list *var_list = NULL;
+    struct utsname sys_name;
+    unsigned int cpqHoTrapFlag;
 
-    /*
-     * This assumes that the table is a 'simple' table.
-     *  See the implementation documentation for the meaning of this.
-     *  You will need to provide the correct value for the TABLE_SIZE parameter
-     *
-     * If this table does not meet the requirements for a simple table,
-     *  you will need to provide the replacement code yourself.
-     *  Mib2c is not smart enough to write this for you.
-     *    Again, see the implementation documentation for what is required.
-     */
-    pcpq_host_info = GetHostMibVariables();
+    uname(&sys_name);   /* get sysName */
 
-    if ((cpqHost_t*)0 == pcpq_host_info) {
-        return NULL;
-    }
+    snmp_varlist_add_variable(&var_list, sysName,
+            sizeof(sysName) / sizeof(oid),
+            ASN_OCTET_STR,
+            (u_char *) sys_name.nodename,
+            strlen(sys_name.nodename));
 
-    if (header_simple_table(vp, name, length, exact, var_len, write_method,
-                            pcpq_host_info->NumFWEntries)
-                    == MATCH_FAILED) {
-        return NULL;
-    }
+    snmp_varlist_add_variable(&var_list, cpqHoTrapFlags,
+            sizeof(cpqHoTrapFlags) / sizeof(oid),
+            ASN_INTEGER, &cpqHoTrapFlag,
+            sizeof(ASN_INTEGER));
 
-    index = (int)name[*length-1];
-    /* we use a zero based index */
-    index--;
+    snmp_varlist_add_variable(&var_list, cpqHoGenericData,
+            sizeof(cpqHoGenericData) / sizeof(oid),
+            ASN_OCTET_STR, (u_char *) GenericData,
+            strlen(GenericData));
 
-    /*
-     * this is where we do the value assignments for the mib results.
-     */
-    switch (vp->magic) {
-    case CPQHO_FWVER_INDEX:
-        long_ret = pcpq_host_info->pFWTable[index].HostFwVerIndex;
-        return (unsigned char *) &long_ret;
 
-    case CPQHO_FWVER_CATEGORY:
-        long_ret = pcpq_host_info->pFWTable[index].HostFwVerCategory;
-        return (unsigned char *) &long_ret;
+    netsnmp_send_traps(SNMP_TRAP_ENTERPRISESPECIFIC,
+                    11003,
+                    compaq,
+                    compaq_len,
+                    var_list,
+                    NULL,
+                    0);
 
-    case CPQHO_FWVER_DEVICETYPE:
-        long_ret = pcpq_host_info->pFWTable[index].HostFwVerDeviceType;
-        return (unsigned char *) &long_ret;
+    DEBUGMSGTL(("cpqhost:", "Free varbind list...\n"));
+    snmp_free_varbind(var_list);
+    DEBUGMSGTL(("cpqhost:", "Done freeing varbind list...\n"));
 
-    case CPQHO_FWVER_DISPLAYNAME:
-        strcpy(string, pcpq_host_info->pFWTable[index].HostFwVerDisplayName);
-        *var_len = strlen(string);
-        return (unsigned char *) string;
-
-    case CPQHO_FWVER_VERSION:
-        strcpy(string, pcpq_host_info->pFWTable[index].HostFwVerVersion);
-        *var_len = strlen(string);
-        return (unsigned char *) string;
-
-    case CPQHO_FWVER_LOCATION:
-        strcpy(string, pcpq_host_info->pFWTable[index].HostFwVerLocation);
-        *var_len = strlen(string);
-        return (unsigned char *) string;
-
-    case CPQHO_FWVER_XMLSTRING:
-        strcpy(string, pcpq_host_info->pFWTable[index].HostFwVerXmlString);
-        *var_len = strlen(string);
-        return (unsigned char *) string;
-
-    case CPQHO_FWVER_KEYSTRING:
-        strcpy(string, pcpq_host_info->pFWTable[index].HostFwVerKeyString);
-        *var_len = strlen(string);
-        return (unsigned char *) string;
-
-    case CPQHO_FWVER_UPDATEMETHOD:
-        long_ret = pcpq_host_info->pFWTable[index].HostFwVerUpdateMethod;
-        return (unsigned char *) &long_ret;
-
-    default:
-        ERROR_MSG("");
-    }
-    return NULL;
 }
-
-#endif
-

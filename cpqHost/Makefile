@@ -8,7 +8,7 @@
 #
 
 OS ?= linux
-NETSNMP ?= net-snmp-5.7.1
+NETSNMP ?= net-snmp-5.7.2
 CC = gcc
 
 OPT ?= -O2
@@ -17,9 +17,14 @@ PWD = `pwd`
 
 # shared library flags (assumes gcc)
 MIB=Host
+LEVEL=../
 DLFLAGS=-fPIC -shared 
+NETSNMPDIR=$(LEVEL)$(NETSNMP)
+NETSNMPINC=$(shell if [ -f $(NETSNMPDIR)/net-snmp-config ] ; then \
+					   $(NETSNMPDIR)/net-snmp-config --build-includes $(NETSNMPDIR) ; \
+				   fi)
 CFLAGS          ?= -fno-strict-aliasing $(OPT) -g -pipe -Werror -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux 
-CPPFLAGS = -I. -I.. -I../cpqNic -I../cpqScsi -I../cpqIde $(shell if [ -f ../$(NETSNMP)/net-snmp-config ] ; then ../$(NETSNMP)/net-snmp-config --build-includes ../$(NETSNMP) ; fi) -DHELPER_VERSION=\"$(VERSION)\"
+CPPFLAGS = -I. -I.. -I../cpqNic -I../cpqScsi -I../cpqIde $(NETSNMPINC) -DHELPER_VERSION=\"$(VERSION)\"
 OBJS=cpqHost.o cpqHostMemory.o cpqHoSWRunningTable.o cpqHoSwVerTable.o cpqHoFileSysTable.o cpqHoFwVerTable.o
 TARGETS=cpqHost.o 
 NETSNMPVERSIONMAJ = $(shell if [ -f ../$(NETSNMP)/net-snmp-config ] ; then  ../$(NETSNMP)/net-snmp-config --version | cut -f1 -d\. ; fi  )

@@ -21,7 +21,7 @@
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
 NAME="HP Agentless Monitoring Service for ProLiant"
 SNAME="hpHelper"
-OPTIONS="-I0"
+HPAMS_OPTIONS="-I0"
 
 if [ -e /etc/sysconfig/hp-ams ]; then
   . /etc/sysconfig/hp-ams
@@ -39,6 +39,11 @@ case "$1" in
       lsmod|grep -q hpilo
       if [ $? -ne 0 ]; then 
          modprobe hpilo
+      fi
+      if [ "$ALLOW_CORE" = "y" ]; then 
+        mkdir -p /var/log/cores/hpHelper
+        echo "/var/log/cores/%e/%p-%s-%t.core" > /proc/sys/kernel/core_pattern
+        ulimit -c unlimited
       fi
 
       if [ -f /sys/module/hpilo/parameters/max_ccb ]; then
@@ -59,7 +64,7 @@ case "$1" in
          echo "$SNAME is already running.  Please stop $SNAME or use 'restart'"
          exit 1
       fi
-      /sbin/$SNAME $OPTIONS; RC=$?
+      /sbin/$SNAME $HPAMS_OPTIONS; RC=$?
 
       if [ "$RC" -eq "0" ]; then
          [ -d /var/lock/subsys ] && touch /var/lock/subsys/hp-ams
