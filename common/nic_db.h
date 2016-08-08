@@ -1,7 +1,25 @@
 #ifndef NIC_DB_H
 #define NIC_DB_H
-#define NIC_DB_ROWS 216
+#define NIC_DB_ROWS 219
 static nic_hw_db nic_hw[NIC_DB_ROWS] = {
+{0x14E4, 0x16A2, 0x103C, 0x2231,
+            "", "782833-001", "", "",
+            "", "",
+            37,
+            "HP FlexFabric 20G 2-port 631M Adapter",
+            },
+{0x8086, 0x154B, 0x103C, 0x22FD,
+            "", "790316-001", "", "",
+            "", "",
+            39,
+            "HP Ethernet 10Gb 2-port 562SFP+ Adapter",
+            },
+{0x8086, 0x154B, 0x103C, 0x22FC,
+            "", "790317-001", "", "",
+            "", "",
+            43,
+            "HP Ethernet 10Gb 2-port 562SFLR-FP+ Adapter",
+            },
 {0x15B3, 0x1007, 0x103C, 0x22AC,
             "", "n/a", "", "",
             "", "",
