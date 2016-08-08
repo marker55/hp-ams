@@ -79,7 +79,7 @@ BUILDAGENTLIBS = $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --a
 BUILDNETSNMPDEPS = $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --build-lib-deps $(NETSNMP) ; fi)
 BUILDNETSNMPCMD =  $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --build-command ;fi)
 #BUILDLIBS = $(BUILDNETSNMPDEPS)  -lm -lresolv -lcrypt $(DISTROLIBS)
-BUILDLIBS = $(BUILDNETSNMPDEPS) $(DISTROLIBS)
+BUILDLIBS = $(BUILDNETSNMPDEPS) -lm $(DISTROLIBS)
 
 TARFILE=$(NAME)-$(VERSION).tar.gz
 
