@@ -1,0 +1,22 @@
+--- net-snmp-5.7-clean/agent/mibgroup/if-mib/ifXTable/ifXTable.c	2011-07-01 17:35:46.000000000 -0500
++++ net-snmp-5.7/agent/mibgroup/if-mib/ifXTable/ifXTable.c	2011-09-06 16:07:14.473405370 -0500
+@@ -1204,7 +1204,7 @@
+     netsnmp_assert(NULL != rowreq_ctx);
+ 
+     if (0 == rowreq_ctx->data.ifLinkUpDownTrapEnable)
+-        return MFD_SKIP;
++        rowreq_ctx->data.ifLinkUpDownTrapEnable = 1;
+ 
+     /*
+      * TODO:231:o: |-> Extract the current value of the ifLinkUpDownTrapEnable data.
+--- net-snmp-5.7-clean/agent/mibgroup/if-mib/ifTable/ifTable_data_access.c	2011-07-01 17:35:46.000000000 -0500
++++ net-snmp-5.7/agent/mibgroup/if-mib/ifTable/ifTable_data_access.c	2011-09-06 16:03:41.481390101 -0500
+@@ -378,7 +378,7 @@
+     if (oper_changed) {
+         rowreq_ctx->data.ifLastChange = netsnmp_get_agent_uptime();
+ #ifdef USING_IF_MIB_IFXTABLE_IFXTABLE_MODULE
+-        if (rowreq_ctx->data.ifLinkUpDownTrapEnable == 1) {
++        if (rowreq_ctx->data.ifLinkUpDownTrapEnable != 2) {
+             if (rowreq_ctx->data.ifOperStatus == IFOPERSTATUS_UP) {
+                 oid notification_oid[] = { 1, 3, 6, 1, 6, 3, 1, 1, 5, 4 };
+                 send_linkUpDownNotifications(notification_oid, OID_LENGTH(notification_oid),

@@ -1,0 +1,35 @@
+diff -burN net-snmp-5.7.2/agent/helpers/table_row.c net-snmp-5.7.2.save/agent/helpers/table_row.c
+--- net-snmp-5.7.2/agent/helpers/table_row.c	2012-10-09 17:28:58.000000000 -0500
++++ net-snmp-5.7.2.save/agent/helpers/table_row.c	2013-04-30 13:50:27.000000000 -0500
+@@ -112,22 +112,6 @@
+         snmp_log(LOG_ERR, "bad param in netsnmp_table_row_register\n");
+         return SNMPERR_GENERR;
+     }
+-
+-        /*
+-         *   The first table_row invoked for a particular table should
+-         * register the full table as well, with a default handler to
+-         * process requests for non-existent (or incomplete) rows.
+-         *
+-         *   Subsequent table_row registrations attempting to set up
+-         * this default handler would fail - preferably silently!
+-         */
+-    snprintf(tmp, sizeof(tmp), "%s_table", reginfo->handlerName);
+-    reg2 = netsnmp_create_handler_registration(
+-              tmp,     _table_row_default_handler,
+-              reginfo->rootoid, reginfo->rootoid_len,
+-              reginfo->modes);
+-    netsnmp_register_table(reg2, tabreg);  /* Ignore return value */
+-
+         /*
+          * Adjust the OID being registered, to take account
+          * of the indexes and column range provided....
+@@ -137,7 +121,7 @@
+     row_oid[row_oid_len++] = 1;   /* tableEntry */
+     row_oid[row_oid_len++] = tabreg->min_column;
+     reginfo->range_ubound  = tabreg->max_column;
+-    reginfo->range_subid   = row_oid_len-1;
++    reginfo->range_subid   = row_oid_len;
+     build_oid_noalloc(&row_oid[row_oid_len],
+                       MAX_OID_LEN-row_oid_len, &len, NULL, 0, index);
+     row_oid_len += len;

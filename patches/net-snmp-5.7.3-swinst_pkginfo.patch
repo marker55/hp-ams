@@ -1,0 +1,10 @@
+--- net-snmp-5.7.2/agent/mibgroup/host/data_access/swinst_pkginfo.c	2015-02-04 12:57:32.347683533 -0600
++++ net-snmp-5.7.3/agent/mibgroup/host/data_access/swinst_pkginfo.c	2015-02-04 13:11:16.012264968 -0600
+@@ -207,6 +207,7 @@
+ 	    memcpy( entry->swDate, cp, date_len );
+ 	    entry->swDate_len = date_len;
+ 	}
++    if (d != NULL)
+ 	closedir( d );
+ #ifdef HAVE_LIBPKG
+     }
