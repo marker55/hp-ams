@@ -2,11 +2,11 @@
 #define NIC_DB_H
 #define NIC_DB_ROWS 219
 static nic_hw_db nic_hw[NIC_DB_ROWS] = {
-{0x14E4, 0x16A2, 0x103C, 0x2231,
-            "", "782833-001", "", "",
+{0x8086, 0x1587, 0x103C, 0x22FE,
+            "", "790318-001", "", "",
             "", "",
             37,
-            "HP FlexFabric 20G 2-port 631M Adapter",
+            "HP Flex-20 20Gb 2-port 660FLB Adapter",
             },
 {0x8086, 0x154B, 0x103C, 0x22FD,
             "", "790316-001", "", "",
