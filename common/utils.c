@@ -11,8 +11,33 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <netdb.h>
+#include <sys/time.h>
 #include "utils.h"
 #include "smbios.h"
+
+void init_etime(struct timeval the_time[]) {
+    struct timeval *prev_time = &the_time[1];
+
+    gettimeofday(prev_time, NULL);
+}
+
+int get_etime(struct timeval the_time[]) {
+    struct timeval *curr_time = &the_time[0];
+    struct timeval *prev_time = &the_time[1];
+    struct timeval e_time;
+
+    //fprintf(stderr, "the_time[0] = %p, the_time[1] = %p\n",&the_time[0],  &the_time[1]);
+    gettimeofday(curr_time, NULL);
+    
+    //fprintf(stderr, "curr_time->tv_sec = %ld, curr_time->tv_usec= %ld, prev_time->tv_sec = %ld, prev_time->tv_usec = %ld\n",
+    //                curr_time->tv_sec, curr_time->tv_usec, prev_time->tv_sec, prev_time->tv_usec);
+    timersub(curr_time, prev_time, &e_time);
+    //fprintf(stderr, "e_time->tv_sec = %ld, e_time->tv_usec= %ld\n",
+    //                e_time.tv_sec, e_time.tv_usec);
+    prev_time->tv_sec = curr_time->tv_sec;
+    prev_time->tv_usec = curr_time->tv_usec;
+    return (e_time.tv_sec*1000 + e_time.tv_usec/1000);
+}
 
 int get_nic_port(char * name)
 {

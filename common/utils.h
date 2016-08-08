@@ -2,6 +2,9 @@
 
 #define MAC_ADDRESS_BYTES      6
 
+void init_etime(struct timeval the_time[]);
+int get_etime(struct timeval the_time[]);
+
 int file_select(const struct dirent *);
 int proc_select(const struct dirent *);
 int pci_select(const struct dirent *);
