@@ -436,25 +436,36 @@ int SmbGetSysGen() {
     char *GenStr = "0";
     int len;
     PSMBIOS_SYSTEM_INFORMATION sysInfo;
+    PCQSMBIOS_SERV_SYS_ID ServSysId;
 
     SmbGetRecordByType(SMBIOS_SYSTEM_INFO, 0, (void *)&sysInfo);
 
     ProductName = (char *)SmbGetStringByNumber(sysInfo, sysInfo->byProductName);
-    if (strncmp("ProLiant", ProductName, 8) != 0 )
+    if (!strncmp("ProLiant", ProductName, 8)){
+        len = strlen(ProductName);
+        while (len ) {
+            if (isdigit(ProductName[len-1]))
+                if ((len - 1) &&  ! (
+                    (ProductName[len - 2] == 'v') || (ProductName[len - 2] == 'v')
+                    )) {
+                    if ((len - 1) && isdigit(ProductName[len - 2]))
+                        GenStr = &ProductName[len - 2];
+                    else
+                        GenStr = &ProductName[len - 1];
+                    return atoi(GenStr);
+                }
+            len--;
+        }
         return 0;
-    len = strlen(ProductName);
-    while (len ) {
-        if (isdigit(ProductName[len-1])) 
-            if ((len - 1) &&  ! (
-                 (ProductName[len - 2] == 'v') || (ProductName[len - 2] == 'v')
-                )) {
-                if ((len - 1) && isdigit(ProductName[len - 2]))
-                    GenStr = &ProductName[len - 2];
-                else
-                    GenStr = &ProductName[len - 1];
-    return atoi(GenStr);
-            } 
-        len--;
-    } 
+    } else {
+        if (!strncasecmp(SmbGetStringByNumber(sysInfo, sysInfo->byManufacturer), 
+                         "H3C", 3))
+            if (SmbGetRecordByType(SMBIOS_HPOEM_SYSID, 0, (void *)&ServSysId))
+                if (!strncasecmp(SmbGetStringByNumber(ServSysId, 
+                                                      ServSysId->serverSystemIdStr), 
+                                 "$0E11", 5))
+                    return (9);
+
+    }
     return 0;
 }

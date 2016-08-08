@@ -1,6 +1,6 @@
 # Overridden during automated builds
 COMP_NAME    ?= hp-ams
-COMP_VER     ?= 2.1.0
+COMP_VER     ?= 2.1.1
 COMP_PKG_REV ?= 666
 
 NAME         ?= $(COMP_NAME)
