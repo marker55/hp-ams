@@ -944,15 +944,17 @@ int netsnmp_arch_iflog_container_load(netsnmp_container *container)
                     strcpy(&netdev[netdev_sz], filelist[i]->d_name);
                     strcat(netdev, "/brif");
                     if ((dCount = scandir(netdev, &devlist, 
-                                    file_select, alphasort)) == 1) {
-                        phys_index = name2pindx(devlist[0]->d_name);
+                                    file_select, alphasort)) > 0) {
+                        for (j = 0; j < dCount; j++) {
+                            phys_index = name2pindx(devlist[j]->d_name);
 
                         /* logical interface name is used for bonding/teaming */
-                        entry->cpqNicIfLogMapPhysicalAdapters[0] = 
-                            (char)phys_index;
-                        entry->cpqNicIfLogMapPhysicalAdapters_len = 1;
-                        entry->cpqNicIfLogMapPhysicalAdapters[1] = 0;
-                        entry->cpqNicIfLogMapAdapterCount = 1;
+                            entry->cpqNicIfLogMapPhysicalAdapters[j] = 
+                                 (char)phys_index;
+                        }
+                        entry->cpqNicIfLogMapPhysicalAdapters_len = j;
+                        entry->cpqNicIfLogMapPhysicalAdapters[j] = 0;
+                        entry->cpqNicIfLogMapAdapterCount = j;
                         free(devlist[0]);
                         free(devlist);
                     } 
