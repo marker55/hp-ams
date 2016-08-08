@@ -242,20 +242,21 @@ fi
 ##########################################################################
 
 %files -f filelist-%{tardir}
-%defattr(755,root,root)
+%defattr(644,root,root)
 
 %defattr(755,root,root)
 /sbin/hpHelper
-/opt/hp/hp-ams
-/etc/sysconfig/hp-ams
-%if %{?_unitdir:1}%{!?mymacro:0}
-%{_unitdir}/hp-ams.service
-%else
+%if ! %{?_unitdir:1}%{!?mymacro:0}
 /etc/init.d/hp-ams
 %endif
 
 %defattr(644,root,root)
+/etc/sysconfig/hp-ams
+/opt/hp/hp-ams
 /usr/share/man/man8/hpHelper.8.gz
+%if  %{?_unitdir:1}%{!?mymacro:0}
+%{_unitdir}/hp-ams.service
+%endif
 
 %changelog
 * Wed Jul 28 2010 HP Linux Development <Linux_SWdeliverables@external.groups.hp.com> %VERSION%-%RELEASE%
