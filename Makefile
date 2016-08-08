@@ -59,7 +59,7 @@ NETSNMPCONFIG = $(NETSNMP)/net-snmp-config
 export OS NETSNMP VERSION
 NETSNMPVERSIONMIN = $(shell echo $(NETSNMP)| cut -f2 -d\.  )
 MIBS="host agentx/subagent mibII hardware/memory"
-NOTMIBS="mibII/system_mib mibII/snmp_mib_5_5 mibII/vacm_vars mibII/vacm_conf mibII/snmp mibII/tcp mibII/udp mibII/at mibII/sysORTable mibII/icmp mibII/ipv6 mibII/setSerialNo ip-mib/inetNetToMediaTable host/hrh_storage host/hr_disk host/hrh_filesys host/hr_network host/hr_other host/hr_partition host/hr_print target agent_mibs cd_snmp notification notification-log-mib disman/event disman/schedule snmpv3mibs mibII/vacm utilities/execute mibII/tcpTable ucd-snmp/dlmod" 
+NOTMIBS="mibII/system_mib mibII/snmp_mib_5_5 mibII/vacm_vars mibII/vacm_conf mibII/snmp mibII/tcp mibII/udp mibII/at mibII/sysORTable mibII/icmp mibII/ipv6 mibII/setSerialNo ip-mib/inetNetToMediaTable host/hr_disk host/hr_network host/hr_other host/hr_partition host/hr_print target agent_mibs cd_snmp notification notification-log-mib disman/event disman/schedule snmpv3mibs mibII/vacm utilities/execute mibII/tcpTable ucd-snmp/dlmod" 
 CONF_OPTIONS=--enable-read-only --disable-set-support --disable-agent --disable-privacy --without-openssl $(shell if [ $(SYSTEMD) = 1 ] ; then echo "--with-systemd" ; fi)
 LEVEL=./
 NETSNMPDIR=$(LEVEL)$(NETSNMP)
@@ -78,7 +78,8 @@ LDFLAGS=$(shell if [ -f $(NETSNMPCONFIG) ] ; then $(NETSNMPCONFIG) --ldflags ; f
 BUILDAGENTLIBS = $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --agent-libs ; fi)   
 BUILDNETSNMPDEPS = $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --build-lib-deps $(NETSNMP) ; fi)
 BUILDNETSNMPCMD =  $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --build-command ;fi)
-BUILDLIBS = $(BUILDNETSNMPDEPS)  -lm -lresolv -lcrypt $(DISTROLIBS)
+#BUILDLIBS = $(BUILDNETSNMPDEPS)  -lm -lresolv -lcrypt $(DISTROLIBS)
+BUILDLIBS = $(BUILDNETSNMPDEPS) $(DISTROLIBS)
 
 TARFILE=$(NAME)-$(VERSION).tar.gz
 
