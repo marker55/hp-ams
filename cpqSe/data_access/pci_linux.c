@@ -39,6 +39,11 @@ char *pci_ids[] = {"/usr/share/hwdata/pci.ids",
 
 
 #define SYSBUSPCIDEVICES "/sys/bus/pci/devices/"
+unsigned int pci_get_revision(unsigned char *config)
+{
+    return (unsigned int) config[8];
+}
+
 unsigned int pci_get_caps(unsigned char *config)
 {
     int cap = 0;
@@ -373,8 +378,7 @@ pci_node * pci_node_create(void )
     return node;
 }
 
-    int
-pci_dev_filter(const struct dirent * d )
+int pci_dev_filter(const struct dirent * d )
 {
     if ((d->d_name[4] == ':') &&
             (d->d_name[7] == ':') &&
@@ -438,8 +442,10 @@ int pci_node_scan(pci_node * node, char * dirname)
                 if ((node->config = malloc(256)) != NULL) {
                     int config_fd;
                     if ((config_fd = open(newdir, O_RDONLY)) != -1) {
-                        if (read(config_fd, node->config, 256) == 256 )
+                        if (read(config_fd, node->config, 256) == 256 ) {
                             node->caps = pci_get_caps(node->config);
+                            node ->revision = pci_get_revision(node->config);
+                        }
                         free(node->config);
                         close(config_fd);
                     } else {
