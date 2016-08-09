@@ -1,3 +1,9 @@
+typedef struct _vpd_node{
+    unsigned char    tag[2];
+    unsigned char   *data;
+    void*   next;
+} vpd_node;
+
 /* Structure to map PCI vendor ID to name */
 typedef struct _vendor_node {
     unsigned short vendor_id;
@@ -34,6 +40,7 @@ typedef struct _class_node {
 } class_node;
 
 typedef struct _pci_node {
+    unsigned char   sysdev[16];
     unsigned short  domain;
     unsigned char   bus;
     unsigned char   dev;
@@ -52,6 +59,10 @@ typedef struct _pci_node {
     device_node    *device;
     subsystem_node *subsystem;
     class_node     *pciclass;
+    unsigned char  *vpd;
+    unsigned char  *vpd_productname;
+    vpd_node       *vpd_data;
+
     int             irq;
     void  *      pci_next;
     void  *      pci_sub;

@@ -19,7 +19,7 @@
 ### END INIT INFO
 
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
-NAME="HP Agentless Monitoring Service for ProLiant"
+NAME="HP Agentless Management Service for ProLiant"
 SNAME="hpHelper"
 HPAMS_OPTIONS="-I0"
 

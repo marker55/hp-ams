@@ -36,12 +36,7 @@
 
 extern unsigned char     cpqHoMibHealthStatusArray[];
 extern int trap_fire;
-extern unsigned char*get_ScsiGeneric(unsigned char*);
-extern unsigned long long get_BlockSize(unsigned char*);
-extern int get_DiskType(char *);
-extern char * get_DiskModel(char *);
-extern char * get_sas_DiskRev(char *);
-extern char * get_DiskState(char *);
+extern int pcislot_scsi_host(char * buffer);
 
 extern int file_select(const struct dirent *);
 void SendSasTrap(int, 
@@ -370,7 +365,7 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
     int disk_fd;
     char *serialnum = NULL;
     int Health = 0, Speed = 0, Temp = -1, Mcot = -1, Wear = -1;
-    unsigned char *Temperature;
+    char *Temperature;
     //int j, k;
     //long  rc = 0;
 
@@ -447,7 +442,7 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
             disk->cpqSasPhyDrvPlacement = SAS_PHYS_DRV_PLACE_EXTERNAL;
         } else {
             /* Check to see if we were able to get CSMI connector info */
-            if (strlen(hba->Reference[PhyID].bConnector))
+            if (strlen((char *)hba->Reference[PhyID].bConnector))
                 disk->cpqSasPhyDrvLocationString_len =
                     sprintf(disk->cpqSasPhyDrvLocationString,
                             "Port %sBay %d",
@@ -492,9 +487,9 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
             free(value);
 	    }
 
-        disk->cpqSasPhyDrvSize = get_BlockSize(scsi) >> 11;
+        disk->cpqSasPhyDrvSize = get_BlockSize((unsigned char *)scsi) >> 11;
 
-        generic = get_ScsiGeneric(scsi);
+        generic = (char *)get_ScsiGeneric((unsigned char *)scsi);
         if (generic != NULL) {
             memset(disk->cpqSasPhyDrvOsName, 0, 256);
             disk->cpqSasPhyDrvOsName_len = 
@@ -602,8 +597,11 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
 
         }
         if ((disk->cpqSasPhyDrvType == 2) && 
-            (disk->cpqSasPhyDrvStatus != SAS_PHYS_STATUS_FAILED)){
-            disk->cpqSasPhyDrvUsedReallocs = get_defect_data_size(disk_fd);
+            (disk->cpqSasPhyDrvStatus != SAS_PHYS_STATUS_FAILED)) {
+            if (disk->cpqSasPhyDrvMediaType == PHYS_DRV_ROTATING_PLATTERS)
+                disk->cpqSasPhyDrvUsedReallocs = get_defect_data_size(disk_fd, 5);
+            if (disk->cpqSasPhyDrvMediaType == PHYS_DRV_SOLID_STATE)
+                disk->cpqSasPhyDrvUsedReallocs = get_defect_data_size(disk_fd, 6);
             if (disk->cpqSasPhyDrvUsedReallocs == -1) 
                 disk->cpqSasPhyDrvUsedReallocs = 0;
         } else
@@ -864,6 +862,8 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
             strcpy(attribute, buffer);
             pciSlot = pcislot_scsi_host(attribute);
 
+            entry->cpqSasHbaHwLocation[0] ='\0';
+            entry->cpqSasHbaHwLocation_len = 0;
             if (pciSlot > 0 ) {
                 DEBUGMSGTL(("sashba:container:load", "Got pcislot info for %s = %d\n",
                             buffer,
@@ -876,12 +876,6 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
                                 "Blade %d, Slot %d",
                                 (pciSlot>>8) & 0xF,
                                 (pciSlot>>16) & 0xFF);
-                else
-                    entry->cpqSasHbaHwLocation_len =
-                        snprintf(entry->cpqSasHbaHwLocation,
-                                128,
-                                "Slot %d",
-                                pciSlot);
             }
 
             switch (BoardID) {
@@ -1007,7 +1001,7 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
                        sizeof(sas_connector_info) * 32);
                 free(hbaConnector);
                 for (iii = 0; iii < 32; iii++) {
-                    int conlen = strlen(entry->Reference[iii].bConnector) - 1;
+                    int conlen = strlen((char *)entry->Reference[iii].bConnector) - 1;
                     if (entry->Reference[iii].bConnector[conlen] == 0x20 ) 
                         entry->Reference[iii].bConnector[conlen] = 0;
                     DEBUGMSGTL(("sashba:container:load", "Connector= %s\n",
@@ -1161,7 +1155,6 @@ void SendSasTrap(int trapID,
     { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 17, 255, 255 };
 
     netsnmp_variable_list *var_list = NULL;
-    int status, oldstatus;
 
     unsigned int cpqHoTrapFlag;
     DEBUGMSGTL(("sasphydrv:container:load", "Trap:DiskCondition = %ld\n",
@@ -1284,9 +1277,6 @@ void SendSasTrap(int trapID,
                     compaq,
                     compaq_len,
                     var_list);
-            status = disk->cpqSasPhyDrvStatus;
-            oldstatus = disk->OldStatus;
-
 
             break;
 

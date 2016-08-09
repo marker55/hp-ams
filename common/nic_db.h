@@ -17,12 +17,13 @@
 //#include "common_structs.h"
 
 /// number of entries (rows) in table
-#define NIC_DB_ROWS 161
+#define NIC_DB_ROWS 164
 
 /// the hardware information table
 static nic_hw_db nic_hw[NIC_DB_ROWS] = {
-//{0x14E4, 0x16A2, 0x103C, 0x2231, "HP",  "777430-B21", "782833-001", "",  "",  "",          37, "HP FlexFabric 20G 2-port 631M Adapter", }, /* Bronco */
-//{0x10DF, 0x0720, 0x103C, 0x2343, "",    "777434-B21", "782834-001", "",  "",  "",          51, "HP FlexFabric 20Gb 2-port Converged Network Adapter", },  /* Ember - 02.03.15 - temp */
+{0x14E4, 0x165F, 0x103C, 0x22E8, "HP",  "N/A",        "",           "",  "",  "",          40, "HP Ethernet 1Gb 2-port 332i Adapter", }, /* Gen9 Snap4 - embedded in Sakura,Yehliu */
+{0x14E4, 0x16A2, 0x103C, 0x2231, "HP",  "777430-B21", "782833-001", "",  "",  "",          50, "HP Synergy 3820C 10/20Gb Converged Network Adapter", }, /* Bronco - Gen9 Snap4*/
+{0x10DF, 0x0720, 0x103C, 0x2343, "",    "777434-B21", "782834-001", "",  "",  "",          51, "HP Synergy 3520C 10/20Gb Converged Network  Adapter", },  /* Ember - Gen9 Snap4 */
 {0x8086, 0x1572, 0x103C, 0x22FD, "",    "727055-B21", "790316-001", "",  "",  "",          39, "HP Ethernet 10Gb 2-port 562SFP+ Adapter", }, /* Igloo - Gen9Snap3*/
 {0x8086, 0x1572, 0x103C, 0x22FC, "",    "727054-B21", "790317-001", "",  "",  "",          43, "HP Ethernet 10Gb 2-port 562FLR-SFP+ Adapter", }, /* Indigo - Gen9Snap3 */
 {0x8086, 0x1587, 0x103C, 0x22FE, "",    "727052-B21", "790318-001", "",  "",  "",          38, "HP Ethernet 20Gb 2-port 660FLB Adapter", }, /* Imp - Gen9Snap3 */

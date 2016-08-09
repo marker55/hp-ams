@@ -9,6 +9,8 @@
 #include <net-snmp/agent/table_container.h>
 #include "cpqLinOsDiskTable.h"
 
+extern int netsnmp_arch_linosdiskio_container_load(netsnmp_container*);
+
 static void     _cache_free(netsnmp_cache * cache, void *magic);
 static int      _cache_load(netsnmp_cache * cache, void *vmagic);
 
@@ -213,7 +215,6 @@ cpqLinOsDiskTable_handler(netsnmp_mib_handler *handler,
 
     netsnmp_request_info *request;
     netsnmp_table_request_info *table_info;
-    netsnmp_container *container;
     cpqLinOsDiskTable_entry *table_entry;
 
     DEBUGMSGTL(("cpqLinOsDiskTable:handler", "Processing request (%d)\n",
@@ -461,23 +462,11 @@ _cache_load(netsnmp_cache * cache, void *vmagic)
 }                               /* _cache_load */
 
 /**
- * @Internal
- */
-/** remove a row from the table */
-static void
-cpqLinOsDiskTable_freeEntry_cb(cpqLinOsDiskTable_entry * entry,
-                               void *magic)
-{
-    cpqLinOsDiskTable_freeEntry(entry);
-}
-
-/**
  * @internal
  */
 static void
 _cache_free(netsnmp_cache * cache, void *magic)
 {
-    netsnmp_container *container;
 
     DEBUGMSGTL(("internal:cpqLinOsDiskTable:_cache_free", "called\n"));
 

@@ -95,7 +95,7 @@ static int generic_select(const struct dirent *entry)
     return 0;
 }
 
-unsigned long long get_BlockSize(char * scsi)
+unsigned long long get_BlockSize(unsigned char * scsi)
 {
     struct dirent **BlockDisklist;
     int NumBlockDisk;
@@ -113,7 +113,6 @@ unsigned long long get_BlockSize(char * scsi)
     if ((NumBlockDisk = scandir(attribute, &BlockDisklist,
                                 sd_select, alphasort)) > 0) {
         size_t remaining = 255 - strlen(attribute);
-        size_t bd_sz = strlen(BlockDisklist[0]->d_name);
         strncat(attribute, BlockDisklist[0]->d_name, remaining - 5);
         remaining = 255 - strlen(attribute);
         strncat(attribute, "/size", remaining);
@@ -141,7 +140,7 @@ unsigned long long get_BlockSize(char * scsi)
     return size;
 }
 
-unsigned char *get_ScsiGeneric(char *scsi)
+unsigned char *get_ScsiGeneric(unsigned char *scsi)
 {
     char attribute[256];
     char *generic = NULL;
@@ -328,7 +327,7 @@ int sata_parse_mcot(char *Temperature)
         return 0;
 }
 
-unsigned char * get_sata_log(int fd, int log)
+char * get_sata_log(int fd, int log)
 {
     int scsiCmdLen = 16;
     unsigned char scsiCmd[16] = 
@@ -340,7 +339,7 @@ unsigned char * get_sata_log(int fd, int log)
     unsigned char sense_buf[32];
     unsigned char response[512];
     int resp_size = 512;
-    unsigned char *statlog = NULL;
+    char *statlog = NULL;
 
     memset(&sense_buf, 0, sizeof(sense_buf));
     memset(&sgiob, 0, sizeof(sgiob));
@@ -369,7 +368,7 @@ unsigned char * get_sata_log(int fd, int log)
     return statlog;
 }
 
-unsigned char * get_sata_DiskRev(int fd)
+char * get_sata_DiskRev(int fd)
 {
     int scsiCmdLen = 16;
     unsigned char scsiCmd[16] =
@@ -413,10 +412,10 @@ unsigned char * get_sata_DiskRev(int fd)
     sct_fwrev[6] = response[53];
     sct_fwrev[7] = response[52];
     sct_fwrev[8] = 0;
-    return (unsigned char *)sct_fwrev;
+    return sct_fwrev;
 }
 
-unsigned char * get_sata_sct_stat(int fd)
+char * get_sata_sct_stat(int fd)
 {
     int scsiCmdLen = 16;
     unsigned char scsiCmd[16] = 
@@ -452,27 +451,27 @@ unsigned char * get_sata_sct_stat(int fd)
     }
     sct_stat = malloc(512);
     memcpy(sct_stat, &response[0], 512);
-    return (unsigned char *)sct_stat;
+    return sct_stat;
 }
 
-unsigned char * get_sata_statlog(int fd)
+char * get_sata_statlog(int fd)
 {
     return (get_sata_log(fd, GEN_STAT_PAGE));
 }
 
-unsigned char * get_sata_ssdlog(int fd)
+char * get_sata_ssdlog(int fd)
 {
     return (get_sata_log(fd, SSD_STAT_PAGE));
 }
     
-unsigned char * get_sata_temp(int fd)
+char * get_sata_temp(int fd)
 {
     return (get_sata_log(fd, TEMP_STAT_PAGE));
 }
 
 int get_sata_ssd_wear(int fd) 
 {
-    unsigned char *ssdlog = NULL;
+    char *ssdlog = NULL;
     int wear = 255;
     
     ssdlog = get_sata_ssdlog(fd);
@@ -497,7 +496,7 @@ int get_sata_ssd_wear(int fd)
 int get_sata_pwron(int fd) 
 {
     int poweron = -1;
-    unsigned char *statlog = NULL;
+    char *statlog = NULL;
 
     statlog = get_sata_statlog(fd);
 #ifdef UTTEST_SATA_DBG
@@ -718,7 +717,7 @@ unsigned long long  get_disk_capacity(int fd)
     }
 }
 
-int get_defect_data_size(int fd)
+int get_defect_data_size(int fd, unsigned char format)
 {
     int scsiCmdLen = 10;
     unsigned char scsiCmd[10] = {READ_DEFECT_DATA, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -733,7 +732,7 @@ int get_defect_data_size(int fd)
     memset(&sgiob, 0, sizeof(sgiob));
     memset(&response, 0, sizeof(response));
 
-    scsiCmd[2] = (unsigned char) 0x0d;
+    scsiCmd[2] = (unsigned char) 0x08 | format;
     scsiCmd[7] = (unsigned char)((resp_size >> 8) & 0xff);
     scsiCmd[8] = (unsigned char)(resp_size & 0xff);
 

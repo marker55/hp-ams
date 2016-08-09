@@ -116,7 +116,10 @@ usage(void)
          "\t-T<interval>\n"
          "\t\tThe <interval> parameter indicates how often test trap will be\n"
          "\t\tsent.  If no <interval> is specified, then the trap will be \n"
-         "\t\tsent once at start up\n"
+         "\t\tsent once at start up. The <interval> can be specified with a \n"
+         "\t\tsuffix of 'D, d, H, h, M, m, S, s' or no suffix to specify the\n"
+         "\t\tinterval in days, hours, minutes or seconds.  The range of \n"
+         "\t\tvalues is 10 seconds to 7 days.\n"
          "\t-G<generic data>\n"
          "\t\tThe value for cpqHoGenericData sent with cpqHoGenericTrap\n"
          "\t\t'generic trap data' = default\n"
@@ -208,6 +211,7 @@ main(int argc, char **argv)
     int            do_se = 1;
     int            do_fca = 1;
     int            do_mibII = 1;
+    int scale = 1;
     char *argarg;
     int             prepared_sockets = 0;
     struct stat     st;
@@ -342,8 +346,30 @@ main(int argc, char **argv)
             break;
         case 'T':
             if (optarg != (char *) 0) {
-                testtrap_interval = atoi(optarg);
-                if ((testtrap_interval < 0) || (testtrap_interval > 1440)) {
+                switch (optarg[strlen(optarg)-1]) {
+                    case 'd':
+                    case 'D':
+                        optarg[strlen(optarg)-1] = (char )0;
+                        scale = 60*60*24;
+                        break;
+                    case 'h':
+                    case 'H':
+                        optarg[strlen(optarg)-1] = (char )0;
+                        scale = 60*60;
+                        break;
+                    case 'm':
+                    case 'M':
+                        optarg[strlen(optarg)-1] = (char )0;
+                        scale = 60;
+                        break;
+                    case 'S':
+                    case 's':
+                        optarg[strlen(optarg)-1] = (char )0;
+                    default:
+                        break;
+                }
+                testtrap_interval = atoi(optarg) * scale;
+                if ((testtrap_interval < 10) || (testtrap_interval > (7*24*60*60))) {
                     usage();
                     exit(0);
                 }

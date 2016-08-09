@@ -4,7 +4,7 @@
 char *get_unit_sn(int);
 int get_unit_speed(int);
 int get_unit_health(int);
-int get_defect_data_size(int);
+int get_defect_data_size(int, unsigned char);
 
 enum {
     DEVICE_SUBSYSTEM_DEVICE,

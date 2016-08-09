@@ -10,9 +10,9 @@
 #include <net-snmp/agent/table_container.h>
 
 #include "cpqFcaHostCntlrTable.h"
+#include "common/nl_udev.h"
 
 int FcaCondition;
-static  netsnmp_container *gContainer = NULL;
 #define STATUS_POLL_TIME 600
 
 extern void cpqfca_update_hba_status(char *devpath, char *devname, void *data);
@@ -219,7 +219,6 @@ cpqFcaHostCntlrTable_handler(netsnmp_mib_handler *handler,
 
     netsnmp_request_info *request;
     netsnmp_table_request_info *table_info;
-    netsnmp_container *container;
     cpqFcaHostCntlrTable_entry *table_entry;
 
     DEBUGMSGTL(("cpqFcaHostCntlrTable:handler",

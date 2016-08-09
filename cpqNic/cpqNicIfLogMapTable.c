@@ -11,6 +11,7 @@
 #include "cpqNicIfLogMapTable.h"
 
 extern void     netsnmp_arch_iflog_container_load(netsnmp_container*);
+extern void     cpqNicIfLogMap_reload_entry(cpqNicIfLogMapTable_entry *);
 static void     _cache_free(netsnmp_cache * cache, void *magic);
 static int      _cache_load(netsnmp_cache * cache, void *vmagic);
 
@@ -19,8 +20,6 @@ const oid       cpqNicIfLogMapTable_oid[] =
 const size_t    cpqNicIfLogMapTable_oid_len =
         OID_LENGTH(cpqNicIfLogMapTable_oid);
 extern long     get_cpqNicIfLogMapOverallCondition(void);
-
-static  netsnmp_container *gContainer = NULL;
 
 #define CPQNICIFLOGMAPOVERALLCONDITION            2
 

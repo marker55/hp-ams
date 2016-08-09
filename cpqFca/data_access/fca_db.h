@@ -83,11 +83,13 @@
 #define FCA_HOST_MODEL_EMUCN1200E   64
 #define FCA_HOST_MODEL_BRCM536FLB   65    /* Breezy */
 
-/* Gen9 Snap 4 */
+/* Gen9 Snap 4  -- Private Only -- */
+/* Gen8 Snap 5 -- Public -- */
 //#define FCA_HOST_MODEL_QNX531M      66    /* Bronco */
 //#define FCA_HOST_MODEL_EMUEMBER     67    /* Ember */
 //#define FCA_HOST_MODEL_EMUELECTRON  68    /* Electron */
-//#define FCA_HOST_MODEL_QLAQUARTZ    69    /* Quartz2 */
+//#define FCA_HOST_MODEL_QLAQUARTZ    69    /* Quartz */
+
 
 /* Gen9 Snap 2 */
 //#define FCA_HOST_MODEL_BRCM533FLR   63
@@ -164,11 +166,12 @@
 #define ID_EMUCN1200E      0x21D4103C  /* Emulex CN1200E (Boxster 4) */
 #define ID_BRCM536FLB      0x22FA103C  /* Broadcom 536FLB (Breezy) */
 
-/* Gen9 Snap 4  */
-//#define ID_QNX631M         0x2231103C  /* QLogic Bronco (TBird) CNA -631M  */
-//#define ID_EMU_EMBER       0x2343103C  /* Emulex Ember (TBird) CNA - XXX -- need final marketing name */
-//#define ID_EMU_ELECTRON    0x8001103C  /* Emulex Electron (TBird) FCHBA -XXX  */
-//#define ID_QLA_QUARTZ2     0x8002103C  /* QLogic Quartz2 (TBird) FCHBA - XXX  */
+/* Gen9 Snap 4 -- Private only --- */
+/* Gen9 Snap5 -- Public --  */
+//#define ID_QNX631M         0x2231103C  /* QLogic Bronco (TBird) CNA - Synergy 3820C  */
+//#define ID_EMU_EMBER       0x2343103C  /* Emulex Ember (TBird) CNA - Synergy 3520C */
+//#define ID_EMU_ELECTRON    0x8001103C  /* Emulex Electron (TBird) FCHBA - Synergy 3530C  */
+//#define ID_QLA_QUARTZ2     0x8002103C  /* QLogic Quartz2 (TBird) FCHBA - Synergy 3830C  */
 
 /* Gen9 Snap 2  */
 //#define ID_BRCM533FLR      0x193A103C  /* Broadcom 533FLR flex fabric id (Bryan)  */
@@ -248,11 +251,12 @@ FCA_HBA_LIST gFcaHbaList [] =
       { ID_EMU650FLB,   11,   "650FLB",         FCA_HOST_MODEL_EMU650FLB,      "HP FlexFabric 20Gb 2-port 650FLB Adapter"  },
       { ID_EMUCN1200E,  0,    "",               FCA_HOST_MODEL_EMUCN1200E,     "HP StoreFabric CN1200E 10Gb Converged Network Adapter" },
       { ID_BRCM536FLB,   6,   "536FLB",         FCA_HOST_MODEL_BRCM536FLB,     "HP FlexFabric 10Gb 2-port 536FLB Adapter"  },
-/* Gen9 Snap 4  */
-//      { ID_QNX631M,        6,    "631M",         FCA_HOST_MODEL_QNX531M,      "HP FlexFabric 20G 2-port 631M"  },
-//      { ID_EMU_EMBER,     11,    "556FLR-SFP+",  FCA_HOST_MODEL_EMUEMBER,     "HP FlexFabric 20Gb 2-port Adapter"  },
-//      { ID_EMU_ELECTRON,  11,    "650M",         FCA_HOST_MODEL_EMUELECTRON,  "HP Fiber Channel 16Gb"  },
-//      { ID_QLA_QUARTZ2,   0,     "",             FCA_HOST_MODEL_QLAQUARTZ,    "HP Fiber Channel 16Gb" },
+/* Gen9 Snap 4 -- Private Only --  */
+/* Gen9 Snap5 -- Public --  */
+//      { ID_QNX631M,        5,    "3820C",       FCA_HOST_MODEL_QNX531M,        "HP Synergy 3820C 10/20Gb Converged Network Adapter "  },
+//      { ID_EMU_EMBER,      5,    "3520C",       FCA_HOST_MODEL_EMUEMBER,       "HP Synergy 3520C 10/20Gb Converged Network  Adapter"  },
+//      { ID_EMU_ELECTRON,   5,    "3530C",       FCA_HOST_MODEL_EMUELECTRON,    "HP Synergy 3530C 16G Fibre Channel Host Bus Adapter"  },
+//      { ID_QLA_QUARTZ2,    5,    "3830C",       FCA_HOST_MODEL_QLAQUARTZ,      "HP Synergy 3830C 16G Fibre Channel Host Bus Adapter" },
 /* Gen9 Snap 2  */
 //      { ID_BRCM533FLR,  6,    "533FLR",         FCA_HOST_MODEL_BRCM533FLR,     "HP FlexFabric 10Gb 2-port 533FLR Adapter"  },
 //      { ID_BRCM536FLR,   6,   "536FLR",         FCA_HOST_MODEL_BRCM536FLR,     "HP FlexFabric 10Gb 4-port 536FLR-T Adapter"  },

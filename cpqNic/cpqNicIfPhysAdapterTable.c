@@ -14,6 +14,7 @@
 #define SUPPORT_PREFIX_FLAGS 1
 
 extern void     netsnmp_arch_ifphys_container_load(netsnmp_container *);
+extern void cpqNicIfPhysAdapter_reload_entry(cpqNicIfPhysAdapterTable_entry *);
 static void     _cache_free(netsnmp_cache * cache, void *magic);
 static int      _cache_load(netsnmp_cache * cache, void *vmagic);
 

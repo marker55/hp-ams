@@ -1,6 +1,6 @@
 # Overridden during automated builds
 COMP_NAME    ?= hp-ams
-COMP_VER     ?= 2.2.0
+COMP_VER     ?= 2.3.0
 COMP_PKG_REV ?= 666
 
 NAME         ?= $(COMP_NAME)
@@ -41,7 +41,7 @@ MANDIR:=$(shell if [ -d $(PREFIX)/share/man ] ; then \
                 else \
                     echo $(DESTDIR)/$(PREFIX)/usr/man; fi )
 DISTROLIBS ?= $(shell if [ -f /etc/redhat-release ] ; then \
-                     echo "-lrpmio -lrpm -lpci"; \
+                     echo "-lrpmio -lrpm -lpci -lm"; \
                   elif [ -f /etc/SuSE-release ] ; then \
                      echo "-lrpmio -lrpm -lpci"; \
                   elif [ -f /etc/lsb-release ] ; then \

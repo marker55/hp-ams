@@ -31,17 +31,12 @@ extern unsigned char     cpqHoMibHealthStatusArray[];
 
 extern int file_select(const struct dirent *);
 void SendIdeTrap(int, cpqIdeAtaDiskTable_entry *);
+extern int pcislot_scsi_host(char * buffer);
 
 void netsnmp_arch_idecntlr_init(void); 
 void netsnmp_arch_idedisk_init(void);
 
 extern  int alphasort();
-extern unsigned char*get_ScsiGeneric(unsigned char*);
-extern unsigned long long get_BlockSize(unsigned char*);
-extern int get_DiskType(char *);
-extern char * get_DiskModel(char *);
-extern char * get_sata_DiskRev(char *);
-extern char * get_DiskState(char *);
 
 static struct dirent **ScsiHostlist;
 static char * ScsiHostDir = "/sys/class/scsi_host/";
@@ -50,12 +45,6 @@ static int NumScsiHost;
 static struct dirent **ScsiDisklist;
 static char * ScsiDiskDir = "/sys/class/scsi_disk/";
 static int NumScsiDisk;
-
-static struct dirent **BlockDisklist;
-static int NumBlockDisk;
-
-static struct dirent **GenericDisklist;
-static int NumGenericDisk;
 
 static char *current_Cntlr;
 
@@ -154,24 +143,18 @@ int netsnmp_arch_idedisk_container_load(netsnmp_container* container)
     netsnmp_container *cntlr_container;
     netsnmp_iterator  *it;
     netsnmp_cache *cntlr_cache;
-    netsnmp_container *fw_container = NULL;
-    netsnmp_cache *fw_cache = NULL;
 
     char buffer[256];
-    char attribute[256];
     char *value;
-    long long size;
     char *scsi;
     char *generic;
 
     int Cntlr, Bus, Index, Target;
-    char * OS_name;
     char *serialnum = NULL;
     int j;
-    long  rc = 0;
     int disk_fd;
     int Health = 0, Temp = -1, Mcot = -1, Wear = -1;
-    unsigned char *Temperature;
+    char *Temperature;
 
     netsnmp_index tmp;
     oid oid_index[2];
@@ -259,9 +242,9 @@ int netsnmp_arch_idedisk_container_load(netsnmp_container* container)
                     free(value);
                 }
 
-                disk->cpqIdeAtaDiskCapacity = get_BlockSize(scsi) >> 11;
+                disk->cpqIdeAtaDiskCapacity = get_BlockSize((unsigned char *)scsi) >> 11;
 
-                generic = get_ScsiGeneric(scsi);
+                generic = (char *)get_ScsiGeneric((unsigned char *)scsi);
                 if (generic != NULL) {
                     memset(disk->cpqIdeAtaDiskOsName, 0, 256);
                     disk->cpqIdeAtaDiskOsName_len =
@@ -353,7 +336,7 @@ int netsnmp_arch_idedisk_container_load(netsnmp_container* container)
                 MAKE_CONDITION(cntlr->cpqIdeControllerOverallCondition,
                                disk->cpqIdeAtaDiskStatus);
             if (old == NULL) {
-                rc = CONTAINER_INSERT(container, disk);
+                CONTAINER_INSERT(container, disk);
                 DEBUGMSGTL(("idedisk:container:load", "entry inserted\n"));
             }
             if (((old == NULL) || (disk->OldStatus == 2)) &&

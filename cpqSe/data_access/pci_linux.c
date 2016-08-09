@@ -41,6 +41,101 @@ char *pci_ids[] = {"/usr/share/hwdata/pci.ids",
 
 
 #define SYSBUSPCIDEVICES "/sys/bus/pci/devices/"
+
+void debug_tags(vpd_node *node)
+{
+    DEBUGMSGTL(("pci:vpd","New Node\n"));
+    while (node != NULL) {
+        DEBUGMSGTL(("pci:vpd", "[%c%c] = %s\n", 
+                    node->tag[0], node->tag[1],node->data));
+        node = node->next;
+    }
+}
+
+unsigned char* pci_get_vpdname(unsigned char *vpd)
+{
+    size_t length;
+    unsigned char *productname = NULL;
+
+    if (vpd[0] == 0x82) {
+        length = (unsigned short) vpd[1];
+        DEBUGMSGTL(("pci:vpd"," length = %d\n", (int)length));
+        if ((productname = malloc(length + 1)) != NULL) 
+            memset(productname, 0, length + 1);
+            strncpy((char *)productname, (char *)&vpd[3], length);
+    }
+    DEBUGMSGTL(("pci:vpd","productname = %s\n", productname));
+    return productname;
+}
+
+vpd_node* pci_get_vpdtags(unsigned char *vpd)
+{
+    size_t length = 0;;
+    vpd_node *vpd_tag = NULL;
+    vpd_node *vpd_tag_root = NULL;
+    unsigned int rw_offset = 0;
+
+    unsigned char *tag = NULL;
+    unsigned char tag_length;
+    unsigned short ro_tag_length = 0;;
+    unsigned short rw_tag_length = 0;;
+    if (vpd[0] == 0x82) {
+        length = (unsigned short) vpd[1];
+        
+//        DEBUGMSGTL(("pci:vpd"," length = %d\n", length));
+        if (vpd[length + 3] == 0x90) {
+            unsigned char *ro_tag = NULL;
+            unsigned char *ro_tag_end = NULL;
+            if ((vpd_tag_root = malloc(sizeof(vpd_node))) == NULL) 
+                return NULL;
+            ro_tag = vpd + length + 3;
+            ro_tag_length = ro_tag[1] + (ro_tag[2] << 8);
+            ro_tag_end = ro_tag + ro_tag_length;
+            tag = ro_tag + 3;
+            vpd_tag = vpd_tag_root;
+            while (tag < ro_tag_end) {
+                tag_length = tag[2];
+                DEBUGMSGTL(("pci:vpd","tag_length = %d, tag = %p, tag_end = %p\n", tag_length, tag, ro_tag_end));
+                if (tag_length) { 
+                    strncpy((char *)vpd_tag->tag, (char *)tag, 2);
+                    vpd_tag->data = malloc(tag_length + 1);
+                    memset(vpd_tag->data, 0, tag_length + 1);
+                    strncpy((char *)vpd_tag->data, (char *)tag + 3, tag_length);
+                    vpd_tag->next = malloc(sizeof(vpd_node));
+                    memset(vpd_tag->next, 0, sizeof(vpd_node));
+                    vpd_tag = vpd_tag->next;
+                } 
+                tag += (tag_length + 3);
+            }
+        }             
+        rw_offset = length + ro_tag_length + 6;
+        if (vpd[rw_offset] == 0x91) {
+            unsigned char *rw_tag = NULL;
+            unsigned char *rw_tag_end = NULL;
+
+            rw_tag = vpd + rw_offset;
+            rw_tag_length = rw_tag[1] + (rw_tag[2] << 8);
+            rw_tag_end = rw_tag + rw_tag_length;
+            tag = rw_tag + 3;
+            while (tag < rw_tag_end) {
+                tag_length = tag[2];
+                DEBUGMSGTL(("pci:vpd","tag_length = %d, tag = %p, tag_end = %p\n", tag_length, tag, rw_tag_end));
+                if (tag_length) { 
+                    strncpy((char *)vpd_tag->tag, (char *)tag, 2);
+                    vpd_tag->data = malloc(tag_length + 1);
+                    memset(vpd_tag->data, 0, tag_length + 1);
+                    strncpy((char *)vpd_tag->data, (char *)tag + 3, tag_length);
+                    vpd_tag->next = malloc(sizeof(vpd_node));
+                    memset(vpd_tag->next, 0, sizeof(vpd_node));
+                    vpd_tag = vpd_tag->next;
+                } 
+                tag += (tag_length + 3);
+            }
+        }
+    }
+    return vpd_tag_root;;
+}
+
 unsigned int pci_get_revision(unsigned char *config)
 {
     return (unsigned int) config[8];
@@ -129,7 +224,7 @@ int get_pci_slot_info(netsnmp_container* container)
     struct dirent **filelist;
     cpqSePciSlotTable_entry *entry;
 
-    int i , rc, bc, dom = 0, bus = 0, device = 0;
+    int i, bc, dom = 0, bus = 0, device = 0;
     PSMBIOS_SYSTEM_SLOTS slotInfo;
 
     char buf[80];
@@ -173,7 +268,8 @@ int get_pci_slot_info(netsnmp_container* container)
                             entry->cpqSePciSlotBusNumberIndex = bus;
                             entry->cpqSePciSlotDeviceNumberIndex = device;
                             entry->cpqSePciPhysSlot = slotInfo->wSlotID;
-                            memset(entry->cpqSePciSlotBoardName, 0, sizeof(entry->cpqSePciSlotBoardName));
+                            memset(entry->cpqSePciSlotBoardName, 
+                                   0, sizeof(entry->cpqSePciSlotBoardName));
                             strncpy(entry->cpqSePciSlotBoardName, "(Empty)", 
                                    sizeof(entry->cpqSePciSlotBoardName - 1));
                             entry->cpqSePciSlotBoardName_len = 7;
@@ -200,8 +296,6 @@ int get_pci_slot_info(netsnmp_container* container)
     
                             entry->cpqSePciSlotCurrentMode = 
                                                         PCI_SLOT_TYPE_UNKNOWN;
-    
-                            rc = CONTAINER_INSERT(container, entry);
                         }
                     }
                 }
@@ -405,6 +499,8 @@ int pci_node_scan(pci_node * node, char * dirname)
         if (n > 0) {
             for (i = 0;i < n; i++) {
                 ssize_t remain;
+                memset(node->sysdev, 0, 16);
+                strncpy((char *)node->sysdev, devices[i]->d_name, 15);
                 sscanf(devices[i]->d_name, "%4hx:%2hhx:%2hhx.%1hhx",
                         &(node->domain), &(node->bus),
                         &(node->dev), &(node->func));
@@ -470,6 +566,28 @@ int pci_node_scan(pci_node * node, char * dirname)
                         node->config = NULL;
                     }
                 }
+
+                newdir[newdir_sz] = (char) 0;
+                remain += 5;
+                strncat(newdir,"vpd", remain);
+                remain -= 3;
+                if ((node->vpd = malloc(4096)) != NULL) {
+                    int vpd_fd;
+                    if ((vpd_fd = open(newdir, O_RDONLY)) != -1) {
+                        DEBUGMSGTL(("pci:vpd","newdir = %s\n", newdir));
+                        if (read(vpd_fd, node->vpd, 4096) > 0  ) {
+                            node->vpd_productname = pci_get_vpdname(node->vpd);
+                            node->vpd_data = pci_get_vpdtags(node->vpd);
+                            debug_tags(node->vpd_data);
+                        }
+                        free(node->vpd);
+                        close(vpd_fd);
+                    } else {
+                        free(node->vpd);
+                    }
+                    node->vpd = NULL;
+                }
+
                 node->vendor = vendor_search(vendor_root, node->vendor_id);
                 if (vendor_root == NULL )
                     vendor_root = node->vendor;
@@ -522,11 +640,9 @@ int pci_node_scan(pci_node * node, char * dirname)
 
 void scan_hw_ids()
 {
-    char * file_name;
     int i = 0;
     int flen = 0;
     FILE *hw_ids = NULL;
-    struct stat st;
     char buffer[256];
     unsigned short vendor_id = 0;
     unsigned short device_id = 0;
@@ -559,7 +675,7 @@ void scan_hw_ids()
             class_id = (int)strtol(&buffer[2], NULL, 16) << 16;
             class_looking = 1;
             memset(&class_id_str[0], 0, 80);
-            strncpy(&class_id_str[0], &buffer[6], 79);
+            strncpy((char *)&class_id_str[0], &buffer[6], 79);
             continue;
         }
 
@@ -572,11 +688,12 @@ void scan_hw_ids()
             for (pciclass = class_root; 
                     pciclass != NULL; pciclass = pciclass->next) {
                 if (class_id == (pciclass->device_class & 0xffff00) ) {
-                    if ((pciclass->super = malloc(strlen(&class_id_str[0]) + 1))
+                    if ((pciclass->super = 
+                            malloc(strlen((char *)&class_id_str[0]) + 1))
                          != NULL) 
                         strncpy((char *)pciclass->super, 
-                                &class_id_str[0], 
-                                strlen(&class_id_str[0]));
+                                (char *)&class_id_str[0], 
+                                strlen((char *)&class_id_str[0]));
                     if ((pciclass->name = malloc(strlen(&buffer[5]) + 1)) 
                          != NULL) 
                         memset(pciclass->name, 0, strlen(&buffer[5]) + 1);
@@ -596,7 +713,8 @@ void scan_hw_ids()
             for (pciclass = class_root; 
                     pciclass != NULL; pciclass = pciclass->next) {
                 if (class_id == pciclass->device_class  )
-                    if ((pciclass->prog_if_name = malloc(strlen(&buffer[6]) + 1)) != NULL) 
+                    if ((pciclass->prog_if_name = 
+                            malloc(strlen(&buffer[6]) + 1)) != NULL) 
                         strncpy((char *)pciclass->prog_if_name, 
                                 &buffer[6], 
                                 strlen(&buffer[6]));
@@ -624,9 +742,9 @@ void scan_hw_ids()
                 device_looking = 0;
             continue;
         }
-        if ((buffer[0] == '\t') &&
+        if ((buffer[0] == '\t') && device_looking &&
                 (((buffer[1] >= '0') && (buffer[1] <= '9')) ||
-                 ((buffer[1] >= 'a') && (buffer[1] <= 'f'))) && device_looking) {
+                 ((buffer[1] >= 'a') && (buffer[1] <= 'f')))) {
             /* Looking for TAB(HEX)  (NAME) */
             buffer[5] = 0;
             device_id = (unsigned short)strtol(&buffer[1], NULL,16);
@@ -646,9 +764,9 @@ void scan_hw_ids()
                 subsystem_looking = 0;
             continue;
         }
-        if ((buffer[0] == '\t') && (buffer[1] == '\t') &&
+        if ((buffer[0] == '\t') && (buffer[1] == '\t') && subsystem_looking &&
                 (((buffer[2] >= '0') && (buffer[2] <= '9')) ||
-                 ((buffer[2] >= 'a') && (buffer[2] <= 'f'))) && subsystem_looking) {
+                 ((buffer[2] >= 'a') && (buffer[2] <= 'f')))) {
             /* Looking for TAB TAB(HEX) (HEX)  (NAME) */
             buffer[6] = 0;
             buffer[11] = 0;
@@ -674,11 +792,10 @@ void scan_hw_ids()
 
 void netsnmp_arch_pci_init(void) 
 {
-    int count;
 
     if (pci_root == NULL){
         pci_root = pci_node_create();
-        count = pci_node_scan(pci_root, SYSBUSPCIDEVICES);
+        pci_node_scan(pci_root, SYSBUSPCIDEVICES);
 
         scan_hw_ids();
     }
@@ -686,22 +803,19 @@ void netsnmp_arch_pci_init(void)
 
 int netsnmp_arch_pcislot_container_load(netsnmp_container* container) 
 {
-    int count;
     pci_node *dev;
 
     cpqSePciSlotTable_entry *entry;
-    int cnt, rc;
 
     if (pci_root == NULL){
         pci_root = pci_node_create();
-        count = pci_node_scan(pci_root, SYSBUSPCIDEVICES);
+        pci_node_scan(pci_root, SYSBUSPCIDEVICES);
 
         scan_hw_ids();
     }
 
     get_pci_slot_info(container);
 
-    cnt = 0;
     for (dev=pci_root; dev != NULL; dev=dev->pci_next) {
         if (dev->func == 0) {
             entry = cpqSePciSlotTable_createEntry(container, 
@@ -718,49 +832,90 @@ int netsnmp_arch_pcislot_container_load(netsnmp_container* container)
                     "%04X%04x", dev->vendor_id,dev->device_id);
             entry->cpqSePciSlotSubSystemID_len = PCISLOT_SUBSYS_SZ;
 
-            memset(entry->cpqSePciSlotBoardName, 0, sizeof(entry->cpqSePciSlotBoardName));
+            memset(entry->cpqSePciSlotBoardName, 0, 
+                    sizeof(entry->cpqSePciSlotBoardName));
+            entry->cpqSePciSlotBoardName_len = 0;
+            /* use VPD product name if it starts with HP */
+            if ((dev->vpd_productname) && 
+                !strncmp((char *)dev->vpd_productname, "HP ", 3))
+                entry->cpqSePciSlotBoardName_len = 
+                    snprintf(entry->cpqSePciSlotBoardName, 
+                             PCISLOT_BOARDNAME_SZ, "%s", dev->vpd_productname);
+            else {
+                vpd_node* node = dev->vpd_data;
+                while (node != NULL){
+                    if ((node->data != NULL) && 
+                        !strncmp((char *)node->data, "HP ", 3))
+                        entry->cpqSePciSlotBoardName_len = 
+                            snprintf(entry->cpqSePciSlotBoardName, 
+                                    PCISLOT_BOARDNAME_SZ, "%s", node->data);
+                    node = node->next;
+                }
+            }
+            if (!entry->cpqSePciSlotBoardName_len) {
             if (dev->device->name != NULL)
-                entry->cpqSePciSlotBoardName_len = snprintf(entry->cpqSePciSlotBoardName, 
+                    /* if there is a good device name then use the 
+                        uVendor and device name */
+                    entry->cpqSePciSlotBoardName_len = 
+                        snprintf(entry->cpqSePciSlotBoardName, 
                         PCISLOT_BOARDNAME_SZ, "%s %s", 
                         dev->vendor->name, dev->device->name);
             else
-                entry->cpqSePciSlotBoardName_len = snprintf(entry->cpqSePciSlotBoardName, 
+                    /* just print out the Vendor and the 
+                       hexadeciamla device name */
+                    entry->cpqSePciSlotBoardName_len = 
+                        snprintf(entry->cpqSePciSlotBoardName, 
                         PCISLOT_BOARDNAME_SZ, "%s Device %4x", 
                         dev->vendor->name, dev->device_id);
 
+                /* go back and check HP/Compaq storage controllers and use 
+                   Subvendor and subdevice ID's if we have them */
             if (((dev->device_class & 0xff0000) == 0x10000) && 
                     ((dev->subvendor_id == 0x103c) || 
                      (dev->subvendor_id == 0x0e11))) {
                 if (dev->subsystem->vname == NULL) 
                     dev->subsystem->vname = get_vname(dev->subvendor_id);
 
-                DEBUGMSGTL(("pci:arch","dev->subsystem->vname=%s dev->subsystem->vname=%s\n", 
+                    DEBUGMSGTL(("pci:arch",
+                                "dev->subsys->vname=%s"
+                                " dev->subsys->vname=%s\n", 
                             dev->subsystem->vname, dev->subsystem->name));
                 if (dev->subsystem->name != NULL) {
-                    entry->cpqSePciSlotBoardName_len = snprintf(entry->cpqSePciSlotBoardName, 
+                        entry->cpqSePciSlotBoardName_len = 
+                            snprintf(entry->cpqSePciSlotBoardName, 
                             PCISLOT_BOARDNAME_SZ, "%s %s %s", 
-                            dev->subsystem->vname, dev->subsystem->name, dev->device->name);
-                    snprintf(entry->cpqSePciSlotSubSystemID, PCISLOT_SUBSYS_SZ + 1, 
-                            "%04X%04x", dev->subvendor_id, dev->subdevice_id);
+                                    dev->subsystem->vname, 
+                                    dev->subsystem->name, dev->device->name);
+                        snprintf(entry->cpqSePciSlotSubSystemID, 
+                                PCISLOT_SUBSYS_SZ + 1, 
+                                "%04X%04x", 
+                                dev->subvendor_id, dev->subdevice_id);
                 }
             }
+                /* go back and check HP/Compaq NIC controllers  and use Subvendor 
+                   and subdevice ID's if we have them */
             if (((dev->device_class & 0xff0000) == 0x20000) && 
                     ((dev->subvendor_id == 0x103c) || 
                      (dev->subvendor_id == 0x0e11))) {
                 if (dev->subsystem->vname == NULL) 
                     dev->subsystem->vname = get_vname(dev->subvendor_id);
 
-                DEBUGMSGTL(("pci:arch","dev->subsystem->vname=%s dev->subsystem->vname=%s\n", 
+                    DEBUGMSGTL(("pci:arch",
+                                "dev->subsystem->vname=%s "
+                                "dev->subsystem->vname=%s\n", 
                             dev->subsystem->vname, dev->subsystem->name));
                 if (dev->subsystem->name != NULL) {
-                    entry->cpqSePciSlotBoardName_len = snprintf(entry->cpqSePciSlotBoardName, 
+                        entry->cpqSePciSlotBoardName_len = 
+                            snprintf(entry->cpqSePciSlotBoardName, 
                             PCISLOT_BOARDNAME_SZ, "%s %s", 
-                            dev->subsystem->vname, dev->subsystem->name);
-                    snprintf(entry->cpqSePciSlotSubSystemID, PCISLOT_SUBSYS_SZ + 1, 
-                            "%04X%04x", dev->subvendor_id, dev->subdevice_id);
+                                    dev->subsystem->vname,
+                                    dev->subsystem->name);
+                        snprintf(entry->cpqSePciSlotSubSystemID, 
+                                PCISLOT_SUBSYS_SZ + 1, "%04X%04x", 
+                                dev->subvendor_id, dev->subdevice_id);
+                    }
                 }
             }
-
             entry->cpqSePciSlotWidth = get_pci_width(dev); /* Unknown for now */
 
             entry->cpqSePciSlotExtendedInfo = get_pci_extended_info(dev);
@@ -771,8 +926,6 @@ int netsnmp_arch_pcislot_container_load(netsnmp_container* container)
             entry->cpqSePciMaxSlotSpeed = 0;
             entry->cpqSePciXMaxSlotSpeed = -1;
             entry->cpqSePciCurrentSlotSpeed = 0;
-
-            rc = CONTAINER_INSERT(container, entry);
         }
     }
     DEBUGMSGTL(("pci:arch"," loaded %ld slot entries\n",
@@ -783,15 +936,12 @@ int netsnmp_arch_pcislot_container_load(netsnmp_container* container)
 
 int netsnmp_arch_pcifunc_container_load(netsnmp_container* container) 
 {
-    int count;
-
     pci_node *dev;
     cpqSePciFunctTable_entry *entry;
-    int rc;
 
     if (pci_root == NULL){
         pci_root = pci_node_create();
-        count = pci_node_scan(pci_root, SYSBUSPCIDEVICES);
+        pci_node_scan(pci_root, SYSBUSPCIDEVICES);
 
         scan_hw_ids();
     }
@@ -810,13 +960,15 @@ int netsnmp_arch_pcifunc_container_load(netsnmp_container* container)
         if (dev->pciclass->name != NULL ) {
             if (dev->pciclass->prog_if_name != NULL ) 
                 entry->cpqSePciFunctClassDescription_len = 
-                    snprintf(entry->cpqSePciFunctClassDescription, 80, "%s - %s (%s)", 
+                    snprintf(entry->cpqSePciFunctClassDescription, 80, 
+                            "%s - %s (%s)", 
                             (char *)dev->pciclass->super,
                             (char *)dev->pciclass->name,
                             (char *)dev->pciclass->prog_if_name);
             else
                 entry->cpqSePciFunctClassDescription_len = 
-                    snprintf(entry->cpqSePciFunctClassDescription, 80, "%s - %s", 
+                    snprintf(entry->cpqSePciFunctClassDescription, 80, 
+                            "%s - %s", 
                             (char *)dev->pciclass->super,
                             (char *)dev->pciclass->name);
 
@@ -837,7 +989,8 @@ int netsnmp_arch_pcifunc_container_load(netsnmp_container* container)
             entry->cpqSePciFunctDevStatus = PCI_DEVICE_DISABLED;
 
         if (((dev->device_class & 0xff0000) == 0x20000) &&
-                ((dev->subvendor_id == 0x103c) || (dev->subvendor_id == 0x0e11))){
+                ((dev->subvendor_id == 0x103c) || 
+                 (dev->subvendor_id == 0x0e11))) {
             entry->cpqSePciFunctVendorID = dev->subvendor_id;
             entry->cpqSePciFunctDeviceID = dev->subdevice_id;
         } else {
@@ -845,7 +998,6 @@ int netsnmp_arch_pcifunc_container_load(netsnmp_container* container)
             entry->cpqSePciFunctDeviceID = dev->device_id;
         }
 
-        rc = CONTAINER_INSERT(container, entry);
         DEBUGMSGTL(("pci:arch","Inserted pcidev->bus=%x dev=%x func=%x\n",
                     dev->bus, dev->dev, dev->func));
     }

@@ -325,6 +325,8 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
     char *value;
     long  rc = 0;
     int i;
+    char    linkBuf[1024];
+    ssize_t link_sz;
 
     DEBUGMSGTL(("fcahc:container:load", "loading\n"));
 
@@ -390,6 +392,8 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
             strcpy(attribute, buffer);
             entry->cpqFcaHostCntlrSlot = pcislot_scsi_host(attribute);
 
+            entry->cpqFcaHostCntlrHwLocation_len = 0;
+            entry->cpqFcaHostCntlrHwLocation[0] = '\0';
             if (entry->cpqFcaHostCntlrSlot > 0 ) {
                 DEBUGMSGTL(("fcahc:container:load", "Got pcislot info for %s = %u\n",
                             buffer,
@@ -402,12 +406,6 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
                                 "Blade %u, Slot %u",
                                 (entry->cpqFcaHostCntlrSlot>>8) & 0xF,
                                 (entry->cpqFcaHostCntlrSlot>>16) & 0xFF);
-                else
-                    entry->cpqFcaHostCntlrHwLocation_len =
-                        snprintf(entry->cpqFcaHostCntlrHwLocation,
-                                256,
-                                "Slot %u",
-                                entry->cpqFcaHostCntlrSlot);
             }
     
             strcpy(attribute, buffer);
@@ -417,7 +415,7 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
                             attribute));
             device = get_sysfs_shex(attribute);
             DEBUGMSGTL(("fcahc:container:load", "Value = %x\n", device));
-
+            if ((unsigned short) device != 0xffff ) {
             strcpy(attribute, buffer);
             strncat(attribute, sysfs_attr[DEVICE_SUBSYSTEM_VENDOR],
                     sizeof(attribute) - strlen(attribute) - 1);
@@ -425,6 +423,46 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
                         attribute));
             vendor = get_sysfs_shex(attribute);
             DEBUGMSGTL(("fcahc:container:load", "Value = %x\n", vendor));
+            } else {
+                unsigned char * start;
+                unsigned char * end;
+                unsigned char pcidevice[256];
+                int j;
+                
+                /* this is possible a converged NIC look elsewere */
+
+                DEBUGMSGTL(("fcahc:container:load", "buffer is  %s\n", buffer));
+                if ((link_sz = readlink(buffer, linkBuf, 1024)) < 0) {
+                    return NULL;
+                }
+                linkBuf[link_sz] = 0;
+                start = strrchr(linkBuf, '/');
+                while (start != NULL) {
+                    *start = 0;
+                    if (!strncmp(start + 1, "0000:", 5)) {
+                        strcpy(attribute, "/sys/bus/pci/devices/");
+                        strcat(attribute, start + 1);
+                        start = NULL;
+                        continue;
+                    } else {
+                        start = strrchr(linkBuf, '/');
+                    }
+                }
+
+                DEBUGMSGTL(("fcahc:container:load", "attribute is %s\n",
+                        attribute));
+                strcpy(pcidevice, attribute);
+                strcat(attribute, "/subsystem_device");
+                DEBUGMSGTL(("fcahc:container:load", "Getting attribute from %s\n",
+                        attribute));
+                device = get_sysfs_shex(attribute);
+                DEBUGMSGTL(("fcahc:container:load", "Value = %x\n", device));
+                strcat(pcidevice, "/subsystem_vendor");
+                DEBUGMSGTL(("fcahc:container:load", "Getting attribute from %s\n",
+                        pcidevice));
+                vendor = get_sysfs_shex(pcidevice);
+                DEBUGMSGTL(("fcahc:container:load", "Value = %x\n", vendor));
+            }
 
             BoardID = device << 16;
             BoardID += vendor;

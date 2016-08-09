@@ -56,7 +56,7 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
     rpmts                 ts;
     rpmdbMatchIterator    mi;
     Header                h;
-    const char           *n, *v, *r, *g, *vendor, *description;
+    const char           *n, *v, *r, *vendor, *description;
     uint32_t              *t;
     int                   rc = 0, i = 0;
     struct tm            *td;
@@ -107,10 +107,6 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
             r = rpmtdGetString(&tag_data);
             rpmtdFreeData(&tag_data);
 
-            headerGet(h, RPMTAG_GROUP,       &tag_data, HEADERGET_DEFAULT);
-            g = rpmtdGetString(&tag_data);
-            rpmtdFreeData(&tag_data);
-
             headerGet(h, RPMTAG_SUMMARY,     &tag_data, HEADERGET_DEFAULT);
             description = rpmtdGetString(&tag_data);
             rpmtdFreeData(&tag_data);
@@ -122,7 +118,6 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
             headerGetEntry( h, RPMTAG_NAME,        NULL, (void**)&n, NULL);
             headerGetEntry( h, RPMTAG_VERSION,     NULL, (void**)&v, NULL);
             headerGetEntry( h, RPMTAG_RELEASE,     NULL, (void**)&r, NULL);
-            headerGetEntry( h, RPMTAG_GROUP,       NULL, (void**)&g, NULL);
             headerGetEntry( h, RPMTAG_INSTALLTIME, NULL, (void**)&t, NULL);
             headerGetEntry( h, RPMTAG_SUMMARY,     NULL,
                     (void **) &description, NULL);
@@ -130,9 +125,19 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
 
             strncpy(entry->cpqHoSwVerName, n, sizeof(entry->cpqHoSwVerName) - 1);
             entry->cpqHoSwVerName_len = strlen(entry->cpqHoSwVerName);
-            entry->cpqHoSwVerType = (NULL != strstr( g, "System Environment"))
-                ? 2 /* operatingSystem */
-                : 5;     /*  application    */
+
+            entry->cpqHoSwVerType = 5;     /*  application    */
+            if (strstr(n, "-firmware-"))
+                entry->cpqHoSwVerType = 7;  /* need to add new type */
+            if (!strncmp(n, "kmod-", 5) || !strstr(n, "-kmp-"))
+                entry->cpqHoSwVerType = 2; 
+            if (entry->cpqHoSwVerType == 5) {
+                if (strcasestr(description, "agent"))
+                     entry->cpqHoSwVerType = 3;
+                if (strcasestr(description, "tool") || 
+                    strcasestr(description, "util"))
+                     entry->cpqHoSwVerType = 4;
+            }
 
             if (description != NULL ) {
                 DEBUGMSGTL(("cpqHoSwVerTable:load:arch", "description = %s\n",

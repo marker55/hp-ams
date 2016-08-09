@@ -1,4 +1,4 @@
-summary         : Agentless Monitoring Service for HP ProLiant Gen8 and Gen9 Systems
+summary         : Agentless Management Service for HP ProLiant Gen8 and Gen9 Systems
 name            : hp-ams
 Version         : %VERSION%
 Release         : %RELEASE%
@@ -242,21 +242,20 @@ fi
 ##########################################################################
 
 %files -f filelist-%{tardir}
-%defattr(644,root,root)
+%defattr(755,root,root)
 
 %defattr(755,root,root)
 /sbin/hpHelper
-%if ! %{?_unitdir:1}%{!?mymacro:0}
+/opt/hp/hp-ams
+/etc/sysconfig/hp-ams
+%if %{?_unitdir:1}%{!?mymacro:0}
+%{_unitdir}/hp-ams.service
+%else
 /etc/init.d/hp-ams
 %endif
 
 %defattr(644,root,root)
-/etc/sysconfig/hp-ams
-/opt/hp/hp-ams
 /usr/share/man/man8/hpHelper.8.gz
-%if  %{?_unitdir:1}%{!?mymacro:0}
-%{_unitdir}/hp-ams.service
-%endif
 
 %changelog
 * Wed Jul 28 2010 HP Linux Development <Linux_SWdeliverables@external.groups.hp.com> %VERSION%-%RELEASE%

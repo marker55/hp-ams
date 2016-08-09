@@ -28,7 +28,9 @@ extern void init_cpqHostOsMem(void);
 extern void initialize_table_cpqHoSWRunningTable(void);
 extern void init_cpqHoSwVerTable(void);
 extern void init_cpqHoSWRunningTable(void);
-extern void init_cpqHoFwVerTable(void);
+extern int header_generic(struct variable *, oid *, size_t *, int, size_t *,
+                   WriteMethod **);
+
 
 extern char *GenericData;
 extern int testtrap_interval;
@@ -185,7 +187,6 @@ init_cpqHost(void)
     init_cpqHoSwVerTable();
     init_cpqHostOsMem();
     init_cpqHoSWRunningTable();
-    init_cpqHoFwVerTable();
 
     /*
      * register ourselves with the agent to handle our mib tree 
