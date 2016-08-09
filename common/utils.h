@@ -2,6 +2,7 @@
 
 #define MAC_ADDRESS_BYTES      6
 
+long uptime();
 void init_etime(struct timeval the_time[]);
 int get_etime(struct timeval the_time[]);
 

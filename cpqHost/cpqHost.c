@@ -204,7 +204,7 @@ init_cpqHost(void)
         if (snmp_alarm_register(testtrap_interval, 
                              SA_REPEAT, 
                              (SNMPAlarmCallback *) &SendcpqHostGenericTrap, 
-                             NULL) < 0 )
+                             NULL) == 0 )
             DEBUGMSGTL(("cpqHost", "Alarm register failed\n"));
     } else 
         SendcpqHostGenericTrap();
@@ -431,13 +431,11 @@ void SendcpqHostGenericTrap()
             strlen(GenericData));
 
 
-    netsnmp_send_traps(SNMP_TRAP_ENTERPRISESPECIFIC,
+    send_enterprise_trap_vars(SNMP_TRAP_ENTERPRISESPECIFIC,
                     11003,
                     compaq,
                     compaq_len,
-                    var_list,
-                    NULL,
-                    0);
+                    var_list);
 
     DEBUGMSGTL(("cpqhost:", "Free varbind list...\n"));
     snmp_free_varbind(var_list);

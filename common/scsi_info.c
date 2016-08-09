@@ -105,28 +105,34 @@ unsigned long long get_BlockSize(char * scsi)
     memset(attribute, 0, sizeof(attribute));
 
 #if RHEL_MAJOR == 5
-    sprintf(attribute, "/sys/class/scsi_device/%s/device/", scsi);
+    snprintf(attribute, 255, "/sys/class/scsi_device/%s/device/", scsi);
 #else
-    sprintf(attribute, "/sys/class/scsi_device/%s/device/block/", scsi);
+    snprintf(attribute, 255, "/sys/class/scsi_device/%s/device/block/", scsi);
 #endif
 
     if ((NumBlockDisk = scandir(attribute, &BlockDisklist,
                                 sd_select, alphasort)) > 0) {
-        strcat(attribute, BlockDisklist[0]->d_name);
-        strcat(attribute,"/size");
+        size_t remaining = 255 - strlen(attribute);
+        size_t bd_sz = strlen(BlockDisklist[0]->d_name);
+        strncat(attribute, BlockDisklist[0]->d_name, remaining - 5);
+        remaining = 255 - strlen(attribute);
+        strncat(attribute, "/size", remaining);
         /* Size is in 512 block, need mmbytes so left shift 11 bits */
         size = get_sysfs_ullong(attribute);
         free(BlockDisklist[0]);
         free(BlockDisklist);
     } else {
-        strcat(attribute, "/block/");
+        size_t remaining = 255 - strlen(attribute);
+        strncat(attribute, "/block/", remaining);
+        remaining = 255 - strlen(attribute);
 
         /* Look for block:sd? */
         if ((NumBlockDisk = scandir(attribute, &BlockDisklist,
                                     sd_select, alphasort)) > 0) {
 
-            strcat(attribute,BlockDisklist[0]->d_name);
-            strcat(attribute,  "/size");
+            strncat(attribute,BlockDisklist[0]->d_name, remaining);
+            remaining = 255 - strlen(attribute);
+            strncat(attribute,  "/size", remaining);
             size = get_sysfs_ullong(attribute);
             free(BlockDisklist[0]);
             free(BlockDisklist);
@@ -144,7 +150,7 @@ unsigned char *get_ScsiGeneric(char *scsi)
     char buffer[256], lbuffer[256], *pbuffer;
 
     memset(attribute, 0, sizeof(attribute));
-    sprintf(attribute, "/sys/class/scsi_device/%s/device/generic", scsi);
+    snprintf(attribute, sizeof(attribute) - 1, "/sys/class/scsi_device/%s/device/generic", scsi);
     if ((len = readlink(attribute, lbuffer, 253)) > 0) {
         lbuffer[len]='\0'; /* Null terminate the string */
         pbuffer = basename(lbuffer);
@@ -164,7 +170,6 @@ unsigned char *get_ScsiGeneric(char *scsi)
                                 generic_select, alphasort);
     if (NumGenericDisk  > 0) {
         size_t gd_sz = strlen(GenericDisklist[0]->d_name);
-
         if ((generic = malloc(gd_sz + 1)) != NULL){
             memset(generic, 0, gd_sz + 1);
             strncpy(generic, GenericDisklist[0]->d_name, gd_sz);
@@ -1261,7 +1266,7 @@ int get_DiskType(char *scsi)
 
     memset(attribute, 0, sizeof(attribute));
 
-    sprintf(attribute, "/sys/class/scsi_device/%s/device/type", scsi);
+    snprintf(attribute, sizeof(attribute) - 1, "/sys/class/scsi_device/%s/device/type", scsi);
     return(get_sysfs_uint(attribute));
 }
 
@@ -1271,7 +1276,7 @@ char * get_DiskModel(char *scsi)
 
     memset(attribute, 0, sizeof(attribute));
 
-    sprintf(attribute, "/sys/class/scsi_device/%s/device/model", scsi);
+    snprintf(attribute, sizeof(attribute) - 1, "/sys/class/scsi_device/%s/device/model", scsi);
     return(get_sysfs_str(attribute));
 }
 
@@ -1281,7 +1286,7 @@ char * get_sas_DiskRev(char *scsi)
 
     memset(attribute, 0, sizeof(attribute));
 
-    sprintf(attribute, "/sys/class/scsi_device/%s/device/rev", scsi);
+    snprintf(attribute, sizeof(attribute) - 1, "/sys/class/scsi_device/%s/device/rev", scsi);
     return(get_sysfs_str(attribute));
 }
 
@@ -1291,7 +1296,7 @@ char * get_DiskState(char *scsi)
 
     memset(attribute, 0, sizeof(attribute));
 
-    sprintf(attribute, "/sys/class/scsi_device/%s/device/state", scsi);
+    snprintf(attribute,  sizeof(attribute) - 1, "/sys/class/scsi_device/%s/device/state", scsi);
     return(get_sysfs_str(attribute));
 }
 
@@ -1317,7 +1322,7 @@ int main(int argc, char **argv)
                     generic_select, alphasort))  > 0) {
         for (j = 0; j < NumScsiGeneric; j++) {
             memset(disk_name, 0, 256);
-            sprintf(disk_name, "/dev/%s",ScsiGenericlist[j]->d_name);
+            snprintf(disk_name, sizeof(disk_name) - 1, "/dev/%s",ScsiGenericlist[j]->d_name);
             free(ScsiGenericlist[j]);
             if ((disk_fd = open(disk_name, O_RDWR | O_NONBLOCK)) < 0 )
             continue;

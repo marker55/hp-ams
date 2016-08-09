@@ -1,6 +1,6 @@
 # Overridden during automated builds
 COMP_NAME    ?= hp-ams
-COMP_VER     ?= 2.1.1
+COMP_VER     ?= 2.2.0
 COMP_PKG_REV ?= 666
 
 NAME         ?= $(COMP_NAME)
@@ -54,7 +54,7 @@ DISTROLIBS ?= $(shell if [ -f /etc/redhat-release ] ; then \
 export SHELL=/bin/bash
 
 OS = linux
-NETSNMP ?= net-snmp-5.7.2
+NETSNMP ?= net-snmp-5.7.3
 NETSNMPCONFIG = $(NETSNMP)/net-snmp-config
 export OS NETSNMP VERSION
 NETSNMPVERSIONMIN = $(shell echo $(NETSNMP)| cut -f2 -d\.  )

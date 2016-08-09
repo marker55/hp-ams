@@ -30,7 +30,7 @@ static void udev_event_process(int fd, void *data) {
     char cred_msg[CMSG_SPACE(sizeof(struct ucred))];
  
     int                buflen, bufpos;
-    char               buf[1024];
+    char               buf[16384];
     char *action = NULL;
     char *subsystem = NULL;
     char *devpath = NULL;
