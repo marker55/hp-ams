@@ -1,5 +1,5 @@
 /**
- *  \file rec_crash.c
+ *  \file crash.c
  *  \brief Provide KDump crash processing capabilities to AMS/REC
  *  \version $Id$
  *  \created 2011/07/05 16:05:31
@@ -10,7 +10,7 @@
  *  that have been processed are marked by touching a file in its (the
  *  crash's) directory named SUCCESSFULLY_PROCESSED_TAGFILE.
  *
- *  The code starts at REC_PROCESS_CRASHES at the bottom.
+ *  The code starts at LOG_PROCESS_CRASHES at the bottom.
  *
  *  Copyright (C) 2011, Hewlett-Packard Development Company, L.P.
  *
@@ -45,15 +45,15 @@
 
 #define SUCCESSFULLY_PROCESSED_TAGFILE ".hp-ams"
 #define DEBUG_TRIGGER_FILE "/tmp/.hp-ams"
+#define DEBUG_LOG_FILE "/tmp/hp-ams.log"
 
 #define LINVER_UNK         0x0
 #define LINVER_RHEL_UNK    0x1
 #define LINVER_RHEL_5      0x2
 #define LINVER_RHEL_6      0x3
-#define LINVER_RHEL_7      0x4
-#define LINVER_SLES_UNK    0x5
-#define LINVER_SLES_10     0x6
-#define LINVER_SLES_11     0x7
+#define LINVER_SLES_UNK    0x4
+#define LINVER_SLES_10     0x5
+#define LINVER_SLES_11     0x6f
 
 typedef struct os_dep_config_t {
     int linux_version;
@@ -76,6 +76,7 @@ os_dep_config dep;
 /* global values */
 extern int s_ams_rec_class;
 extern int s_ams_rec_handle;
+FILE* debug_output = NULL;
 int debug = 0;
 
 /* some external prototypes we need */
@@ -116,6 +117,37 @@ static void strip(char *buf, int sz) {
     }
 }
 
+static void debug_log(const char *fmt, ...) {
+    va_list argp;
+    pid_t pid = getpid();
+
+
+    /*
+    time_t t = time(NULL);
+    char t_str[ = ctime(&t);
+    */
+
+    if (debug) {
+        if (NULL == debug_output) {
+            debug_output = fopen(DEBUG_LOG_FILE, "a");
+            assert(NULL != debug_output);
+        }
+        //fprintf(debug_output, "[%s]: ", ctime(&t));
+        fprintf(debug_output, "hpHelper[%d] ", pid);
+        va_start(argp, fmt);
+        vfprintf(debug_output, fmt, argp); 
+        fprintf(debug_output, "\n");
+        va_end(argp);
+        fflush(debug_output);
+    }
+}
+
+static void close_debug_log(void) {
+    if (NULL != debug_output) {
+        fclose(debug_output);
+    }
+}
+
 static void get_os_deps(os_dep_config* dep) {
     int linux_version = LINVER_UNK;
     distro_id_t* distro = NULL;
@@ -125,9 +157,7 @@ static void get_os_deps(os_dep_config* dep) {
     distro = getDistroInfo();
     if (NULL != distro) {
         if (memcmp(rh_string, distro->Vendor, strlen(rh_string)) == 0) {
-            if (7 == distro->Version) {
-                linux_version = LINVER_RHEL_7;
-            } else if (6 == distro->Version) {
+            if (6 == distro->Version) {
                 linux_version = LINVER_RHEL_6;
             } else if (5 == distro->Version) {
                 linux_version = LINVER_RHEL_5;
@@ -151,7 +181,6 @@ static void get_os_deps(os_dep_config* dep) {
     case LINVER_RHEL_UNK:
     case LINVER_RHEL_5:
     case LINVER_RHEL_6:
-    case LINVER_RHEL_7:
     case LINVER_SLES_UNK:
     case LINVER_SLES_10:
     case LINVER_SLES_11:
@@ -166,7 +195,7 @@ static void get_os_deps(os_dep_config* dep) {
         dep->debug_sym_dir_pattern = "/usr/lib/debug/lib/modules/%s";
         dep->vmlinux_pattern = "/usr/lib/debug/lib/modules/%s/vmlinux";
         dep->crash_core = "/vmcore";
-        dep->output_template = "/tmp.reckdwXXXXXX";
+        dep->output_template = "/tmp/bbkdwXXXXXX";
     }
 }
 
@@ -228,8 +257,7 @@ static int gettmpname(char *buf, int bufsz) {
     int rc = 0;
 
     memset(buf, 0, bufsz);
-    strncpy(buf, dep.crash_dir, bufsz-1);
-    strncat(buf, dep.output_template, bufsz-1);
+    strncpy(buf, dep.output_template, bufsz-1);
     
     fd = mkstemp(buf);
     
@@ -237,8 +265,7 @@ static int gettmpname(char *buf, int bufsz) {
         rc = fd;
     } else {
         close(fd);
-        if (debug == 0)
-            unlink(buf);
+        unlink(buf);
     }
     return rc;
 }
@@ -270,7 +297,7 @@ static void free_list(llist *l) {
 static llist* insert_item(char *buf, llist *l) {
     llist* new_item = malloc(sizeof(llist));
     assert(NULL != new_item);
-    strncpy (new_item->entry, buf, 
+    strncpy(new_item->entry, buf, 
             sizeof(new_item->entry) - strlen(new_item->entry) - 1);
     new_item->next = l;
     return new_item;
@@ -424,7 +451,7 @@ static int log_buffer_contents_rec(char *msg) {
     size_t toc_sz = 0;
     size_t blob_sz = 0;
     char* blob;
-    descript *toc;
+    RECORDER_API4_RECORD *toc;
 
     if (NULL != msg) {
 
@@ -449,7 +476,7 @@ static int log_buffer_contents_rec(char *msg) {
          */
         num_descript = sizeof(fld)/sizeof(field);
         DEBUGMSGTL(("rec:log","Kdump num_descript = %d\n", num_descript));
-        if ((toc_sz = sizeof(descript) * num_descript) 
+        if ((toc_sz = sizeof(RECORDER_API4_RECORD) * num_descript) 
             > RECORDER_MAX_BLOB_SIZE) {
             DEBUGMSGTL(("rec:log", "KDump descriptor too large %ld\n", toc_sz));
             return -1;
@@ -464,7 +491,7 @@ static int log_buffer_contents_rec(char *msg) {
 
         /* now setup field descriptor */
         for (i = 0; i < num_descript; i++) {
-            toc[i].flags = REC_FLAGS_DESCRIPTOR | REC_FLAGS_DESC_FIELD;
+            toc[i].flags = REC_FLAGS_API4 | REC_FLAGS_DESC_FIELD;
             toc[i].classs = s_ams_rec_class;
             toc[i].code = REC_CODE_AMS_OS_CRASH;
             toc[i].field = i;
@@ -546,16 +573,15 @@ static int log_file_contents(char *filename) {
     if (fp) {
         fseek(fp, 0, SEEK_END);
         file_len = ftell(fp);
-        if (file_len > 0) {
-            fseek(fp, 0, SEEK_SET);
-    
+        fseek(fp, 0, SEEK_SET);
+        if (file_len >0) {
             buf = (char*)malloc(file_len + 1);
     
             if (buf) {
                 size_t sz;
-
-                memset(buf, 0, file_len + 1);
     
+                memset(buf, 0, file_len + 1);
+
                 sz = fread(buf, file_len, 1, fp);
                 rc = log_buffer_contents(buf);
                 free(buf);
@@ -603,8 +629,8 @@ static int get_path_value_from_file(char* filename, char* buf, int bufsz) {
                 if (memcmp(line, match, match_sz-1) == 0) {
                     char *nptr = line+match_sz;
 
-                    DEBUGMSGTL(("rec:crash","Found path configuration %s in %s on line %d.",
-                              nptr, filename, lcount));
+                    debug_log("Found path configuration %s in %s on line %d.",
+                              nptr, filename, lcount);
                     strncpy(buf, nptr, bufsz-1);
                     rc = 0;
                 }
@@ -644,19 +670,19 @@ static int get_crash_dir(char *buf, int bufsz) {
                 /* failed to obtain a path from the kdump config, use
                  * default
                  */
-                DEBUGMSGTL(("rec:crash","Did not find path value in %s, using default value: %s", dep.kdump_conf, dep.crash_dir));
+                debug_log("Did not find path value in %s, using default value: %s", dep.kdump_conf, dep.crash_dir);
                 strncpy(buf, dep.crash_dir, bufsz-1);
             } else {
                 /* obtained a path from the kdump config, copy it into
                  * the result buffer
                  */
-                DEBUGMSGTL(("rec:crash","Found path value in %s, using: %s", dep.kdump_conf, buffer));
+                debug_log("Found path value in %s, using: %s", dep.kdump_conf, buffer);
                 strncpy(buf, buffer, bufsz-1);
             }
 
         } else {
             /* no kdump.conf, use default */
-            DEBUGMSGTL(("rec:crash","No %s file found, using default: %s", dep.kdump_conf, dep.crash_dir));
+            debug_log("No %s file found, using default: %s", dep.kdump_conf, dep.crash_dir);
             strncpy(buf, dep.crash_dir, bufsz-1);
         }
     } else {
@@ -725,7 +751,7 @@ static llist* find_crash_entries(int previous_flag) {
     get_crash_dir(crash_dir, PATH_MAX);
 
     if (does_exist(crash_dir)) {
-        DEBUGMSGTL(("rec:crash","Crash directory exists (%s), examining for candidates to process.", crash_dir));
+        debug_log("Crash directory exists (%s), examining for candidates to process.", crash_dir);
         dp = opendir(crash_dir);
         if (NULL != dp) {
             while ((ep = readdir(dp))) {
@@ -747,18 +773,18 @@ static llist* find_crash_entries(int previous_flag) {
                     if (previous_flag && !stat_result) {
                         // looking for previous, and found one
                         l = insert_item(ep->d_name, l);
-                        DEBUGMSGTL(("rec:crash", "Adding previously processed: %s/%s.", crash_dir, ep->d_name));
+                        debug_log("Adding previously processed: %s/%s.", crash_dir, ep->d_name);
                     } else {
                         if (!previous_flag && stat_result) {
                             // looking for new, and did not find touch file
                             l = insert_item(ep->d_name, l);
 
-                            DEBUGMSGTL(("rec:crash", "Adding candidate: %s/%s.", crash_dir, ep->d_name));
+                            debug_log("Adding candidate: %s/%s.", crash_dir, ep->d_name);
                         }
                     }
                 } else {
                     /* skip if there is no vmcore file */
-                    DEBUGMSGTL(("rec:crash", "Skipping: %s (no vmcore found).", ep->d_name));
+                    debug_log ("Skipping: %s (no vmcore found).", ep->d_name);
                 }
             }
             closedir(dp);
@@ -766,7 +792,7 @@ static llist* find_crash_entries(int previous_flag) {
             perror ("Couldn't open crash directory.");
         }
     } else {
-        DEBUGMSGTL(("rec:crash", "Crash directory does not exist (%s), skipping.", crash_dir));
+        debug_log ("Crash directory does not exist (%s), skipping.", crash_dir);
     }
     return l;
 }
@@ -807,11 +833,11 @@ static int update_previous_crash_entries(llist* cur, llist* prev) {
                  crash_dir, t->entry, SUCCESSFULLY_PROCESSED_TAGFILE);
         if (stat(filename, &sb)) {
             // file doesn't exist
-            if ((fp = fopen(filename, "w")) != NULL) {
+            if ((fp = fopen(filename, "w")) != NULL ) {
                 fprintf(fp, "This file notes that this crash has already been processed\n");
                 fprintf(fp, "and recorded by hpHelper.\n");
                 fclose(fp);
-                DEBUGMSGTL(("rec:crash", "Created %s", filename));
+                debug_log ("Created %s", filename);
             }
         }
 
@@ -945,28 +971,28 @@ static int process_crash_item(char *entry) {
         memset(cmdbuf, 0, BUFSIZ);
         snprintf(cmdbuf, BUFSIZ-1, "%s --dump-dmesg %s/%s/vmcore %s",
                  dep.makedumpfile_bin, crash_dir, entry, dmesg_output);
-        DEBUGMSGTL(("rec:crash", "RUN: %s", cmdbuf));
+        debug_log("RUN: %s", cmdbuf);
         rc += run_proc_return_result(cmdbuf, NULL);
 
         if (is_gzip_binary_available()) {
             memset(cmdbuf, 0, BUFSIZ);
             snprintf(cmdbuf, BUFSIZ-1, "%s --best %s", dep.gzip_bin, dmesg_output);
-            DEBUGMSGTL(("rec:crash", "RUN: gzip --best %s", dmesg_output));
+            debug_log("RUN: gzip --best %s", dmesg_output);
             append_gz(dmesg_output, PATH_MAX);
             rc += run_proc_return_result(cmdbuf, NULL);
         }
 
-        DEBUGMSGTL(("rec:crash", "LOG: %s", dmesg_output));
+        debug_log("LOG: %s", dmesg_output);
         log_file_contents(dmesg_output);
 
         if (is_crash_binary_available()) {
-            DEBUGMSGTL(("rec:crash", "crash is available"));
+            debug_log("crash is available");
             if (is_debug_symbols_available()) {
                 char vmcore_loc[PATH_MAX];
                 char vmlinux_loc[PATH_MAX];
                 char release[PATH_MAX];
 
-                DEBUGMSGTL(("rec:crash", "Debug symbols are available"));
+                debug_log ("Debug symbols are available");
                 memset(vmcore_loc, 0, PATH_MAX);
                 memset(vmlinux_loc, 0, PATH_MAX);
                 memset(release, 0, PATH_MAX);
@@ -984,38 +1010,38 @@ static int process_crash_item(char *entry) {
                              dep.crash_bin, vmlinux_loc, vmcore_loc, 
                              crash_input_script, crash_output);
                     
-                    DEBUGMSGTL(("rec:crash", "RUN: %s", cmdbuf));
+                    debug_log("RUN: %s", cmdbuf);
                     rc += run_proc_return_result(cmdbuf, NULL);
 
                     if (is_gzip_binary_available()) {
                         memset(cmdbuf, 0, BUFSIZ);
                         snprintf(cmdbuf, BUFSIZ-1, "%s --best %s", dep.gzip_bin, crash_output);
-                        DEBUGMSGTL(("rec:crash", "RUN: gzip --best %s", crash_output));
+                        debug_log("RUN: gzip --best %s", crash_output);
                         append_gz(crash_output, PATH_MAX);
 
                         rc += run_proc_return_result(cmdbuf, NULL);
                     }
 
 
-                    DEBUGMSGTL(("rec:crash", "LOG: %s", crash_output));
+                    debug_log ("LOG: %s", crash_output);
                     rc = log_file_contents(crash_output);
                 } else {
-                    DEBUGMSGTL(("rec:crash", "Failed to write crash input script."));
+                    debug_log ("Failed to write crash input script.");
                     log_buffer_contents("Failed to write crash input script.");
                     rc = 1;
                 }
             } else {
-                DEBUGMSGTL(("rec:crash", "Debug package matching the running kernel is not installed."));
+                debug_log ("Debug package matching the running kernel is not installed.");
                 log_buffer_contents("Install the matching kernel debug package to enable the extraction of crash information.");
                 rc = 1;
             }
         } else {
-            DEBUGMSGTL(("rec:crash", "The crash binary is not installed."));
+            debug_log ("The crash binary is not installed.");
             log_buffer_contents("Install the crash package to enable the extraction of kdump information.");
             rc = 1;
         }
     } else {
-        DEBUGMSGTL(("rec:crash", "The makedumpfile binary is not installed."));
+        debug_log ("The makedumpfile binary is not installed.");
         log_buffer_contents("makedumpfile is not available on this system.  Cannot extract crash information.");
         rc = 1;
     }
@@ -1047,7 +1073,7 @@ static int process_new_crashes(llist* cur, llist* prev) {
             /* this is a new crash */
             rc += process_crash_item(tmp->entry);
         } else {
-            DEBUGMSGTL(("rec:crash", "%s has already been processed before", tmp->entry));
+            debug_log ("%s has already been processed before", tmp->entry);
         }
         tmp = tmp->next;
     }
@@ -1069,7 +1095,6 @@ void LOG_PROCESS_CRASHES(void) {
     int rc = 0;
     llist* current_crash_entries = NULL;
     llist* previous_crash_entries = NULL;
-
     struct stat sb;
 
     /* enable debugging based on a trigger file, rather than command
@@ -1077,11 +1102,12 @@ void LOG_PROCESS_CRASHES(void) {
     memset(&sb, 0, sizeof(struct stat));
     if (does_exist(DEBUG_TRIGGER_FILE)) {
         debug = 1;
+        debug_log ("Found %s, enabling debugging", DEBUG_TRIGGER_FILE);
     }
-
+    
     memset(&dep, 0, sizeof(os_dep_config));
     get_os_deps(&dep);
-    DEBUGMSGTL(("rec:crash", "Loaded OS dependencies."));
+    debug_log ("Loaded OS dependencies.");
     
     /* List entries in crash directory */
     current_crash_entries = find_current_crash_entries();
@@ -1098,13 +1124,14 @@ void LOG_PROCESS_CRASHES(void) {
             /* update previous_crash_entries file */
             rc = update_previous_crash_entries(current_crash_entries, previous_crash_entries);
         } else {
-            DEBUGMSGTL(("rec:crash", "Failed to process one or more crashes.  Not updating crash list."));
+            debug_log("Failed to process one or more crashes.  Not updating crash list.");
         }
 
     } else {
-        DEBUGMSGTL(("rec:crash", "No crashes found."));
+        debug_log("No crashes found.");
     }
 
+    close_debug_log();
     free_list(current_crash_entries);
     free_list(previous_crash_entries);
     return;

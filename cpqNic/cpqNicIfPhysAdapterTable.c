@@ -8,6 +8,7 @@
 #include <net-snmp/agent/net-snmp-agent-includes.h>
 #include <net-snmp/agent/net-snmp-agent-includes.h>
 #include <net-snmp/agent/table_container.h>
+#include "cpqNicIfLogMapTable.h"
 #include "cpqNicIfPhysAdapterTable.h"
 #include <linux/rtnetlink.h>
 #define SUPPORT_PREFIX_FLAGS 1
@@ -24,7 +25,9 @@ const size_t    cpqNicIfPhysAdapterTable_oid_len =
         OID_LENGTH(cpqNicIfPhysAdapterTable_oid);
 
 void cpqNicIfPhysAdapterTable_cache_reload();
+void cpqNicIfPhysAdapterTable_cache_remove();
 extern void cpqNicIfLogMapTable_cache_reload();
+extern void cpqNicIfLogMapTable_cache_remove();
 /* taken from netlink patch for if-mib */
 static int cpqnic_netlink_listen(unsigned subscriptions)
 {
@@ -84,9 +87,10 @@ static void cpqnic_iflink_process(int fd, void *data) {
             return;
         }
 
-        if (nlmp->nlmsg_type == RTM_NEWLINK ||
-           nlmp->nlmsg_type == RTM_DELLINK) {
-           ifi = NLMSG_DATA(nlmp);
+        DEBUGMSGTL(("access:interface:iflink", "NLMSG type = %d\n", nlmp->nlmsg_type));
+
+        if (nlmp->nlmsg_type == RTM_NEWLINK)  {
+            ifi = NLMSG_DATA(nlmp);
             length = nlmp->nlmsg_len - NLMSG_LENGTH(sizeof(*ifi));
 
             if (length < 0) {
@@ -94,9 +98,27 @@ static void cpqnic_iflink_process(int fd, void *data) {
                 return;
             }
 
+            DEBUGMSGTL(("access:interface:iflink", "NLMSG index = %d\n", ifi->ifi_index));
+            DEBUGMSGTL(("access:interface:iflink", "NLMSG flags = %x\n", ifi->ifi_flags));
+            DEBUGMSGTL(("access:interface:iflink", "NLMSG mask = %x\n", ifi->ifi_change));
            /* Just request a refresh! */
-           cpqNicIfPhysAdapterTable_cache_reload();
-           cpqNicIfLogMapTable_cache_reload();
+           cpqNicIfLogMapTable_cache_reload(ifi->ifi_index);
+           cpqNicIfPhysAdapterTable_cache_reload(ifi->ifi_index);
+        } else if (nlmp->nlmsg_type == RTM_DELLINK) {
+            ifi = NLMSG_DATA(nlmp);
+            length = nlmp->nlmsg_len - NLMSG_LENGTH(sizeof(*ifi));
+
+            if (length < 0) {
+                DEBUGMSGTL(("access:interface:iflink", "wrong nlmsg length %d\n", length));
+                return;
+            }
+            DEBUGMSGTL(("access:interface:iflink", "NLMSG index = %d\n", ifi->ifi_index));
+            DEBUGMSGTL(("access:interface:iflink", "NLMSG flags = %x\n", ifi->ifi_flags));
+            DEBUGMSGTL(("access:interface:iflink", "NLMSG mask = %x\n", ifi->ifi_change));
+
+           cpqNicIfLogMapTable_cache_remove(ifi->ifi_index);
+           cpqNicIfPhysAdapterTable_cache_remove(ifi->ifi_index);
+
         }
     }
 }
@@ -803,17 +825,58 @@ cpqNicIfPhysAdapterTable_handler(netsnmp_mib_handler *handler,
 }
 
 void
-cpqNicIfPhysAdapterTable_cache_reload()
+cpqNicIfPhysAdapterTable_cache_remove(oid index)
 {
     netsnmp_cache  *cpqNicIfPhysAdapterTable_cache = NULL;
+    netsnmp_container *ifphysdev_container;
+    netsnmp_iterator  *it;
+    cpqNicIfPhysAdapterTable_entry* entry = NULL;
 
+    DEBUGMSGTL(("internal:cpqNicIfPhysAdapterTable:_cache_reload", "triggered\n"));
     cpqNicIfPhysAdapterTable_cache = netsnmp_cache_find_by_oid(cpqNicIfPhysAdapterTable_oid,
                                             cpqNicIfPhysAdapterTable_oid_len);
 
-    DEBUGMSGTL(("internal:cpqNicIfPhysAdapterTable:_cache_reload", "triggered\n"));
     if (NULL != cpqNicIfPhysAdapterTable_cache) {
-       cpqNicIfPhysAdapterTable_cache->valid = 0;
-       netsnmp_cache_check_and_reload(cpqNicIfPhysAdapterTable_cache);
+        ifphysdev_container = cpqNicIfPhysAdapterTable_cache->magic;
+        it = CONTAINER_ITERATOR(ifphysdev_container);
+
+        entry = ITERATOR_FIRST( it );
+        while (entry != NULL ) {
+            if (entry->cpqNicIfPhysAdapterIndex == index)
+                break;
+            entry = ITERATOR_NEXT( it );
+        }
+        ITERATOR_RELEASE( it );
+        if (entry != NULL)
+            cpqNicIfPhysAdapterTable_removeEntry(ifphysdev_container, entry);
+    }
+}
+
+void
+cpqNicIfPhysAdapterTable_cache_reload(oid index)
+{
+    netsnmp_cache  *cpqNicIfPhysAdapterTable_cache = NULL;
+    netsnmp_container *ifphysdev_container;
+    netsnmp_iterator  *it;
+    cpqNicIfPhysAdapterTable_entry* entry = NULL;
+
+    DEBUGMSGTL(("internal:cpqNicIfPhysAdapterTable:_cache_reload", "triggered\n"));
+    cpqNicIfPhysAdapterTable_cache = netsnmp_cache_find_by_oid(cpqNicIfPhysAdapterTable_oid,
+                                            cpqNicIfPhysAdapterTable_oid_len);
+
+    if (NULL != cpqNicIfPhysAdapterTable_cache) {
+        ifphysdev_container = cpqNicIfPhysAdapterTable_cache->magic;
+        it = CONTAINER_ITERATOR(ifphysdev_container);
+
+        entry = ITERATOR_FIRST( it );
+        while (entry != NULL ) {
+            if (entry->cpqNicIfPhysAdapterIndex == index)
+                break;
+            entry = ITERATOR_NEXT( it );
+        }
+        ITERATOR_RELEASE( it );
+        if (entry != NULL)
+            cpqNicIfPhysAdapter_reload_entry(entry);
     }
 }
 

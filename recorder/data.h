@@ -1,6 +1,6 @@
 /////////////////////////////////////////////////////////////////////
 //
-//  rec_data.h
+//  data.h
 //
 //  iLO "flight data recorder"
 //  Descriptor and data record definitions
@@ -14,20 +14,16 @@
 
 #include <string.h>
 #include "recorder_types.h"
-extern void
-dump_chunk(const char *debugtoken, const char *title, const u_char * buf,
-           int size);
-
 
 #pragma pack(1)
 
 /////////////////////////////////////////////////////////////////////
 //
-//  RECORDER_DESCRIPTOR_FLAGS
+//  RECORDER_API4_FLAGS
 //
 /////////////////////////////////////////////////////////////////////
 
-union RECORDER_DESCRIPTOR_FLAGS
+union RECORDER_API4_FLAGS
 {
     UINT8   AsBYTE;                     // Byte 0
 
@@ -43,11 +39,11 @@ union RECORDER_DESCRIPTOR_FLAGS
     };
 };
 
-typedef union RECORDER_DESCRIPTOR_FLAGS RECORDER_DESCRIPTOR_FLAGS;
+typedef union RECORDER_API4_FLAGS RECORDER_API4_FLAGS;
 
-// C_ASSERT(sizeof(RECORDER_DESCRIPTOR_FLAGS) == 1);
+// C_ASSERT(sizeof(RECORDER_API4_FLAGS) == 1);
 
-// RECORDER_DESCRIPTOR_FLAGS.Scope
+// RECORDER_API4_FLAGS.Scope
 
 enum REC_DESC_SCOPE
 {
@@ -60,15 +56,15 @@ typedef enum  REC_DESC_SCOPE             REC_DESC_SCOPE;
 
 /////////////////////////////////////////////////////////////////////
 //
-//  RECORDER_DESCRIPTOR
+//  RECORDER_API4
 //
 /////////////////////////////////////////////////////////////////////
 
 #define BLACBOX_MAX_DESCRIPTION     88
 
-struct RECORDER_DESCRIPTOR
+struct RECORDER_API4
 {
-    RECORDER_DESCRIPTOR_FLAGS Flags;    // Byte 0
+    RECORDER_API4_FLAGS Flags;    // Byte 0
 
     UINT8       Class;                  // Byte 1
     UINT8       Code;                   // Byte 2
@@ -88,11 +84,11 @@ struct RECORDER_DESCRIPTOR
     char        Description[BLACBOX_MAX_DESCRIPTION];   // Byte 8 - 95
 };
 
-typedef struct RECORDER_DESCRIPTOR  RECORDER_DESCRIPTOR;
+typedef struct RECORDER_API4  RECORDER_API4;
 
-// C_ASSERT(sizeof(RECORDER_DESCRIPTOR) == 96);
+// C_ASSERT(sizeof(RECORDER_API4) == 96);
 
-// RECORDER_DESCRIPTOR.Severity
+// RECORDER_API4.Severity
 
 enum REC_DESC_SEVERITY
 {
@@ -108,7 +104,7 @@ enum REC_DESC_SEVERITY
 
 typedef enum   REC_DESC_SEVERITY     REC_DESC_SEVERITY;
 
-// RECORDER_DESCRIPTOR.DataType
+// RECORDER_API4.DataType
 
 enum REC_DESC_DATATYPE
 {
@@ -124,7 +120,7 @@ enum REC_DESC_DATATYPE
 
 typedef enum   REC_DESC_DATATYPE     REC_DESC_DATATYPE;
 
-// RECORDER_DESCRIPTOR.DataFormat
+// RECORDER_API4.DataFormat
 
 enum REC_DESC_DATAFMT
 {
@@ -137,7 +133,7 @@ enum REC_DESC_DATAFMT
 
 typedef enum   REC_DESC_DATAFMT      REC_DESC_DATAFMT;
 
-// RECORDER_DESCRIPTOR.Visibility
+// RECORDER_API4.Visibility
 
 enum REC_DESC_VISIBILITY
 {
@@ -151,9 +147,9 @@ typedef enum   REC_DESC_VISIBILITY   REC_DESC_VISIBILITY;
 
 /////////////////////////////////////////////////////////////////////
 //
-//  RECORDER_BASE_DESCRIPTOR
-//  RECORDER_CODE_DESCRIPTOR
-//  RECORDER_FIELD_DESCRIPTOR
+//  RECORDER_BASE_API4
+//  RECORDER_CODE_API4
+//  RECORDER_FIELD_API4
 //
 //  C++ classes that make it easier to initialize descriptors
 //
@@ -161,14 +157,14 @@ typedef enum   REC_DESC_VISIBILITY   REC_DESC_VISIBILITY;
 
 #ifdef __cplusplus
 
-class RECORDER_BASE_DESCRIPTOR : public RECORDER_DESCRIPTOR
+class RECORDER_BASE_API4 : public RECORDER_API4
 {
     public:
 
-        RECORDER_BASE_DESCRIPTOR()
+        RECORDER_BASE_API4()
         {}
 
-        RECORDER_BASE_DESCRIPTOR(
+        RECORDER_BASE_API4(
             REC_DESC_SCOPE Scope,
             UINT Class,
             UINT Code,
@@ -223,17 +219,17 @@ class RECORDER_BASE_DESCRIPTOR : public RECORDER_DESCRIPTOR
         };
 };
 
-// C_ASSERT(sizeof(RECORDER_BASE_DESCRIPTOR) == 96);
+// C_ASSERT(sizeof(RECORDER_BASE_API4) == 96);
 
-class RECORDER_CODE_DESCRIPTOR : public RECORDER_BASE_DESCRIPTOR
+class RECORDER_CODE_API4 : public RECORDER_BASE_API4
 {
     public:
 
-        RECORDER_CODE_DESCRIPTOR()
-          : RECORDER_BASE_DESCRIPTOR()
+        RECORDER_CODE_API4()
+          : RECORDER_BASE_API4()
         {}
 
-        RECORDER_CODE_DESCRIPTOR(
+        RECORDER_CODE_API4(
             UINT Class,
             UINT Code,
             const char* Description,
@@ -242,7 +238,7 @@ class RECORDER_CODE_DESCRIPTOR : public RECORDER_BASE_DESCRIPTOR
             REC_DESC_DATATYPE DataType = REC_DESC_DATATYPE_BINARY,
             REC_DESC_DATAFMT DataFormat = REC_DESC_DATAFMT_OTHER
         )
-          : RECORDER_BASE_DESCRIPTOR(
+          : RECORDER_BASE_API4(
                 REC_DESC_SCOPE_CODE,
                 Class,
                 Code,
@@ -266,7 +262,7 @@ class RECORDER_CODE_DESCRIPTOR : public RECORDER_BASE_DESCRIPTOR
             REC_DESC_DATAFMT DataFormat = REC_DESC_DATAFMT_OTHER
         )
         {
-            RECORDER_BASE_DESCRIPTOR::Init(
+            RECORDER_BASE_API4::Init(
                 REC_DESC_SCOPE_CODE,
                 Class,
                 Code,
@@ -280,17 +276,17 @@ class RECORDER_CODE_DESCRIPTOR : public RECORDER_BASE_DESCRIPTOR
         }
 };
 
-// C_ASSERT(sizeof(RECORDER_CODE_DESCRIPTOR) == 96);
+// C_ASSERT(sizeof(RECORDER_CODE_API4) == 96);
 
-class RECORDER_FIELD_DESCRIPTOR : public RECORDER_BASE_DESCRIPTOR
+class RECORDER_FIELD_API4 : public RECORDER_BASE_API4
 {
     public:
 
-        RECORDER_FIELD_DESCRIPTOR()
-          : RECORDER_BASE_DESCRIPTOR()
+        RECORDER_FIELD_API4()
+          : RECORDER_BASE_API4()
         {}
 
-        RECORDER_FIELD_DESCRIPTOR(
+        RECORDER_FIELD_API4(
             UINT Class,
             UINT Code,
             UINT Field,
@@ -300,7 +296,7 @@ class RECORDER_FIELD_DESCRIPTOR : public RECORDER_BASE_DESCRIPTOR
             REC_DESC_DATATYPE DataType = REC_DESC_DATATYPE_BINARY,
             REC_DESC_DATAFMT DataFormat = REC_DESC_DATAFMT_OTHER
         )
-          : RECORDER_BASE_DESCRIPTOR(
+          : RECORDER_BASE_API4(
                 REC_DESC_SCOPE_FIELD,
                 Class,
                 Code,
@@ -325,7 +321,7 @@ class RECORDER_FIELD_DESCRIPTOR : public RECORDER_BASE_DESCRIPTOR
             REC_DESC_DATAFMT DataFormat = REC_DESC_DATAFMT_OTHER
         )
         {
-            RECORDER_BASE_DESCRIPTOR::Init(
+            RECORDER_BASE_API4::Init(
                 REC_DESC_SCOPE_FIELD,
                 Class,
                 Code,
@@ -339,7 +335,7 @@ class RECORDER_FIELD_DESCRIPTOR : public RECORDER_BASE_DESCRIPTOR
         }
 };
 
-// C_ASSERT(sizeof(RECORDER_FIELD_DESCRIPTOR) == 96);
+// C_ASSERT(sizeof(RECORDER_FIELD_API4) == 96);
 
 #endif
 
@@ -537,7 +533,7 @@ union RECORDER_RECORD
     RECORDER_DATA_WITH_FIELD_OR_INSTANCE_AND_TIMETICK   WithFieldAndTimetick;
     RECORDER_DATA_WITH_FIELD_OR_INSTANCE_AND_TIMETICK   WithInstanceAndTimetick;
     RECORDER_DATA_WITH_FIELD_AND_INSTANCE_AND_TIMETICK  WithFieldAndInstanceAndTimetick;
-    RECORDER_DESCRIPTOR                                 Descriptor;
+    RECORDER_API4                                 Descriptor;
 };
 
 typedef union RECORDER_RECORD RECORDER_RECORD;

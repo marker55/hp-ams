@@ -828,8 +828,15 @@ enum SlotType_t
    sltPCIExpressG2x2   = 0xAD,
    sltPCIExpressG2x4   = 0xAE,
    sltPCIExpressG2x8   = 0xAF,
-   sltPCIExpressG2x16  = 0xB0
+   sltPCIExpressG2x16  = 0xB0,
+   sltPCIExpressG3     = 0xB1,
+   sltPCIExpressG3x1   = 0xB2,
+   sltPCIExpressG3x2   = 0xB3,
+   sltPCIExpressG3x4   = 0xB4,
+   sltPCIExpressG3x8   = 0xB5,
+   sltPCIExpressG3x16  = 0xB6
 };
+
 enum SlotWidth_t
 {
    slwOther            = 0x01,
@@ -859,7 +866,9 @@ enum SlotLength_t
    sllOther            = 0x01,
    sllUnknown          = 0x02,
    sllShort            = 0x03,
-   sllLong             = 0x04
+   sllLong             = 0x04,
+   sll25               = 0x05,
+   sll35               = 0x06
 };
 enum SlotCharacteristics1_t
 {

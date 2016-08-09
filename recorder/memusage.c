@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <string.h>
 #include <unistd.h>
 
 #include "ams_rec.h"
@@ -27,9 +28,6 @@ int doCodeDescriptor(unsigned int, unsigned int, unsigned char, unsigned char,
 extern int log_interval;
 extern void rec_log_memory_usage(unsigned int, void *);
 extern int mem_usage_reinit;
-extern void
-dump_chunk(const char *debugtoken, const char *title, const u_char * buf,
-           int size);
 
 static field fld[] = {
       {REC_SIZE_QWORD,   REC_TYP_NUMERIC, "Physical Memory Used"},
@@ -44,7 +42,7 @@ void LOG_MEMORY_USAGE()
     int rc;
     int num_descript;
     size_t toc_sz = 0;
-    descript *toc;
+    RECORDER_API4_RECORD *toc;
 
     if (!rec_init() )
         return;
@@ -65,7 +63,7 @@ void LOG_MEMORY_USAGE()
     /* build descriptor toc */
     num_descript = sizeof(fld)/sizeof(field);
     DEBUGMSGTL(("rec:rec_log_mem","Memory Usage num_descript = %d\n", num_descript));
-    if ((toc_sz = sizeof(descript) * num_descript)
+    if ((toc_sz = sizeof(RECORDER_API4_RECORD) * num_descript)
             > RECORDER_MAX_BLOB_SIZE) {
         DEBUGMSGTL(("rec:rec_log_error","Memory Usage Descriptor too large %ld\n", toc_sz));
         return;
@@ -80,7 +78,7 @@ void LOG_MEMORY_USAGE()
     /* now do the field descriptor */
     memset(toc, 0, toc_sz);
     for ( i = 0; i < num_descript; i++) {
-        toc[i].flags = REC_FLAGS_DESCRIPTOR | REC_FLAGS_DESC_FIELD;
+        toc[i].flags = REC_FLAGS_API4 | REC_FLAGS_DESC_FIELD;
         toc[i].classs = s_ams_rec_class;
         toc[i].code = REC_CODE_AMS_MEMORY_USAGE;
         toc[i].field = i;

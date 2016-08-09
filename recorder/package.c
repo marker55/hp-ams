@@ -48,11 +48,11 @@ void LOG_PACKAGE(
     int rc;
     int num_descript;
     size_t toc_sz = 0;
-    size_t blob_sz = 5;
+    size_t blob_sz = 0;
     REC_AMS_PackageData *PackageData;
 
     char *blob;
-    descript *toc;
+    RECORDER_API4_RECORD *toc;
     int pkgcount = 0;
 
 
@@ -75,7 +75,7 @@ void LOG_PACKAGE(
     /* build descriptor toc */
     num_descript = sizeof(fld)/sizeof(field);
     DEBUGMSGTL(("rec:log","Package num_descript = %d\n", num_descript));
-    if ((toc_sz = sizeof(descript) * num_descript)
+    if ((toc_sz = sizeof(RECORDER_API4_RECORD) * num_descript)
             > RECORDER_MAX_BLOB_SIZE) {
         DEBUGMSGTL(("rec:log","Package Descriptor too large %ld\n", toc_sz));
         return;
@@ -89,7 +89,7 @@ void LOG_PACKAGE(
     /* now do the field descriptor */
     memset(toc, 0, toc_sz);
     for ( i = 0; i < num_descript; i++) {
-        toc[i].flags = REC_FLAGS_DESCRIPTOR | REC_FLAGS_DESC_FIELD;
+        toc[i].flags = REC_FLAGS_API4 | REC_FLAGS_DESC_FIELD;
         toc[i].classs = s_ams_rec_class;
         toc[i].code = REC_CODE_AMS_SOFTWARE;
         toc[i].field = i;
@@ -123,7 +123,7 @@ void LOG_PACKAGE(
     for (j = 0; j < pkgcount; j++ ) {
         char *end;
         DEBUGMSGTL(("rec:log_package","Iter = %d\n", j));
-        blob_sz += sizeof(REC_AMS_PackageData);
+        blob_sz = sizeof(REC_AMS_PackageData) + 5; /* account for null bytes */
 	if (packages[j]->vendor != NULL)
             blob_sz += strlen(packages[j]->vendor);
 	if (packages[j]->sname != NULL)
@@ -155,7 +155,7 @@ void LOG_PACKAGE(
 
         end = blob + sizeof(REC_AMS_PackageData);
 	if (packages[j]->vendor != NULL) {
-            DEBUGMSGTL(("rec:log:package","Package vendor %s\n", packages[j]->vendor));
+            DEBUGMSGTL(("rec:logpackage","Package vendor %s\n", packages[j]->vendor));
             strcpy(end, packages[j]->vendor);
             end += strlen(packages[j]->vendor) + 1;
             free(packages[j]->vendor);
@@ -184,7 +184,7 @@ void LOG_PACKAGE(
             end++;
 
 	if (packages[j]->name != NULL) {
-            DEBUGMSGTL(("rec:log:package","Package name %s\n", packages[j]->name));
+            DEBUGMSGTL(("rec:logpackage","Package name %s\n", packages[j]->name));
             strcpy(end, packages[j]->name);
             free(packages[j]->name);
 	}

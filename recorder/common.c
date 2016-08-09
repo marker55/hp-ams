@@ -24,11 +24,11 @@ int doCodeDescriptor(unsigned int handle,
                      unsigned char vis,
                      char *descripstr)
 {
-    descript toc;
+    RECORDER_API4_RECORD toc;
     int rc;
 
-    memset(&toc, 0, sizeof(descript));
-    toc.flags = REC_FLAGS_DESCRIPTOR | REC_FLAGS_DESC_CODE;
+    memset(&toc, 0, sizeof(RECORDER_API4_RECORD));
+    toc.flags = REC_FLAGS_API4 | REC_FLAGS_DESC_CODE;
     toc.classs = class;
     toc.code = code;
     toc.field = 0;
@@ -37,7 +37,7 @@ int doCodeDescriptor(unsigned int handle,
     toc.visibility = vis;
     strcpy(&toc.desc[0], descripstr);
     if ((rc = rec_api4_code(s_ams_rec_handle,
-                    sizeof(descript), &toc)) != RECORDER_OK) {
+                    sizeof(RECORDER_API4_RECORD), &toc)) != RECORDER_OK) {
         DEBUGMSGTL(("rec:log","Host Name register descriptor failed %d\n", rc));
     }
     return rc;

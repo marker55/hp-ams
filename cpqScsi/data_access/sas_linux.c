@@ -35,6 +35,7 @@
 #include "sas_linux.h"
 
 extern unsigned char     cpqHoMibHealthStatusArray[];
+extern int trap_fire;
 extern unsigned char*get_ScsiGeneric(unsigned char*);
 extern unsigned long long get_BlockSize(unsigned char*);
 extern int get_DiskType(char *);
@@ -458,7 +459,7 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
                             (PhyID / 4) + 1, BayID);
 
             disk->cpqSasPhyDrvPlacement = SAS_PHYS_DRV_PLACE_INTERNAL;
-	}
+	    }
 
         if ((value = get_DiskModel(scsi)) != NULL) {
             if (!strncmp(protocol, "sata", 4))
@@ -489,7 +490,7 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
             disk->cpqSasPhyDrvSasAddress_len = 
                          strlen(disk->cpqSasPhyDrvSasAddress);
             free(value);
-	}
+	    }
 
         disk->cpqSasPhyDrvSize = get_BlockSize(scsi) >> 11;
 
@@ -566,18 +567,18 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
                 disk->cpqSasPhyDrvCurrTemperature = Temp;
                 disk->cpqSasPhyDrvTemperatureThreshold = Mcot;
                 free(Temperature);
-        }
+            } 
 
             if ((Health = get_sata_health(disk_fd)) >= 0) {
                 if (((Health != 0) && (Wear >= 95)) || (Temp > Mcot)) {
                     disk->cpqSasPhyDrvStatus = SAS_PHYS_STATUS_PREDICTIVEFAILURE;
-        } else {
-                disk->cpqSasPhyDrvStatus = SAS_PHYS_STATUS_OK;
+                } else {
+                    disk->cpqSasPhyDrvStatus = SAS_PHYS_STATUS_OK;
                 }
             } else {
                 disk->cpqSasPhyDrvStatus = SAS_PHYS_STATUS_FAILED;
             }
-            } else {
+        } else {
             if ((Temperature = get_sas_temp(disk_fd)) != NULL ) {
                 Temp = sas_parse_current(Temperature);
                 Mcot = sas_parse_mcot(Temperature);
@@ -591,13 +592,13 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
 
             if ((Health = get_sas_health(disk_fd)) >= 0) {
                 if (((Health != 0) && (Wear >= 95)) || (Temp > Mcot)) {
-                disk->cpqSasPhyDrvStatus = SAS_PHYS_STATUS_PREDICTIVEFAILURE;
+                    disk->cpqSasPhyDrvStatus = SAS_PHYS_STATUS_PREDICTIVEFAILURE;
                 } else {
                     disk->cpqSasPhyDrvStatus = SAS_PHYS_STATUS_OK;
+                }
+            } else {
+                disk->cpqSasPhyDrvStatus = SAS_PHYS_STATUS_FAILED;
             }
-        } else {
-            disk->cpqSasPhyDrvStatus = SAS_PHYS_STATUS_FAILED;
-        }
 
         }
         if ((disk->cpqSasPhyDrvType == 2) && 
@@ -700,7 +701,7 @@ static void cpqsas_add_sas_end_device(char *devpath, char *devname, void *data)
                 cpqSasHbaTable_oid_len);
         if (hba_cache == NULL) {
             return ;
-    }
+        }
         hba_container = hba_cache->magic;
         it = CONTAINER_ITERATOR(hba_container);
         hba = ITERATOR_FIRST(it);
@@ -730,42 +731,42 @@ static void cpqsas_remove_sas_end_device(char *devpath, char *devname, void *dat
     oid oid_index[2];
     cpqSasPhyDrvTable_entry *disk;
 
-    int  Cntlr, Bus, Target, Lun;
+    int  Cntlr = 0, Bus = 0, Target = 0, Lun = 0;
 
     if (devname != NULL)
         if (sscanf(devname, "bsg/%d:%d:%d:%d", &Cntlr, &Bus, &Target, &Lun) != 4)
             return;
     if (strstr(devpath, "end_device-") == NULL)
-            return;
+        return;
 
-            oid_index[0] = Cntlr;
-            oid_index[1] = Target;
-            tmp.len = 2;
-            tmp.oids = &oid_index[0];
-            disk = CONTAINER_FIND((netsnmp_container *)data, &tmp);
+    oid_index[0] = Cntlr;
+    oid_index[1] = Target;
+    tmp.len = 2;
+    tmp.oids = &oid_index[0];
+    disk = CONTAINER_FIND((netsnmp_container *)data, &tmp);
    
-            if (disk != NULL) {
+    if (disk != NULL) {
 
-                switch (disk->cpqSasPhyDrvStatus) {
-                case 2:  /* ok(2) */
-                case 3:  /* predictiveFailure(3) */
-                case 4:  /* offline(4) */
-                case 5:  /* failed(5) */
-                    disk->cpqSasPhyDrvStatus += 4;/* add missing */
-                    break;
-                case 10:  /* ssdWearOut(10) */
-                    disk->cpqSasPhyDrvStatus = 
-                                    SAS_PHYS_STATUS_MISSINGWASSSDWEAROUT;
-                    break;
-                case 12:  /* notAuthenticated(12) */
-                    disk->cpqSasPhyDrvStatus = 
-                                    SAS_PHYS_STATUS_MISSINGWASNOTAUTHENTICATED;
-                    break;
-                default: 
-                    break;
-                }
-                disk->cpqSasPhyDrvCondition = SAS_PHYS_COND_FAILED;
-                SendSasTrap(SAS_TRAP_PHYSDRV_STATUS_CHANGE, disk);
+        switch (disk->cpqSasPhyDrvStatus) {
+        case 2:  /* ok(2) */
+        case 3:  /* predictiveFailure(3) */
+        case 4:  /* offline(4) */
+        case 5:  /* failed(5) */
+            disk->cpqSasPhyDrvStatus += 4;/* add missing */
+            break;
+        case 10:  /* ssdWearOut(10) */
+            disk->cpqSasPhyDrvStatus = 
+                            SAS_PHYS_STATUS_MISSINGWASSSDWEAROUT;
+            break;
+        case 12:  /* notAuthenticated(12) */
+            disk->cpqSasPhyDrvStatus = 
+                            SAS_PHYS_STATUS_MISSINGWASNOTAUTHENTICATED;
+            break;
+        default: 
+            break;
+        }
+        disk->cpqSasPhyDrvCondition = SAS_PHYS_COND_FAILED;
+        SendSasTrap(SAS_TRAP_PHYSDRV_STATUS_CHANGE, disk);
 
         CONTAINER_REMOVE((netsnmp_container *)data, disk);
     }
@@ -1084,7 +1085,7 @@ int netsnmp_arch_sasphydrv_container_load(netsnmp_container* container)
                         end_device_select, alphasort)) <= 0) {
             ITERATOR_RELEASE( it );
             return -1;
-	}
+	    }
 
         for (j= 0; j< NumSasDevice; j++) {
             char buffer[256], lbuffer[256];
@@ -1107,10 +1108,14 @@ int netsnmp_arch_sasphydrv_container_load(netsnmp_container* container)
             if ((Cntlr = get_Cntlr(lbuffer)) != hba->cpqSasHbaIndex)
                 continue;
             disk = sas_add_disk(lbuffer, hba, container);
-            if (disk != NULL) 
+            if (disk != NULL) {
                  hba->cpqSasHbaOverallCondition =
                     MAKE_CONDITION(hba->cpqSasHbaOverallCondition,
                                disk->cpqSasPhyDrvCondition);
+                if (trap_fire)
+                    SendSasTrap(SAS_TRAP_PHYSDRV_STATUS_CHANGE, disk);
+            }
+
         }
         SasCondition = MAKE_CONDITION(SasCondition,
                                       hba->cpqSasHbaOverallCondition); 
@@ -1135,25 +1140,25 @@ void SendSasTrap(int trapID,
     static oid sysName[] = { 1, 3, 6, 1, 2, 1, 1, 5, 0 };
     static oid cpqHoTrapFlags[] = { 1, 3, 6, 1, 4, 1, 232, 11, 2, 11, 1, 0 };
     static oid cpqSasHbaHwLocation[] = 
-    { 1, 3, 6, 1, 4, 1, 232, 5, 5, 1, 1, 1, 2 };
-    static oid cpqSasPhyDrvLocationString[] = 
-    { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 3 };
+    { 1, 3, 6, 1, 4, 1, 232, 5, 5, 1, 1, 1, 2, 255 };
     static oid cpqSasPhyDrvHbaIndex[] = 
-    { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 1 };
+    { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 1, 255, 255 };
     static oid cpqSasPhyDrvIndex[] =  
-    { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 2 };
-    static oid cpqSasPhyDrvStatus[] = 
-    { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 5 };
-    static oid cpqSasPhyDrvType[] =
-    { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 16 };
+    { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 2, 255, 255 };
+    static oid cpqSasPhyDrvLocationString[] = 
+    { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 3, 255, 255 };
     static oid cpqSasPhyDrvModel[] =
-    { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 4 };
+    { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 4, 255, 255 };
+    static oid cpqSasPhyDrvStatus[] = 
+    { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 5, 255, 255 };
     static oid cpqSasPhyDrvFWRev[] =
-    { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 7 };
+    { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 7, 255, 255 };
     static oid cpqSasPhyDrvSerialNumber[] =
-    { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 10 };
+    { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 10, 255, 255 };
+    static oid cpqSasPhyDrvType[] =
+    { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 16,255, 255 };
     static oid cpqSasPhyDrvSasAddress[] = 
-    { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 17 };
+    { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 17, 255, 255 };
 
     netsnmp_variable_list *var_list = NULL;
     int status, oldstatus;
@@ -1162,6 +1167,8 @@ void SendSasTrap(int trapID,
     DEBUGMSGTL(("sasphydrv:container:load", "Trap:DiskCondition = %ld\n",
                 disk->cpqSasPhyDrvCondition));
     cpqHoTrapFlag = disk->cpqSasPhyDrvCondition << 2;
+    if (trap_fire) 
+        cpqHoTrapFlag = trap_fire << 2;
 
     snmp_varlist_add_variable(&var_list, sysName,
             sizeof(sysName) / sizeof(oid),
@@ -1174,56 +1181,94 @@ void SendSasTrap(int trapID,
             ASN_INTEGER, (u_char *)&cpqHoTrapFlag,
             sizeof(ASN_INTEGER));
 
+    cpqSasHbaHwLocation[OID_LENGTH(cpqSasHbaHwLocation) - 1] = 
+            disk->cpqSasPhyDrvHbaIndex;
     snmp_varlist_add_variable(&var_list, cpqSasHbaHwLocation,
             sizeof(cpqSasHbaHwLocation) / sizeof(oid),
             ASN_OCTET_STR,
             (u_char *) disk->hba->cpqSasHbaHwLocation,
              disk->hba->cpqSasHbaHwLocation_len);
 
+    cpqSasPhyDrvLocationString[OID_LENGTH(cpqSasPhyDrvLocationString) - 2] =
+            disk->cpqSasPhyDrvHbaIndex;
+    cpqSasPhyDrvLocationString[OID_LENGTH(cpqSasPhyDrvLocationString) - 1] =
+            disk->cpqSasPhyDrvIndex;
     snmp_varlist_add_variable(&var_list, cpqSasPhyDrvLocationString,
             sizeof(cpqSasPhyDrvLocationString) / sizeof(oid),
             ASN_OCTET_STR,
             (u_char *) disk->cpqSasPhyDrvLocationString,
             disk->cpqSasPhyDrvLocationString_len);
 
+    cpqSasPhyDrvHbaIndex[OID_LENGTH(cpqSasPhyDrvHbaIndex) - 2] =
+            disk->cpqSasPhyDrvHbaIndex;
+    cpqSasPhyDrvHbaIndex[OID_LENGTH(cpqSasPhyDrvHbaIndex) - 1] =
+            disk->cpqSasPhyDrvIndex;
     snmp_varlist_add_variable(&var_list, cpqSasPhyDrvHbaIndex,
             sizeof(cpqSasPhyDrvHbaIndex) / sizeof(oid),
             ASN_INTEGER, (u_char *) &disk->cpqSasPhyDrvHbaIndex,
             sizeof(ASN_INTEGER));
 
+    cpqSasPhyDrvIndex[OID_LENGTH(cpqSasPhyDrvIndex) - 2] =
+            disk->cpqSasPhyDrvHbaIndex;
+    cpqSasPhyDrvIndex[OID_LENGTH(cpqSasPhyDrvIndex) - 1] =
+            disk->cpqSasPhyDrvIndex;
     snmp_varlist_add_variable(&var_list, cpqSasPhyDrvIndex,
             sizeof(cpqSasPhyDrvIndex) / sizeof(oid),
             ASN_INTEGER, (u_char *)&disk->cpqSasPhyDrvIndex,
             sizeof(ASN_INTEGER));
 
+    cpqSasPhyDrvStatus[OID_LENGTH(cpqSasPhyDrvStatus) - 2] =
+            disk->cpqSasPhyDrvHbaIndex;
+    cpqSasPhyDrvStatus[OID_LENGTH(cpqSasPhyDrvStatus) - 1] =
+            disk->cpqSasPhyDrvIndex;
     snmp_varlist_add_variable(&var_list, cpqSasPhyDrvStatus,
             sizeof(cpqSasPhyDrvStatus) / sizeof(oid),
             ASN_INTEGER,(u_char *)&disk->cpqSasPhyDrvStatus,
             sizeof(ASN_INTEGER));
 
+    cpqSasPhyDrvType[OID_LENGTH(cpqSasPhyDrvType) - 2] =
+            disk->cpqSasPhyDrvHbaIndex;
+    cpqSasPhyDrvType[OID_LENGTH(cpqSasPhyDrvType) - 1] =
+            disk->cpqSasPhyDrvIndex;
     snmp_varlist_add_variable(&var_list, cpqSasPhyDrvType,
             sizeof(cpqSasPhyDrvType) / sizeof(oid),
             ASN_INTEGER,(u_char *)&disk->cpqSasPhyDrvType,
             sizeof(ASN_INTEGER));
 
+    cpqSasPhyDrvModel[OID_LENGTH(cpqSasPhyDrvModel) - 2] =
+            disk->cpqSasPhyDrvHbaIndex;
+    cpqSasPhyDrvModel[OID_LENGTH(cpqSasPhyDrvModel) - 1] =
+            disk->cpqSasPhyDrvIndex;
     snmp_varlist_add_variable(&var_list, cpqSasPhyDrvModel,
             sizeof(cpqSasPhyDrvModel)/ sizeof(oid),
             ASN_OCTET_STR,
             (u_char *) disk->cpqSasPhyDrvModel,
             disk->cpqSasPhyDrvModel_len);
 
+    cpqSasPhyDrvFWRev[OID_LENGTH(cpqSasPhyDrvFWRev) - 2] =
+            disk->cpqSasPhyDrvHbaIndex;
+    cpqSasPhyDrvFWRev[OID_LENGTH(cpqSasPhyDrvFWRev) - 1] =
+            disk->cpqSasPhyDrvIndex;
     snmp_varlist_add_variable(&var_list, cpqSasPhyDrvFWRev,
             sizeof(cpqSasPhyDrvFWRev) / sizeof(oid),
             ASN_OCTET_STR,
             (u_char *) disk->cpqSasPhyDrvFWRev,
             disk->cpqSasPhyDrvFWRev_len);
 
+    cpqSasPhyDrvSerialNumber[OID_LENGTH(cpqSasPhyDrvSerialNumber) - 2] =
+            disk->cpqSasPhyDrvHbaIndex;
+    cpqSasPhyDrvSerialNumber[OID_LENGTH(cpqSasPhyDrvSerialNumber) - 1] =
+            disk->cpqSasPhyDrvIndex;
     snmp_varlist_add_variable(&var_list, cpqSasPhyDrvSerialNumber,
             sizeof(cpqSasPhyDrvSerialNumber) / sizeof(oid),
             ASN_OCTET_STR,
             (u_char *) disk->cpqSasPhyDrvSerialNumber,
             disk->cpqSasPhyDrvSerialNumber_len);
 
+    cpqSasPhyDrvSasAddress[OID_LENGTH(cpqSasPhyDrvSasAddress) - 2] =
+            disk->cpqSasPhyDrvHbaIndex;
+    cpqSasPhyDrvSasAddress[OID_LENGTH(cpqSasPhyDrvSasAddress) - 1] =
+            disk->cpqSasPhyDrvIndex;
     snmp_varlist_add_variable(&var_list, cpqSasPhyDrvSasAddress,
             sizeof(cpqSasPhyDrvSasAddress) / sizeof(oid),
             ASN_OCTET_STR,
@@ -1234,13 +1279,11 @@ void SendSasTrap(int trapID,
     {
         case SAS_TRAP_PHYSDRV_STATUS_CHANGE:
 
-            netsnmp_send_traps(SNMP_TRAP_ENTERPRISESPECIFIC,
+            send_enterprise_trap_vars(SNMP_TRAP_ENTERPRISESPECIFIC,
                     SAS_TRAP_PHYSDRV_STATUS_CHANGE,
                     compaq,
                     compaq_len,
-                    var_list,
-                    NULL,
-                    0);
+                    var_list);
             status = disk->cpqSasPhyDrvStatus;
             oldstatus = disk->OldStatus;
 

@@ -43,7 +43,7 @@ void LOG_OS_BOOT()
     /* Let's go ahead and set the code for */
     if ((rc = rec_api3(s_ams_rec_handle, REC_CODE_AMS_OS_BOOT)) 
                 != RECORDER_OK) {
-        DEBUGMSGTL(("rec:log", "OS Boot rec_api3 failed (%d)\n", rc));
+        DEBUGMSGTL(("rec:log", "OS Boot rec_code_set failed (%d)\n", rc));
         return;
     }
 
@@ -82,7 +82,7 @@ void LOG_OS_SHUTDOWN()
     /* Let's go ahead and set the code for */
     if ((rc = rec_api3(s_ams_rec_handle, REC_CODE_AMS_OS_SHUTDOWN)) 
                 != RECORDER_OK) {
-        DEBUGMSGTL(("rec:log", "OS Shutdown rec_api3 failed (%d)\n", rc));
+        DEBUGMSGTL(("rec:log", "OS Shutdown rec_code_set failed (%d)\n", rc));
         return;
     }
 

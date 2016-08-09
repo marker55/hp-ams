@@ -14,9 +14,12 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <limits.h>
 #include <sys/types.h>
+#include <fcntl.h>
+#include <dirent.h>
 #include "hpHelper.h"
 
 #ifndef NETSNMP_NO_SYSTEMD
@@ -28,6 +31,7 @@
  */
 #include "cpqNic/cpqNic.h"
 #include "common/smbios.h"
+#include "common/utils.h"
 
 #include <signal.h>
 #include <syslog.h>
@@ -44,7 +48,7 @@ extern void init_cpqLinOsMgmt(void);
 extern void LOG_OS_INFORMATION(void );
 extern void LOG_OS_BOOT(void );
 extern void LOG_OS_SHUTDOWN(void );
-extern void LOG_DRIVER(void );
+extern void LOG_DRIVERS(void );
 extern void LOG_SERVICE(void );
 extern void LOG_PACKAGE(void );
 extern void LOG_OS_USAGE(void );
@@ -53,8 +57,10 @@ extern void LOG_PROCESSOR_USAGE(void );
 extern void LOG_PROCESS_CRASHES(void );
 
 extern int InitSMBIOS(void);
-extern int SmbGetSysGen(void);
+extern int pci_dev_filter(const struct dirent * );
+
 static int      receive(void);
+
 
 MibStatusEntry  cpqHostMibStatusArray[20];
 unsigned char cpqHoMibHealthStatusArray[CPQHO_MIBHEALTHSTATUSARRAY_LEN];
@@ -64,6 +70,7 @@ static int      interval2ping = 15;
 int             log_interval   = 0;
 int             testtrap_interval = 0;
 int             gen8_only     = 1;
+int            trap_fire = 0;
 
 char *GenericData = "generic trap data";
 struct pci_access *pacc = NULL;
@@ -117,6 +124,69 @@ usage(void)
     exit(0);
 }
 
+int GetiLOGen() {
+    int count = 0, k = 0;
+    struct dirent ** devices;
+    char *d_dir = "/sys/module/hpilo/drivers/pci:hpilo/";
+    char buffer[256];
+    int ilogen = 0;
+
+    count = scandir(d_dir, &devices, pci_dev_filter, alphasort );
+    for (k = 0; k < count; k++) {
+        unsigned char config[256];
+        int config_fd;
+
+        strncpy(buffer, d_dir, sizeof(buffer) - 1);
+        strncat(buffer, devices[k]->d_name, 255 - strlen(buffer));
+        strncat(buffer, "/config", 255 - strlen(buffer));
+        if ((config_fd = open(buffer, O_RDONLY)) != -1) {
+            if (read(config_fd, config, 256) == 256 ) {
+            /* Check for iLO3 and later */
+                if ((config[45] == 0x10) && (config[44] == 0x3c)) { 
+                    /* This is a HP iLO */
+                    if (config[47] == 0x33) {
+                        switch (config[46]) {
+                            case 0x04:
+                                /* It's an iLO */
+                                ilogen = 0;
+                                break;
+                            case 0x05:
+                                /* It's an iLO */
+                                ilogen = 1;
+                                break;
+                            case 0x09:
+                                /* It's either an iLO2 or iLO3 */
+                                switch (config[8]) {
+                                    case  3:
+                                        ilogen = 2;
+                                        break;
+                                    case  4:
+                                        ilogen = 3;
+                                        break;
+                                    default:
+                                        ilogen = 1;
+                                }
+                                break;
+                            case 0x0e:
+                                ilogen = 3;
+                                break;
+                            case 0x81:
+                                ilogen = 4;
+                                break;
+                            default:
+                                ilogen = config[8] - 1;
+                        }
+                    } 
+                }
+            }
+            close(config_fd);
+         } 
+        free(devices[k]);
+    }
+    free(devices);
+    return ilogen;
+}           
+
 int
 main(int argc, char **argv)
 {
@@ -125,7 +195,7 @@ main(int argc, char **argv)
      */
     int             ch;
     int             dont_fork = 0, use_syslog = 0, kdump_only = 0;
-    int             sys_gen = 0;
+    int             ilo_gen = 0;
     char            *transport = "hpilo:";
     int             i;
 
@@ -140,7 +210,16 @@ main(int argc, char **argv)
     int            do_mibII = 1;
     char *argarg;
     int             prepared_sockets = 0;
+    struct stat     st;
+    struct timeval the_time[2];
 
+    init_etime(&the_time[0]);
+
+    if (stat("/sys/module/hpilo", &st) != 0 ) {
+       printf("hp-ams requires that the hpilo kernel module is loaded");
+       exit(1);
+    } 
+        
 #ifndef NETSNMP_NO_SYSTEMD
     /* check if systemd has sockets for us and don't close them */
     prepared_sockets = netsnmp_sd_listen_fds(0);
@@ -158,7 +237,7 @@ main(int argc, char **argv)
 
     snmp_disable_log();
 
-    while ((ch = getopt(argc, argv, "D:fG:kLM::OI:P:T::x:")) != EOF)
+    while ((ch = getopt(argc, argv, "D:fG:kLM::OI:P:t:T::x:")) != EOF)
         switch (ch) {
         case 'D':
             debug_register_tokens(optarg);
@@ -254,6 +333,13 @@ main(int argc, char **argv)
         case 'O':
             gen8_only = 0;     /* allow to run on non supported */
             break;
+        case 't':
+             if (optarg != (char *) 0) 
+                trap_fire = atoi(optarg);
+            else
+                trap_fire = 1;
+
+            break;
         case 'T':
             if (optarg != (char *) 0) {
                 testtrap_interval = atoi(optarg);
@@ -303,10 +389,10 @@ main(int argc, char **argv)
             exit(1);
         }
     } else {
-        sys_gen = SmbGetSysGen();
-        if ((gen8_only) && (sys_gen < 8)) {
-            fprintf(stderr,"This program will on run on HP ProLiant Gen8"
-                       " or newer platforms\n");
+        ilo_gen = GetiLOGen();
+        if ((gen8_only) && (ilo_gen < 4)) {
+            fprintf(stderr,"This program requires the host to have a HP Integrated Lights Out 4 (iLO 4)"
+                       " BMC\n");
             exit(1);
         }
     }
@@ -325,13 +411,21 @@ main(int argc, char **argv)
     memset(cpqHostMibStatusArray,0,sizeof(cpqHostMibStatusArray));
     memset(cpqHoMibHealthStatusArray, 0, sizeof(cpqHoMibHealthStatusArray));
 
-    if (do_ahs) {
-    LOG_PROCESS_CRASHES();
-    if (kdump_only) {
-        return 0;
-    }
+    DEBUGMSG(("hpHelper:timer", "interval for StartUp %dms\n", get_etime(&the_time[0])));
 
-    LOG_OS_BOOT();
+    if (do_ahs) {
+        LOG_PROCESS_CRASHES();
+
+        DEBUGMSG(("hpHelper:timer", "interval for Log Crashes %dms\n", get_etime(&the_time[0])));
+
+        if (kdump_only) {
+            return 0;
+        }
+
+        LOG_OS_BOOT();
+
+        DEBUGMSG(("hpHelper:timer", "interval for Log Boot %dms\n", get_etime(&the_time[0])));
+
     }
     openlog("hp-ams",  LOG_CONS | LOG_PID, LOG_DAEMON);
     /*
@@ -357,36 +451,61 @@ main(int argc, char **argv)
 
     init_snmp("hpHelper");
 
-    if (do_mibII)
-    init_mib_modules();
+    DEBUGMSG(("hpHelper:timer", "interval for SNMP startup %dms\n", get_etime(&the_time[0])));
 
-    if (do_host)
-    init_cpqHost();
-
-    if (do_ahs) {
-    LOG_OS_INFORMATION();
-    LOG_DRIVER();
-    LOG_SERVICE();
-    LOG_PACKAGE();
+    if (do_mibII) {
+        init_mib_modules();
+        DEBUGMSG(("hpHelper:timer", "interval for init MIB-2 %dms\n", get_etime(&the_time[0])));
     }
 
-    if (do_se)
+    if (do_host) {
+        init_cpqHost();
+        DEBUGMSG(("hpHelper:timer", "interval for cpqHost %dms\n", get_etime(&the_time[0])));
+    }
+
+    if (do_ahs) {
+        LOG_OS_INFORMATION();
+        DEBUGMSG(("hpHelper:timer", "interval for LOG OS %dms\n", get_etime(&the_time[0])));
+
+        LOG_DRIVERS();
+        DEBUGMSG(("hpHelper:timer", "interval for Log drivers %dms\n", get_etime(&the_time[0])));
+
+        LOG_SERVICE();
+        DEBUGMSG(("hpHelper:timer", "interval for Log services %dms\n", get_etime(&the_time[0])));
+
+        LOG_PACKAGE();
+        DEBUGMSG(("hpHelper:timer", "interval for Log packages %dms\n", get_etime(&the_time[0])));
+    }
+
+    if (do_se) {
         init_cpqStdPciTable();
+        DEBUGMSG(("hpHelper:timer", "interval for cpqSe %dms\n", get_etime(&the_time[0])));
+    }
 
-    if (do_scsi)
-    init_cpqScsi();
+    if (do_scsi) {
+        init_cpqScsi();
+        DEBUGMSG(("hpHelper:timer", "interval for cpqScsi %dms\n", get_etime(&the_time[0])));
+    }
 
-    if (do_ide)
-    init_cpqIde();
+    if (do_ide) {
+        init_cpqIde();
+        DEBUGMSG(("hpHelper:timer", "interval for cpqIde %dms\n", get_etime(&the_time[0])));
+    }
 
-    if (do_fca)
-    init_cpqFibreArray();
+    if (do_fca) {
+        init_cpqFibreArray();
+        DEBUGMSG(("hpHelper:timer", "interval for cpqFca %dms\n", get_etime(&the_time[0])));
+    }
 
-    if (do_nic)
-    init_cpqNic();
+    if (do_nic) {
+        init_cpqNic();
+        DEBUGMSG(("hpHelper:timer", "interval for cpqNic %dms\n", get_etime(&the_time[0])));
+    }
 
-    if (do_pmp)
+    if (do_pmp) {
         init_cpqLinOsMgmt();
+        DEBUGMSG(("hpHelper:timer", "interval for cpqLinOsMgmt %dms\n", get_etime(&the_time[0])));
+    }
 
     /*
      * Send coldstart trap if possible.
@@ -407,9 +526,14 @@ main(int argc, char **argv)
 #endif
 
     if (do_ahs) {
-    LOG_OS_USAGE();
-    LOG_PROCESSOR_USAGE();
-    LOG_MEMORY_USAGE();
+        LOG_OS_USAGE();
+        DEBUGMSG(("hpHelper:timer", "interval for LOG OS Usage%dms\n", get_etime(&the_time[0])));
+
+        LOG_PROCESSOR_USAGE();
+        DEBUGMSG(("hpHelper:timer", "interval for LOG Processor Usage %dms\n", get_etime(&the_time[0])));
+
+        LOG_MEMORY_USAGE();
+        DEBUGMSG(("hpHelper:timer", "interval for LOG Memory Usage %dms\n", get_etime(&the_time[0])));
     }
 
     /*

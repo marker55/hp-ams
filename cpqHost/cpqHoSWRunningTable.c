@@ -273,11 +273,6 @@ cpqHoSWRunningTable_handler(netsnmp_mib_handler *handler,
                                               SNMP_NOSUCHINSTANCE);
                     continue;
                 }
-                if ( table_entry->cpqHoSWRunningDesc_len == 0) {
-                    netsnmp_set_request_error(reqinfo, request,
-                                              SNMP_NOSUCHINSTANCE);
-                    continue;
-                }
                 snmp_set_var_typed_value(request->requestvb, ASN_OCTET_STR,
                                          table_entry->cpqHoSWRunningDesc,
                                          table_entry->
@@ -285,11 +280,6 @@ cpqHoSWRunningTable_handler(netsnmp_mib_handler *handler,
                 break;
             case COLUMN_CPQHOSWRUNNINGVERSION:
                 if (!table_entry) {
-                    netsnmp_set_request_error(reqinfo, request,
-                                              SNMP_NOSUCHINSTANCE);
-                    continue;
-                }
-                if ( table_entry->cpqHoSWRunningVersion_len == 0) {
                     netsnmp_set_request_error(reqinfo, request,
                                               SNMP_NOSUCHINSTANCE);
                     continue;

@@ -20,7 +20,6 @@ extern unsigned char cpqHoMibHealthStatusArray[];
 extern char    ifLogMapOverallStatus;
 
 extern  int   InitLibCpqNic(void);
-extern  unsigned long iGetIfLastChange(char *);
 
 char NullMAC[IFLOGMAPMACADDRESS_LEN] = {0,0,0,0,0,0};
 
@@ -54,8 +53,8 @@ void init_cpqNic(void)
     cpqHostMibStatusArray[CPQMIB].minor = CPQMIBREVMINOR;
 
 
-    initialize_table_cpqNicIfPhysAdapterTable();
     initialize_table_cpqNicIfLogMapTable();
+    initialize_table_cpqNicIfPhysAdapterTable();
     initialize_cpqNicIfLogMapOverallCondition();
 
     cpqHoMibHealthStatusArray[CPQMIBHEALTHINDEX] = ifLogMapOverallStatus;

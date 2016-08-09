@@ -25,13 +25,16 @@
 #include "common/scsi_info.h"
 
 #include "fca_linux.h"
+#include "fca_db.h"
 
 extern unsigned char     cpqHoMibHealthStatusArray[];
+extern int trap_fire;
 
 extern int file_select(const struct dirent *);
 extern int pcislot_scsi_host(char * buffer);
 void SendFcaTrap(int, cpqFcaHostCntlrTable_entry *);
 void netsnmp_arch_fcahc_init(void); 
+int  getFcaHostCntlrModel( int BoardID, char *pHPModelName, int *pFCoE );
 
 extern  int alphasort();
 
@@ -54,225 +57,49 @@ static int fca_select(const struct dirent *entry)
     }
     return 0;
 }
-int enumPCIid(unsigned int BoardID)
+
+/***************************************************************************/
+/*  Function: SetHbaModelName                                              */
+/*                                                                         */
+/*  Description:                                                           */
+/*    This function determines the HBA model based on board id and HBA API */
+/*    model information.                                                   */
+/*    Also returns info if device is fcoe or not   */
+/*                                                                         */
+/***************************************************************************/
+int getFcaHostCntlrModel( int BoardID, char *pHPModelName, int *pFCoE )
 {
+   int fcaModel = 0, i, fcoe = 0;
 
-            switch (BoardID) {
-                case 0xF0950E11:
-                    return( 6);
-                    break;
-                case 0xF8000E11:
-                    return( 7);
-                    break;
-                case 0x01000E11:
-                    return( 8);
-                    break;
-                case 0x01020E11:
-                    return( 9);
-                    break;
-                case 0xF98010DF:
-                    return(10);
-                    break;
-                case 0x10000E11:
-                    return(11);
-                    break;
-                case 0xF09810DF:
-                    return(12);
-                    break;
-                case 0x01010E11:
-                    return(13);
-                    break;
-                case 0x12BA103C:
-                    return(14);
-                    break;
-                case 0x01030E11:
-                    return(15);
-                    break;
-                case 0x01040E11:
-                    return(16);
-                    break;
-                case 0x12DD103C:
-                    return(19);
-                    break;
-                case 0x12D7103C:
-                    return(20);
-                    break;
-                case 0xF0D510DF:
-                    return(21);
-                    break;
-                case 0xFD0010DF:
-                    return(22);
-                    break;
-                case 0xF0A510DF:
-                    return(23);
-                    break;
-                case 0x1708103C:
-                    return(24);
-                    break;
-                case 0x1705103C:
-                    return(25);
-                    break;
-                case 0x7040103C:
-                    return(26);
-                    break;
-                case 0x7041103C:
-                    return(27);
-                    break;
-                case 0xF0E510DF:
-                    return(28);
-                    break;
-                case 0xFE0010DF:
-                    return(29);
-                    break;
-                case 0x1702103C:
-                    return(30);
-                    break;
-                case 0x3262103C:
-                    return(31);
-                    break;
-                case 0x3263103C:
-                    return(32);
-                    break;
-                case 0x3261103C:
-                    return(33);
-                    break;
-                case 0x3281103C:
-                    return(34);
-                    break;
-                case 0x3282103C:
-                    return(35);
-                    break;
-                case 0x1719103C:
-                    return(36);
-                    break;
-                case 0x17E4103C:
-                    return(37);
-                    break;
-                case 0x17E5103C:
-                    return(38);
-                    break;
-                case 0x17E7103C:
-                    return(39);
-                    break;
-                case 0x17E8103C:
-                    /*HP SN1000Q 16Gb Dual Port FC HBA */
-                  return(40); 
-                    break;
-                case 0x197E103C:
-                    /*HP StoreFabric SN1100E 16Gb Single Port */
-                    return(41); 
-                    break;
-                case 0x197F103C:
-                    /*HP StoreFabric SN1100E 16Gb Dual Port */
-                    return(42); 
-                    break;
-                case 0x1743103C:
-                    /*HP StorageWorks 81B 8Gb Single Port PCI-e FC HBA */
-                    return(43); 
-                    break;
-                case 0x1742103C:
-                    /*HP StorageWorks 82B 8Gb Dual Port PCI-e FC HBA */
-                    return(44); 
-                    break;
-                case 0x3344103C:
-                    /*HP StorageWorks CN1100E Dual Port Converged Network Adapter */
-                    return(45); 
-                    break;
-                case 0x337B103C:
-                    /*HP FlexFabric 10Gb 2-port 554FLB Adapter */
-                    return(46); 
-                    break;
-                case 0x337C103C:
-                    /*HP FlexFabric 10Gb 2-port 554M Adapter */
-                    return(47); 
-                    break;
-                case 0x3376103C:
-                    /*HP FlexFabric 10Gb 2-port 554FLR-SFP+ Adapter */
-                    return(48); 
-                    break;
-                case 0x338F103C:
-                    /*HP Fibre Channel 8Gb LPe1205A Mezz */
-                    return(49); 
-                    break;
-                case 0x3348103C:
-                    /*HP StorageWorks CN1000Q Dual Port Converged Network Adapter */
-                    return(50); 
-                    break;
-                case 0x338E103C:
-                    /*HP QMH2572 8Gb FC HBA for c-Class BladeSystem */
-                    return(51); 
-                    break;
-                case 0x1957103C:
-                    /*HP FlexFabric 10Gb 2-port 526FLR-SFP+ Adapter */
-                    return(52); 
-                    break;
-                case 0x1939103C:
-                    /*HP QMH2672 8Gb FC HBA for c-Class BladeSystem */
-                    return(53); 
-                    break;
-                case 0x1932103C:
-                    /*HP FlexFabric 10Gb 2-port 534FLB Adapter */
-                    return(54); 
-                    break;
-                case 0x1930103C:
-                    /*HP FlexFabric 10Gb 2-port 534FLR-SFP+ Adapter */
-                    return(55); 
-                    break;
-                case 0x1933103C:
-                    /*HP FlexFabric 10Gb 2-port 534M Adapter */
-                    return(56); 
-                    break;
+   DEBUGMSGTL(("fcahc:container:load","getFcaHostCntlrModel:  BoardID is 0x%X\n", BoardID));
 
-                case 0x1931103C:
-                    /*HP StoreFabric CN1100R Dual Port Converged Network Adapter */
-                    return(57); 
-                    break;
-
-                case 0x1956103C:
-                    /*HP Fibre Channel 16Gb LPe1605 Mezz */
-                    return(58); 
-                    break;
-    
-                case 0x1916103C:
-                    /* Broadcom 630FLB flex fabric id   */
-                    return (59);
-                    break;
-
-                case 0x1917103C:
-                    /* Broadcom 630M flex fabric id     */
-                    return (60);
-                    break;
-
-                case 0x220A103C:
-                    /* Emulex 556FLR-SFP+ (Escargot) */
-                    return (61);
-                    break;
-
-                case 0x1934103C:
-                    /* Emulex 650M (Electra) */
-                    return (62);
-                    break;
-
-                case 0x1935103C:
-                    /* Emulex 650FLB (Eureka) */
-                    return (63);
-                    break;
-
-                case 0x21D4103C:
-                    /* Emulex CN1200E (Boxster 4) */
-                    return (64);
-                    break;
-
-                case 0x22FA103C:
-                    /* Broadcom 536FLB (Breezy) */
-                    return (65);
-                    break;
-
-                default:
-                    return(1);
-                    break;
+   /* Loop through the list of HBA models to find this one. */
+   for (i = 0; i < MAX_FCA_HBA_LIST; i++) {
+      if (BoardID == gFcaHbaList[i].ulBoardId) {
+            fcaModel = gFcaHbaList[i].bRegModel;
+            if( strstr(gFcaHbaList[i].szHbaHPModel, "Converged")!=NULL )
+                fcoe = 1;
+            else {
+                if( strstr(gFcaHbaList[i].szHbaHPModel, "Flex")!=NULL )
+                    fcoe = 1;
             }
-}
+            if( pHPModelName )
+                strcpy( pHPModelName, gFcaHbaList[i].szHbaHPModel );
+            if( pFCoE )
+                *pFCoE = fcoe;
+            DEBUGMSGTL(("fcahc:container:load","   Found matching FCHBA.  Returning FCA Model [ %d]  and fcoe flag [%d]\n", fcaModel, fcoe));
+            return ( fcaModel );
+      } /* if */
+   } /* for */
+
+   fcaModel = FCA_HOST_MODEL_FC_GENERIC;
+   if( pHPModelName )
+       sprintf( pHPModelName, "Generic FCHBA Model" );
+   DEBUGMSGTL(("fcahc:container:load","   Matching FCHBA Not Found.  Returning FCA Model   %d\n", fcaModel));
+
+   return (fcaModel);
+
+} /*  */
 
 char * getFcHBASerialNum(char *buffer)
 {
@@ -462,11 +289,13 @@ void cpqfca_update_hba_status(char *devpath, char *devname, void *data)
             if ((entry->cpqFcaHostCntlrStatus != entry->oldStatus) &&
                 (entry->oldStatus != FC_HBA_STATUS_OTHER))  {
                 DEBUGMSGTL(("fcahc:container:load", 
-                    "SENDING FCA STATUS CHANGE TRAP status = %d old = %d\n", 
+                    "SENDING FCA STATUS CHANGE TRAP status = %ld old = %ld\n", 
                     entry->cpqFcaHostCntlrStatus, entry->oldStatus));
                 SendFcaTrap( FCA_TRAP_HOST_CNTLR_STATUS_CHANGE, entry );
                 entry->oldStatus = entry->cpqFcaHostCntlrStatus; //save Old status
             }
+            if (trap_fire)
+                SendFcaTrap( FCA_TRAP_HOST_CNTLR_STATUS_CHANGE, entry );
 
             if (FcaCondition < entry->cpqFcaHostCntlrCondition)
                 FcaCondition = entry->cpqFcaHostCntlrCondition;
@@ -489,6 +318,8 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
     oid oid_index[2];
 
     int FcaIndex, Host;
+    char hpModelName[128];
+    int is_fcoe;
     char buffer[256];
     char attribute[256];
     char *value;
@@ -598,7 +429,8 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
             BoardID = device << 16;
             BoardID += vendor;
 
-            entry->cpqFcaHostCntlrModel = enumPCIid(BoardID);
+            entry->cpqFcaHostCntlrModel = 
+                getFcaHostCntlrModel(BoardID, hpModelName, &is_fcoe );
     
             if ((value = getFcHBASerialNum(buffer)) != NULL) {
                 DEBUGMSGTL(("fcahc:container:load", "Value = %s\n", value));
@@ -710,11 +542,13 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
         if ((entry->cpqFcaHostCntlrStatus != entry->oldStatus) &&
             (entry->oldStatus != FC_HBA_STATUS_OTHER))  {
              DEBUGMSGTL(("fcahc:container:load", 
-                        "SENDING FCA STATUS CHANGE TRAP status = %d old = %d\n", 
-                         entry->cpqFcaHostCntlrStatus, entry->oldStatus));
+                        "SENDING FCA STATUS CHANGE TRAP status = %ld old = %ld\n", 
+                        entry->cpqFcaHostCntlrStatus, entry->oldStatus));
              SendFcaTrap( FCA_TRAP_HOST_CNTLR_STATUS_CHANGE, entry );
              entry->oldStatus = entry->cpqFcaHostCntlrStatus; //save Old status
         }
+        if (trap_fire)
+            SendFcaTrap( FCA_TRAP_HOST_CNTLR_STATUS_CHANGE, entry );
 
         if (FcaCondition < entry->cpqFcaHostCntlrCondition)
             FcaCondition = entry->cpqFcaHostCntlrCondition;
@@ -756,6 +590,8 @@ void SendFcaTrap(int trapID,
     struct utsname sys_name;
     unsigned int cpqHoTrapFlag;
     cpqHoTrapFlag = fca->cpqFcaHostCntlrCondition << 2;
+    if (trap_fire)
+        cpqHoTrapFlag = trap_fire << 2;
 
     uname(&sys_name);   /* get sysName */
 
@@ -813,13 +649,11 @@ void SendFcaTrap(int trapID,
     {
         case FCA_TRAP_HOST_CNTLR_STATUS_CHANGE:
 
-            netsnmp_send_traps(SNMP_TRAP_ENTERPRISESPECIFIC,
+            send_enterprise_trap_vars(SNMP_TRAP_ENTERPRISESPECIFIC,
                     FCA_TRAP_HOST_CNTLR_STATUS_CHANGE,
                     compaq,
                     compaq_len,
-                    var_list,
-                    NULL,
-                    0);
+                    var_list);
 
             DEBUGMSGTL(("fcahc:", "Free varbind list...\n"));
             snmp_free_varbind(var_list);

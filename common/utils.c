@@ -15,6 +15,18 @@
 #include "utils.h"
 #include "smbios.h"
 
+long uptime()
+{
+    FILE           *in = fopen("/proc/uptime", "r");
+    long            uptim = 0, a, b;
+    if (in) {
+        if (2 == fscanf(in, "%ld.%ld", &a, &b))
+            uptim = a * 100 + b;
+        fclose(in);
+    }
+    return uptim;
+}
+
 void init_etime(struct timeval the_time[]) {
     struct timeval *prev_time = &the_time[1];
 
@@ -42,26 +54,31 @@ int get_etime(struct timeval the_time[]) {
 int get_nic_port(char * name)
 {
     int pc = 0;
-    char *buffer[256];
+    char buffer[256];
     struct dirent **filelist;
     int i;
+    int port = -1;
+    char pcilink[1025];
+    ssize_t link_sz;
 
     memset(buffer, 0, 256);
     snprintf(buffer, 255, "/sys/class/net/%s/device/net", name);
-    if ((pc = scandir(buffer, &filelist, file_select, alphasort)) > 1) {
+    if (pc = scandir(buffer, &filelist, file_select, alphasort) > 0) {
         for (i = 0; i < pc; i++) {
-            if (!strcmp(name, filelist[i]->d_name)) {
-                free(filelist[i]);
-                free(filelist);
-                return(i +1);
-            } else
-                free(filelist[i]);
-        }
-    } else {
-        free(filelist[0]);
+            if (!strcmp(name, filelist[i]->d_name)) 
+                port = i + 1;
+            free(filelist[i]);
+        } 
         free(filelist);
-        return -1;
     }
+    if (port == 1) {
+        snprintf(buffer, 255, "/sys/class/net/%s/device", name);
+        if ((link_sz = readlink(buffer, pcilink, 1024)) > 0) {
+            pcilink[link_sz] = '\0';
+            port = atoi(&pcilink[link_sz - 1]) + 1;
+        } 
+    }
+    return port;
 }
 
 int getChassisPort_str(char * pci) 
@@ -82,7 +99,7 @@ int getChassisPort(int bus, int dev, int func)
                               i , (void *)&portInfo) != 0) {
         if ((bus == portInfo->byBusNumber) &&
             (dev == portInfo->byDeviceNumber) &&
-            (func == portInfo->byFunctionNumber))
+            (func == portInfo->byFunctionNumber)) 
            return (((int) portInfo->byDevTypeInstance)&0x07);
         i++;
     }
@@ -108,7 +125,7 @@ int getPCIslot_bus(int  bus)
     PSMBIOS_SYSTEM_SLOTS slotInfo;
 
     while (SmbGetRecordByType(SMBIOS_SYS_SLOTS, i , (void *)&slotInfo) != 0) {
-        if (bus == slotInfo->byBusNumber)
+        if (bus == slotInfo->byBusNumber) 
             return ((int)slotInfo->wSlotID);
         i++;
     }
@@ -124,16 +141,19 @@ int getPCIslot_str(char * pci)
     char syspci[256];
     int i;
     ssize_t link_sz;
+    ssize_t remaining = 255;
 
     if (pci == NULL) 
         return 0;
 
     if ((strchr(pci, '.') == NULL))
         strcat(pci, ".0");
-    strcpy(syspci, "/sys/bus/pci/devices/");
-    strcat(syspci, pci);
+    strncpy(syspci, "/sys/bus/pci/devices/", remaining);
+    remaining -=  strlen(syspci);
+
+    strncat(syspci, pci, remaining);
     link_sz = readlink(syspci, pcilink, 1024);
-    if (link_sz) 
+    if (link_sz > 0) 
         pcilink[link_sz] = '\0';
     else
         return 0;
@@ -271,12 +291,12 @@ read_buf_t *ReadFile(char *FileName)
         if ((readnext + readsize) > bufsize) {
             bufsize += readsize;
             readbuf = realloc(readbuf, bufsize + sizeof(read_buf_t));
-    }
+        }
     }
     
     close(fileFD);
     readbuf->count = readnext;
-        return (readbuf);
+    return (readbuf);
 }
 
 read_line_t *ReadFileLines(char *FileName)
@@ -517,7 +537,7 @@ read_line_t *s;
             fprintf(stderr,"count = %d\n",s->count);
             for (count=0; count < s->count; count++) 
                 fprintf(stderr,"%s\n",s->line[count]);
-
+                
 /*
             if ((distro = getDistroInfo()) != NULL ) {
                 fprintf (stderr,"%s\n",distro->LongDistro);

@@ -379,8 +379,6 @@ cpqNicIfLogMapTable_handler(netsnmp_mib_handler *handler,
                                               SNMP_NOSUCHINSTANCE);
                     continue;
                 }
-                DEBUGMSGTL(("cpqnic:arch","varlen = %ld\n", table_entry->cpqNicIfLogMapPhysicalAdapters_len));
-                DEBUGMSGTL(("cpqnic:arch","map[0] = %d\n", table_entry->cpqNicIfLogMapPhysicalAdapters[0]));
                 snmp_set_var_typed_value(request->requestvb, ASN_OCTET_STR,
                                          table_entry->
                                              cpqNicIfLogMapPhysicalAdapters,
@@ -550,17 +548,60 @@ cpqNicIfLogMapTable_handler(netsnmp_mib_handler *handler,
 }
 
 void
-cpqNicIfLogMapTable_cache_reload()
+cpqNicIfLogMapTable_cache_remove(oid index)
 {
     netsnmp_cache  *cpqNicIfLogMapTable_cache = NULL;
+    netsnmp_container *iflogmap_container;
+    netsnmp_iterator  *it;
+    cpqNicIfLogMapTable_entry* entry = NULL;
+
+    DEBUGMSGTL(("internal:cpqNicIfLogMapTable:_cache_reload", "triggered\n"));
 
     cpqNicIfLogMapTable_cache = netsnmp_cache_find_by_oid(cpqNicIfLogMapTable_oid,
                                             cpqNicIfLogMapTable_oid_len);
 
+    if (cpqNicIfLogMapTable_cache != NULL) {
+        iflogmap_container = cpqNicIfLogMapTable_cache->magic;
+        it = CONTAINER_ITERATOR(iflogmap_container);
+
+        entry = ITERATOR_FIRST( it );
+        while (entry != NULL ) {
+            if (entry->cpqNicIfLogMapIndex == index)
+                break;
+            entry = ITERATOR_NEXT( it );
+        }
+        ITERATOR_RELEASE( it );
+        if (entry != NULL)
+            cpqNicIfLogMapTable_removeEntry(iflogmap_container, entry);
+    }
+}
+
+void
+cpqNicIfLogMapTable_cache_reload(int index)
+{
+    netsnmp_cache  *cpqNicIfLogMapTable_cache = NULL;
+    netsnmp_container *iflogmap_container;
+    netsnmp_iterator  *it;
+    cpqNicIfLogMapTable_entry* entry = NULL;
+
     DEBUGMSGTL(("internal:cpqNicIfLogMapTable:_cache_reload", "triggered\n"));
-    if (NULL != cpqNicIfLogMapTable_cache) {
-       cpqNicIfLogMapTable_cache->valid = 0;
-       netsnmp_cache_check_and_reload(cpqNicIfLogMapTable_cache);
+
+    cpqNicIfLogMapTable_cache = netsnmp_cache_find_by_oid(cpqNicIfLogMapTable_oid,
+                                            cpqNicIfLogMapTable_oid_len);
+
+    if (cpqNicIfLogMapTable_cache != NULL) {
+        iflogmap_container = cpqNicIfLogMapTable_cache->magic;
+        it = CONTAINER_ITERATOR(iflogmap_container);
+
+        entry = ITERATOR_FIRST( it );
+        while (entry != NULL ) {
+            if (entry->cpqNicIfLogMapIndex == index)
+                break;
+            entry = ITERATOR_NEXT( it );
+        }
+        ITERATOR_RELEASE( it );
+        if (entry != NULL)
+            cpqNicIfLogMap_reload_entry(entry);
     }
 }
 

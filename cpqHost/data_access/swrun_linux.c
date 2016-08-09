@@ -87,7 +87,7 @@ cpqhost_arch_swrun_container_load( netsnmp_container *container)
 	entry->cpqHoSWRunningVersion_len = 0;
 
 	memset(entry->cpqHoSWRunningDate, 0, sizeof(entry->cpqHoSWRunningDate));
-	entry->cpqHoSWRunningDate_len = 0;
+	entry->cpqHoSWRunningDate_len = sizeof(entry->cpqHoSWRunningDate);
 
 	entry->cpqHoSWRunningMonitor = 1;
 	entry->cpqHoSWRunningState = 2;
@@ -97,7 +97,7 @@ cpqhost_arch_swrun_container_load( netsnmp_container *container)
 	entry->cpqHoSWRunningCountMax = 1;
 
 	memset(entry->cpqHoSWRunningEventTime, 0, sizeof(entry->cpqHoSWRunningEventTime));
-	entry->cpqHoSWRunningEventTime_len = 0;
+	entry->cpqHoSWRunningEventTime_len = sizeof(entry->cpqHoSWRunningEventTime);
 
 	entry->cpqHoSWRunningStatus = 1;
 	entry->cpqHoSWRunningConfigStatus = 1;

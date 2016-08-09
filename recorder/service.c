@@ -49,7 +49,7 @@ void LOG_SERVICE(
     REC_AMS_ServiceData *ServiceData;
 
     char *blob;
-    descript *toc;
+    RECORDER_API4_RECORD *toc;
     int svccount = 0;
 
 
@@ -72,7 +72,7 @@ void LOG_SERVICE(
     /* build descriptor toc */
     num_descript = sizeof(fld)/sizeof(field);
     DEBUGMSGTL(("rec:log","Service num_descript = %d\n", num_descript));
-    if ((toc_sz = sizeof(descript) * num_descript)
+    if ((toc_sz = sizeof(RECORDER_API4_RECORD) * num_descript)
             > RECORDER_MAX_BLOB_SIZE) {
         DEBUGMSGTL(("rec:log","Service Descriptor too large %ld\n", toc_sz));
         return;
@@ -86,7 +86,7 @@ void LOG_SERVICE(
     /* now do the field descriptor */
     memset(toc, 0, toc_sz);
     for ( i = 0; i < num_descript; i++) {
-        toc[i].flags = REC_FLAGS_DESCRIPTOR | REC_FLAGS_DESC_FIELD;
+        toc[i].flags = REC_FLAGS_API4 | REC_FLAGS_DESC_FIELD;
         toc[i].classs = s_ams_rec_class;
         toc[i].code = REC_CODE_AMS_SERVICE;
         toc[i].field = i;

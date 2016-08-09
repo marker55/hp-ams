@@ -10,6 +10,7 @@
  * Defines
  *******************************************************************/
 // Recorder Implementation / Specification Version
+#define RECORDER_CHIF_SERVICE   0x11
 #define RECORDER_VERSION         (0x01)
 
 // API return codes
@@ -22,7 +23,7 @@
 #define RECORDER_ERR_MALLOC       (4)
 #define RECORDER_ERR_HANDLE       (5)
 #define RECORDER_ERR_BAD_SIZE     (6)
-#define RECORDER_ERR_NO_FILTER    (7)
+#define RECORDER_ERR_NO_API5    (7)
 #define RECORDER_ERR_INVALID_PARM (8)
 
 // Size #defines
@@ -50,12 +51,12 @@
 #define RECORDER_HANDLE_MASK   (0x0000FFFF)
 
 // Filter (F_TYPE)
-#define RECORDER_FILTER_NO_FILTER  (0)
-#define RECORDER_FILTER_BYTE       (1)
-#define RECORDER_FILTER_WORD       (2)
-#define RECORDER_FILTER_DWORD      (4)
+#define RECORDER_API5_NO_API5  (0)
+#define RECORDER_API5_BYTE       (1)
+#define RECORDER_API5_WORD       (2)
+#define RECORDER_API5_DWORD      (4)
 
-#define RECORDER_FILTER_SET      (0x01)
+#define RECORDER_API5_SET      (0x01)
 
 //
 // FLAGS FIELD
@@ -63,7 +64,7 @@
 // External #defines
 // FLAGS field
 // Some of these apply to data and some to descriptors, and some to both!
-#define REC_FLAGS_DESCRIPTOR             (0x80)    
+#define REC_FLAGS_API4             (0x80)    
 // If DESCRIPTOR
 #define REC_FLAGS_DESC_40                (0x40)    
 #define REC_FLAGS_DESC_20                (0x20)
@@ -77,7 +78,7 @@
 #define REC_FLAGS_DESC_R_01              (0x01)
 //#define REC_FLAGS_RESERVED_BELOW             (0x01)
 // If DATA
-#define REC_FLAGS_DESCRIPTOR                  (0x80)    
+#define REC_FLAGS_API4                  (0x80)    
 #define REC_FLAGS_INSTANCE                    (0x40)    
 #define REC_FLAGS_TICK_PRESENT                (0x20)
 #define REC_FLAGS_STATIC                      (0x10)
@@ -135,7 +136,7 @@
 // Reserved
 
 // Code bits
-//#define REC_CODE_DESCRIPTOR  (0x80000000)
+//#define REC_CODE_API4  (0x80000000)
 //#define REC_CODE_T0          (0x40000000)
 
 
@@ -160,7 +161,7 @@
 // Filter - bits used to identify BYTE,WORD,DWORD that are checked/ignored.
 typedef struct {
     UINT32 mask;
-} RECORDER_FILTER;
+} RECORDER_API5;
 
 #pragma pack(1)
 /*******************************************************************
@@ -178,26 +179,80 @@ typedef struct {
     UINT8 visibility;
     UINT8 rsvd;
     char  desc[88];
-} descript;
+} RECORDER_API4_RECORD;
 
-// RECORDER
+// DATA - formats
+typedef struct {
+    UINT8  flags;
+    UINT8  classs;
+    UINT8  code;
+    UINT16 length;             // Length of data field
+    //UINT8  data;             // Data is variable in length, depending upon length field
+} RECORDER_DATA_RECORD_SIMPLE;
+
+typedef struct {
+    UINT8  flags;
+    UINT8  classs;
+    UINT8  code;
+    UINT8  instance;
+    UINT16 length;             // Length of data field
+    //UINT8  data;             // Data is variable in length, depending upon length field
+} RECORDER_DATA_RECORD_WITH_INSTANCE;
+
+typedef struct {
+    UINT8  flags;
+    UINT8  classs;
+    UINT8  code;
+    UINT8  field;
+    UINT16 length;             // Length of data field
+    //UINT8  data;             // Data is variable in length, depending upon length field
+} RECORDER_DATA_RECORD_WITH_FIELD;
+
+typedef struct {
+    UINT8  flags;
+    UINT8  classs;
+    UINT8  code;
+    UINT8  field;
+    UINT8  instance;
+    UINT16 length;             // Length of data field
+    //UINT8  data;             // Data is variable in length, depending upon length field
+} RECORDER_DATA_RECORD_WITH_FIELD_AND_INSTANCE;
+
+//
+// DATA union
+//
+typedef union {
+    RECORDER_DATA_RECORD_SIMPLE          simple;
+    RECORDER_DATA_RECORD_WITH_INSTANCE   instance;
+    RECORDER_DATA_RECORD_WITH_FIELD      field;
+    RECORDER_DATA_RECORD_WITH_FIELD_AND_INSTANCE fi;
+} RECORDER_DATA_RECORD;
+
+
+// TODO: TIMETICK - still need to add support
+typedef struct {
+    UINT32 tick;
+} RECORDER_TICK;
+
+
+// BLACKBOX
 // - These enumerations are important as they come from the CHIF world too - don't change them!
 typedef enum
 { 
     // recorder
-    REC_API_1 = 1,
-    REC_API_2,
-    REC_API_3,
-    REC_API_4,
-    REC_API_5,
-    REC_API_6,
-    REC_API_7,
-    REC_API_8,
-    REC_API_9,
-    REC_API_10,
-    REC_API_11,
-    REC_API_12,
-    REC_API_13
+    REC_API1 = 1,
+    REC_API2,
+    REC_API3,
+    REC_API4,
+    REC_API5,
+    REC_API6,
+    REC_API7,
+    REC_API8,
+    REC_API9,
+    REC_API10,
+    REC_API11,
+    REC_API12,
+    REC_API13
 } REC_RECORDER_TYPES;
 
 /*******************************************************************
@@ -226,11 +281,11 @@ typedef struct {
     unsigned int  flags;
     unsigned int  size;
     unsigned int  count;
-} REC_1_MSG;
+} REC_API1_MSG;
 
 typedef struct {
     int  handle;
-} REC_2_MSG;
+} REC_API2_MSG;
 
 typedef struct {
     int  handle;
@@ -238,7 +293,7 @@ typedef struct {
     unsigned int classs;
     unsigned int code;
     unsigned int flags;
-} REC_3_MSG;
+} REC_DETAIL_MSG;
 
 // REC_DETAIL_MSG.ModifyMask
 
@@ -254,15 +309,15 @@ typedef struct {
     int  handle;
     unsigned int  selection;
     unsigned int  size;
-    descript toc;    // Interpreted as an array
-} REC_4_MSG;
+    RECORDER_API4_RECORD toc;    // Interpreted as an array
+} REC_DESCRIBE_MSG;
 
 typedef struct {
     int    handle;
     int    type;
     unsigned int    bytes;
     UINT32 filter;
-} REC_5_MSG;
+} REC_API5_MSG;
 
 typedef struct {
     int  handle;
@@ -270,29 +325,29 @@ typedef struct {
     unsigned int instance;
     unsigned int field;
     char data[RECORDER_MAX_BLOB_SIZE];
-} REC_6_MSG;
+} REC_LOG_MSG;
 
 // ALLOC
 typedef struct {
     int  classs;
     char name[32];
-} REC_13_MSG;
+} REC_ALLOC_MSG;
 
 // ALL
 typedef struct {
     int  subtype;
     union {
-        REC_1_MSG    m1;
-        REC_2_MSG    m2;
-        REC_3_MSG    m3;
-        REC_4_MSG    m4;
-        REC_5_MSG    m5;
-        REC_6_MSG    m6;
-        REC_13_MSG   m13;
+        REC_API1_MSG    registration;
+        REC_API2_MSG  unregister;
+        REC_DETAIL_MSG      detail;
+        REC_DESCRIBE_MSG    describe;
+        REC_API5_MSG      filter;
+        REC_LOG_MSG         log;
+        REC_ALLOC_MSG       alloc;
     } cmd;
-} REC_MSG;
+} REC_RECORDER_MESSAGE;
 
-// RECORDER
+// BLACKBOX
 typedef struct {
     int  handle;
 } REC_RESPONSE_DATA;
@@ -308,7 +363,7 @@ typedef struct
 {
     int type;
     union {
-        REC_MSG     rec;
+        REC_RECORDER_MESSAGE     bb;
     } rec_msg;
 } REC_MESSAGE;
 
@@ -359,15 +414,15 @@ typedef struct _pkt_hdr {
     uint16_t svc;
 } pkt_hdr;
 
-typedef struct _rec_req {
+typedef struct _rec_chif_req {
     pkt_hdr hdr;
     REC_MESSAGE msg;
-} _req;
+} rec_chif_req;
 
-typedef struct _rec_resp {
+typedef struct _rec_chif_resp {
     pkt_hdr hdr;
     REC_ANSWER msg;
-} _resp;
+} rec_chif_resp;
 
 #pragma pack()
 
@@ -402,18 +457,22 @@ int rec_api2( int handle );
 
 int rec_api4_class( int handle, 
                  unsigned int size, 
-                 const descript * toc );
+                 const RECORDER_API4_RECORD * toc );
 
 int rec_api4_code( int handle, 
                  unsigned int size,  
-                 const descript * toc );
+                 const RECORDER_API4_RECORD * toc );
 
 int rec_api4_field( int handle, 
                  unsigned int size, 
-                 const descript * toc );
+                 const RECORDER_API4_RECORD * toc );
 
 int rec_api3(  int handle, 
                  unsigned int code );
+
+int rec_build_filter( unsigned int size, 
+                 const RECORDER_API4_RECORD * recs, 
+                 UINT32 * f );
 
 int rec_api5( int handle, 
                  int type, 

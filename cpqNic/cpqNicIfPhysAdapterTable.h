@@ -74,6 +74,9 @@ typedef struct cpqNicIfPhysAdapterTable_entry_s {
     int             PCI_Bus;
     int             PCI_Slot;
     int             valid;
+    char            devname[256];
+    cpqNicIfLogMapTable_entry *iflogmap_entry;
+    cpqNicIfLogMapTable_entry *iflogmapp_entry;
 } cpqNicIfPhysAdapterTable_entry;
 
 /*

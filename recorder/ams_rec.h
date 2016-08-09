@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////
 //
-//  rec_ams.h
+//  ams_rec.h
 //
-//  Recorder Items for the Agentless Monitoring Service
+//  Black Box Items for the Agentless Monitoring Service
 //
 //  Copyright 2011 by Hewlett-Packard Development Company, L.P.
 //
@@ -13,7 +13,7 @@
 
 /////////////////////////////////////////////////////////////////////
 //
-//  Data is logged to Recorder in variable length binary records.
+//  Data is logged to Black Box in variable length binary records.
 //  Each data source defines its own record formats.  There is no
 //  central authority maintaining a unified specification or header
 //  files (see also: chaos).
@@ -59,7 +59,12 @@ enum REC_AMS_Codes
     REC_CODE_AMS_MEMORY_USAGE        = 12,
     REC_CODE_AMS_PROCESSOR_USAGE     = 13,
     REC_CODE_AMS_NIC_INFO            = 14,
-    REC_CODE_AMS_NIC_LINK            = 15
+    REC_CODE_AMS_NIC_LINK            = 15,
+    REC_CODE_AMS_DRIVER_CHANGE       = 16,
+    REC_CODE_AMS_SERVICE_CHANGE      = 17,
+    REC_CODE_AMS_SOFTWARE_CHANGE     = 18,
+    REC_CODE_AMS_OS_UPDATE_LIST      = 19,
+    REC_CODE_AMS_OS_UPDATE_CHANGE    = 20,
 };
 
 #define REC_CODE_AMS_OS_BOOT_STR         "OS Boot"
@@ -77,6 +82,11 @@ enum REC_AMS_Codes
 #define REC_CODE_AMS_PROCESSOR_USAGE_STR "Processor Usage"
 #define REC_CODE_AMS_NIC_INFO_STR        "NIC Info"
 #define REC_CODE_AMS_NIC_LINK_STR        "NIC Link"
+#define REC_CODE_AMS_DRIVER_CHANGE_STR   "Driver Change"
+#define REC_CODE_AMS_SERVICE_CHANGE_STR  "Service Change"
+#define REC_CODE_AMS_SOFTWARE_CHANGE_STR "Packages Change"
+#define REC_CODE_AMS_OS_UPDATE_LIST_STR  "OS Update"
+#define REC_CODE_AMS_OS_UPDATE_CHANGE_STR  "OS Update Change"
 
 /////////////////////////////////////////////////////////////////////
 //
@@ -177,6 +187,30 @@ enum REC_AMS_DriverFlags
 {
     REC_AMS_Driver_First             = 0x0001,
     REC_AMS_Driver_Last              = 0x0002,
+};
+
+/////////////////////////////////////////////////////////////////////
+//
+//  REC_CODE_AMS_DRIVER_CHAGNE
+//
+//  [0] = REC_AMS_DriverData
+//  [1] = Driver name string
+//  [2] = Driver filename string
+//  [3] = Driver version string
+//  [4] = Driver timestamp string
+//  [5] = Driver vendor string
+//
+/////////////////////////////////////////////////////////////////////
+
+struct REC_AMS_DriverChangeData
+{
+    UINT16   Flags;
+};
+
+// REC_AMS_OsDriverChangeData.Flags
+
+enum REC_AMS_DriverChangeFlags
+{
     REC_AMS_Driver_Load              = 0x0004,
     REC_AMS_Driver_Unload            = 0x0008
 };

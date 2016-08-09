@@ -37,7 +37,7 @@ void LOG_OS_INFORMATION()
     int i = 0;
     int rc;
     int num_descript;
-    size_t toc_sz = sizeof(descript);
+    size_t toc_sz = sizeof(RECORDER_API4_RECORD);
     size_t blob_sz = sizeof(REC_AMS_OsInfoData);
     size_t string_list_sz = 0;
     REC_AMS_OsInfoData *OsInfoData;
@@ -45,7 +45,7 @@ void LOG_OS_INFORMATION()
     char * end;
 
     char *blob;
-    descript *toc;
+    RECORDER_API4_RECORD *toc;
 
     if (!rec_init() )
         return;
@@ -79,7 +79,7 @@ void LOG_OS_INFORMATION()
     /* now do the field descriptor */
     memset(toc, 0, toc_sz);
     for ( i = 0; i < num_descript; i++) {
-        toc[i].flags = REC_FLAGS_DESCRIPTOR | REC_FLAGS_DESC_FIELD;
+        toc[i].flags = REC_FLAGS_API4 | REC_FLAGS_DESC_FIELD;
         toc[i].classs = s_ams_rec_class;
         toc[i].code = REC_CODE_AMS_OS_INFORMATION;
         toc[i].field = i;

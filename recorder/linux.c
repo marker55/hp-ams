@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <string.h>
 #include <unistd.h>
 #include <errno.h>
 #include "recorder.h"
@@ -23,9 +24,6 @@
 #define MAXHPILOCHANNELS 24
 
 #define HPILO_CCB "/dev/hpilo/d0ccb"
-extern void
-dump_chunk(const char *debugtoken, const char *title, const u_char * buf,
-           int size);
 
 int rec_fd = -1;
 extern int s_ams_rec_class;
@@ -70,7 +68,7 @@ void init_rec(void)  {
             sprintf(dev,"%s%d", HPILO_CCB, start);
         }
     } else {
-        start = atoi(max_ccb);
+        start = atoi(max_ccb) - 1;
         free(max_ccb);
     }
 
@@ -87,16 +85,17 @@ void init_rec(void)  {
     return;
 }
 
-int doWrite( _req * req, int size)
+int doWrite( rec_chif_req * req, int size)
 {
     int cnt = -1;
 
+    init_rec();
     if (rec_fd == -1)
-        init_rec();
+        return -1;
 
     req->hdr.pktsz = size;
     dump_chunk("rec:arch","Write", (const u_char *)req, size);
-    if((cnt = write(rec_fd, req, size)) < 0) {
+    if ((cnt = write(rec_fd, req, size)) < 0) {
         return -1;
     }
     DEBUGMSGTL(("rec:arch", "write %d bytes\n", cnt));
@@ -107,14 +106,16 @@ int doRead( void * resp, int size)
 {
     int cnt = -1;
 
+    init_rec();
     if (rec_fd == -1)
-        init_rec();
+        return -1;
 
     while ((cnt = read(rec_fd, resp, size)) < 0) {
         if (cnt != EINTR) {
-	    DEBUGMSGTL(("rec:rec_log_error", "Read error = %d fd = %d\n",errno, rec_fd));
+            DEBUGMSGTL(("rec:rec_log_error", "Read error = %d fd = %d\n",errno, rec_fd));
             return -1;
-	}
+        } else 
+            DEBUGMSGTL(("rec:rec_log_error", "EINTR error = %d fd = %d\n",errno, rec_fd));
     }
     DEBUGMSGTL(("rec:arch", "read %d bytes fd = %d\n", cnt, rec_fd));
     dump_chunk("rec:arch","Read", (const u_char *)resp, cnt);
@@ -122,28 +123,31 @@ int doRead( void * resp, int size)
     return (cnt);
 }
 
-int doWriteRead( void * req, int size, _resp * resp)
+int doWriteRead( void * req, int size, rec_chif_resp * resp)
 {
     int cnt = -1;
 
-    if (rec_fd == -1)
-        init_rec();
-
+    init_rec();
+    if (rec_fd < 0) 
+        return -1;
     dump_chunk("rec:arch","WriteRead-write", (const u_char *)req, size);
-    if((cnt = write(rec_fd, req, size)) < 0) {
-	DEBUGMSGTL(("rec:rec_log_error", "WriteRead write error = %d fd = %d\n",errno, rec_fd));
+    if ((cnt = write(rec_fd, req, size)) < 0) {
+        DEBUGMSGTL(("rec:rec_log_error", "WriteRead write error = %d fd = %d\n",errno, rec_fd));
         close_rec(1);
         return -1;
     }
     DEBUGMSGTL(("rec:arch", "WriteRead write %d bytes fd = %d\n", cnt, rec_fd));
 
-    memset (resp, 0, sizeof(_resp));
-    while ((cnt = read(rec_fd, resp, sizeof(_resp))) < 0) {
+    usleep(5000);
+
+    memset (resp, 0, sizeof(rec_chif_resp));
+    while ((cnt = read(rec_fd, resp, sizeof(rec_chif_resp))) < 0) {
         if (cnt != EINTR) {
-	    DEBUGMSGTL(("rec:rec_log_error", "WriteRead read error = %d fd = %d\n",errno, rec_fd));
+            DEBUGMSGTL(("rec:rec_log_error", "WriteRead read error = %d fd = %d\n",errno, rec_fd));
             close_rec(1);
             return -1;
-	}
+        } else
+            DEBUGMSGTL(("rec:rec_log_error", "WriteRead EINTR error = %d fd = %d\n",errno, rec_fd));
         DEBUGMSGTL(("rec:arch", "WriteRead read %d bytes fd = snmpHPILODomain.csnmpHPILODomain.c%d\n", cnt, rec_fd));
     }
     dump_chunk("rec:arch","WriteRead-read", (const u_char *)resp, cnt);

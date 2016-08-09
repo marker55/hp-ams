@@ -10,7 +10,7 @@ Homepage: http://linux.hp.com
 
 Package: hp-ams
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, lsof
 Description:  Agentless Monitoring Service for HP ProLiant Gen8 Systems 
 
 Package: hp-ams-dbg

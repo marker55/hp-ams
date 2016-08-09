@@ -5,6 +5,9 @@
 #ifndef CPQNICIFLOGMAPTABLE_H
 #define CPQNICIFLOGMAPTABLE_H
 
+extern const oid       cpqNicIfLogMapTable_oid[];
+extern const size_t    cpqNicIfLogMapTable_oid_len;
+
 typedef struct cpqNicIfLogMapTable_entry_s {
     netsnmp_index   oid_index;
 
@@ -44,6 +47,10 @@ typedef struct cpqNicIfLogMapTable_entry_s {
     size_t          cpqNicIfLogMapIPV6Address_len;
     char            cpqNicIfLogMapLACNumber[256];
     size_t          cpqNicIfLogMapLACNumber_len;
+
+    long            cpqNicIfLogMapPrevCondition;
+    long            cpqNicIfLogMapPrevStatus;
+    long            cpqNicIfLogMapPrevAdapterOKCount;
 
     int             valid;
 } cpqNicIfLogMapTable_entry;

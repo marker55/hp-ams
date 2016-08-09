@@ -3,6 +3,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <string.h>
 #include <unistd.h>
 #include <dirent.h>
 
@@ -27,9 +28,6 @@ extern int proc_select(const struct dirent *);
 extern int log_interval;
 extern void rec_log_proc_usage(unsigned int, void *);
 extern int proc_usage_reinit;
-extern void
-dump_chunk(const char *debugtoken, const char *title, const u_char * buf,
-           int size);
 
 static field fld[] = {
       {REC_SIZE_BYTE,   REC_TYP_NUMERIC, "User Time "},
@@ -44,10 +42,10 @@ void LOG_PROCESSOR_USAGE()
     int rc;
     int num_descript;
     size_t toc_sz = 0;
-    size_t max_toc_sz = (10 * sizeof(descript));
+    size_t max_toc_sz = (10 * sizeof(RECORDER_API4_RECORD));
     struct dirent **cpuent;
-    descript *toc;
-    descript *ttoc;
+    RECORDER_API4_RECORD *toc;
+    RECORDER_API4_RECORD *ttoc;
 
     /* do something different for VmWare and Solaris */
     cpucount = scandir("/sys/class/cpuid", &cpuent, file_select, versionsort);
@@ -77,14 +75,14 @@ void LOG_PROCESSOR_USAGE()
     num_descript = sizeof(fld)/sizeof(field) * cpucount;
     DEBUGMSGTL(("rec:rec_log:rec_log_proc_usage","ProcUsage num_descript = %d\n", 			num_descript));
 
-    toc_sz = sizeof(descript) * num_descript;
+    toc_sz = sizeof(RECORDER_API4_RECORD) * num_descript;
     toc = malloc(toc_sz);
     DEBUGMSGTL(("rec:log","Initial Processor Usage toc_sz = %ld\n", toc_sz));
 
     /* now do the field descriptor */
     memset(toc, 0, toc_sz);
     for (j = 0; j < num_descript; j++ ) {
-        toc[j].flags = REC_FLAGS_DESCRIPTOR | REC_FLAGS_DESC_FIELD;
+        toc[j].flags = REC_FLAGS_API4 | REC_FLAGS_DESC_FIELD;
         toc[j].classs = s_ams_rec_class;
         toc[j].code = REC_CODE_AMS_PROCESSOR_USAGE;
         toc[j].field = j;
