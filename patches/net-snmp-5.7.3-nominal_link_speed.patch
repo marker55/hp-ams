@@ -1,0 +1,27 @@
+diff -burN net-snmp-5.7.3/agent/mibgroup/if-mib/data_access/interface.c net-snmp-5.7.3.new/agent/mibgroup/if-mib/data_access/interface.c
+--- net-snmp-5.7.3/agent/mibgroup/if-mib/data_access/interface.c	2014-12-08 14:23:22.000000000 -0600
++++ net-snmp-5.7.3.new/agent/mibgroup/if-mib/data_access/interface.c	2015-03-12 15:58:50.075156604 -0500
+@@ -744,9 +744,9 @@
+ netsnmp_access_interface_entry_guess_speed(netsnmp_interface_entry *entry)
+ {
+     if (entry->type == IANAIFTYPE_ETHERNETCSMACD)
+-        entry->speed = 10000000;
++        entry->speed = 1000000000;
+     else if (entry->type == IANAIFTYPE_SOFTWARELOOPBACK)
+-        entry->speed = 10000000;
++        entry->speed = 1000000000;
+     else if (entry->type == IANAIFTYPE_ISO88025TOKENRING)
+         entry->speed = 4000000;
+     else
+diff -burN net-snmp-5.7.3/include/net-snmp/data_access/interface.h net-snmp-5.7.3.new/include/net-snmp/data_access/interface.h
+--- net-snmp-5.7.3/include/net-snmp/data_access/interface.h	2014-12-08 14:23:22.000000000 -0600
++++ net-snmp-5.7.3.new/include/net-snmp/data_access/interface.h	2015-03-05 15:41:59.963827611 -0600
+@@ -86,7 +86,7 @@
+ #endif                          /* ifOperStatus_ENUMS */
+ 
+ /* nominal speed of network interface - used when the real speed is unknown */
+-#define NOMINAL_LINK_SPEED 10000000
++#define NOMINAL_LINK_SPEED 1000000000
+ 
+ /**---------------------------------------------------------------------*/
+ /*
