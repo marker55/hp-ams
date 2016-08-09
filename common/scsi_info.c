@@ -140,6 +140,20 @@ unsigned long long get_BlockSize(unsigned char * scsi)
     return size;
 }
 
+unsigned long long get_PciBlockSize(unsigned char * devlink)
+{
+    char attribute[256];
+    unsigned long long size = 0;
+
+    memset(attribute, 0, sizeof(attribute));
+
+    snprintf(attribute, 255, "/sys/devices/%s/size", devlink);
+
+    /* Size is in 512 block, need mbytes so left shift 11 bits */
+    size = get_sysfs_ullong(attribute);
+    return size;
+} 
+
 unsigned char *get_ScsiGeneric(unsigned char *scsi)
 {
     char attribute[256];
@@ -636,9 +650,9 @@ char *get_identify_info(int fd)
     }
 #endif
     len = response[ 4 ] + 4;
-    ident = malloc(len);
-    memset(ident, 0, len );
-    memcpy(ident, &response[0], len);
+    ident = malloc(len + 1);
+    memset(ident, 0, len + 1);
+    memcpy(ident, &response[0], len + 1);
     return ident;
 }
 
@@ -1229,11 +1243,10 @@ unsigned char *inq_parse_prodID(char *Identify)
     return NULL;
 }
 
-unsigned char *inq_parse_rev(char *Identify)
+unsigned char *inq_parse_rev(char *Identify, int len)
 {
     int start = 32;
-    int len = 4;
-    int end = 35;
+    int end = start + len - 1;
     char * buffer = (char *) 0;
     if (Identify != (char *) 0) {
         while (Identify[start] == ' ') {
@@ -1344,7 +1357,7 @@ int main(int argc, char **argv)
                     fprintf(stderr," Product ID=%s", ProductID);
                     free(ProductID);
                 }
-                if ((Rev = inq_parse_rev(Identify)) != NULL) {
+                if ((Rev = inq_parse_rev(Identify, 4)) != NULL) {
                     fprintf(stderr," FW rev=%s\n", Rev);
                     free(Rev);
                }

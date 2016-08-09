@@ -12,7 +12,7 @@
 /* NOTE: fix this include later.... */
 #include "data_access/nic_linux.h"
 #include "cpqNic.h"
-#include "hpHelper.h"
+#include "amsHelper.h"
 #include "cpqNicIfLogMapTable.h"
 #include "cpqNicIfPhysAdapterTable.h"
 

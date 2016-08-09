@@ -19,7 +19,7 @@
 
 #include "libcpqhost/cpqhost.h"
 #include "cpqHost.h"
-#include "hpHelper.h"
+#include "amsHelper.h"
 
 extern  int InitLibCpqHost(void);
 extern void init_cpqHoFileSysTable(void);
@@ -201,7 +201,10 @@ init_cpqHost(void)
     cpqHostMibStatusArray[CPQMIB].stat = MIB_STATUS_AVAILABLE;
     cpqHostMibStatusArray[CPQMIB].cond = MIB_CONDITION_OK;
 
-    if (testtrap_interval)  {
+    DEBUGMSGTL(("cpqHost", "Checkinging periodic test trap interval = %d\n", testtrap_interval));
+    if (testtrap_interval >= 0)  {
+        DEBUGMSGTL(("cpqHost", "Registering periodic test trap alarm\n"));
+        if (testtrap_interval > 0) {
         if (snmp_alarm_register(testtrap_interval, 
                              SA_REPEAT, 
                              (SNMPAlarmCallback *) &SendcpqHostGenericTrap, 
@@ -209,6 +212,7 @@ init_cpqHost(void)
             DEBUGMSGTL(("cpqHost", "Alarm register failed\n"));
     } else 
         SendcpqHostGenericTrap();
+    }
 }
 
 int
@@ -412,6 +416,8 @@ void SendcpqHostGenericTrap()
     netsnmp_variable_list *var_list = NULL;
     struct utsname sys_name;
     unsigned int cpqHoTrapFlag;
+
+    DEBUGMSGTL(("cpqHost", "Sending periodic test trap\n"));
 
     uname(&sys_name);   /* get sysName */
 

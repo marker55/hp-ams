@@ -8,7 +8,7 @@
 #include <net-snmp/agent/net-snmp-agent-includes.h>
 #include "cpqFibreArray.h"
 //#include "cpqFcahcTable.h"
-#include "hpHelper.h"
+#include "amsHelper.h"
 
 #define CPQMIB              16
 #define CPQMIBREVMAJOR      1

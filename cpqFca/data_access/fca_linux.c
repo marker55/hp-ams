@@ -34,7 +34,7 @@ extern int file_select(const struct dirent *);
 extern int pcislot_scsi_host(char * buffer);
 void SendFcaTrap(int, cpqFcaHostCntlrTable_entry *);
 void netsnmp_arch_fcahc_init(void); 
-int  getFcaHostCntlrModel( int BoardID, char *pHPModelName, int *pFCoE );
+int  getFcaHostCntlrModel(unsigned long BoardID, char *pHPModelName, int *pFCoE );
 
 extern  int alphasort();
 
@@ -50,9 +50,7 @@ static int fca_select(const struct dirent *entry)
 {
     int      i = 0;
     for (i = 0; i < NumFcaHost; i++){
-        if (strncmp(entry->d_name,
-                    FcaHostlist[i]->d_name,
-                    strlen(FcaHostlist[i]->d_name)) == 0)
+        if (!strcmp(entry->d_name, FcaHostlist[i]->d_name))
             return(1);
     }
     return 0;
@@ -67,7 +65,7 @@ static int fca_select(const struct dirent *entry)
 /*    Also returns info if device is fcoe or not   */
 /*                                                                         */
 /***************************************************************************/
-int getFcaHostCntlrModel( int BoardID, char *pHPModelName, int *pFCoE )
+int getFcaHostCntlrModel(unsigned long BoardID, char *pHPModelName, int *pFCoE )
 {
    int fcaModel = 0, i, fcoe = 0;
 
@@ -228,7 +226,7 @@ long cpqfca_update_status( char * value, long status)
     return FC_HBA_STATUS_OTHER;
 }
 
-void cpqfca_update_hba_status(char *devpath, char *devname, void *data)
+void cpqfca_update_hba_status(char *devpath, char *devname, char* devtype, void *data)
 {
     cpqFcaHostCntlrTable_entry *entry;
     cpqFcaHostCntlrTable_entry *old;
@@ -325,8 +323,6 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
     char *value;
     long  rc = 0;
     int i;
-    char    linkBuf[1024];
-    ssize_t link_sz;
 
     DEBUGMSGTL(("fcahc:container:load", "loading\n"));
 
@@ -351,7 +347,8 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
         return -1;
 
     for (i=0; i < NumScsiHost; i++) {
-        unsigned int vendor, device, BoardID = 0;
+        unsigned int vendor, device;
+        unsigned long BoardID = 0;
 
         /*  We will need the host name later on */
         sscanf(ScsiHostlist[i]->d_name, "host%d", &Host); 
@@ -415,7 +412,7 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
                             attribute));
             device = get_sysfs_shex(attribute);
             DEBUGMSGTL(("fcahc:container:load", "Value = %x\n", device));
-            if ((unsigned short) device != 0xffff ) {
+
             strcpy(attribute, buffer);
             strncat(attribute, sysfs_attr[DEVICE_SUBSYSTEM_VENDOR],
                     sizeof(attribute) - strlen(attribute) - 1);
@@ -423,46 +420,6 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
                         attribute));
             vendor = get_sysfs_shex(attribute);
             DEBUGMSGTL(("fcahc:container:load", "Value = %x\n", vendor));
-            } else {
-                unsigned char * start;
-                unsigned char * end;
-                unsigned char pcidevice[256];
-                int j;
-                
-                /* this is possible a converged NIC look elsewere */
-
-                DEBUGMSGTL(("fcahc:container:load", "buffer is  %s\n", buffer));
-                if ((link_sz = readlink(buffer, linkBuf, 1024)) < 0) {
-                    return NULL;
-                }
-                linkBuf[link_sz] = 0;
-                start = strrchr(linkBuf, '/');
-                while (start != NULL) {
-                    *start = 0;
-                    if (!strncmp(start + 1, "0000:", 5)) {
-                        strcpy(attribute, "/sys/bus/pci/devices/");
-                        strcat(attribute, start + 1);
-                        start = NULL;
-                        continue;
-                    } else {
-                        start = strrchr(linkBuf, '/');
-                    }
-                }
-
-                DEBUGMSGTL(("fcahc:container:load", "attribute is %s\n",
-                        attribute));
-                strcpy(pcidevice, attribute);
-                strcat(attribute, "/subsystem_device");
-                DEBUGMSGTL(("fcahc:container:load", "Getting attribute from %s\n",
-                        attribute));
-                device = get_sysfs_shex(attribute);
-                DEBUGMSGTL(("fcahc:container:load", "Value = %x\n", device));
-                strcat(pcidevice, "/subsystem_vendor");
-                DEBUGMSGTL(("fcahc:container:load", "Getting attribute from %s\n",
-                        pcidevice));
-                vendor = get_sysfs_shex(pcidevice);
-                DEBUGMSGTL(("fcahc:container:load", "Value = %x\n", vendor));
-            }
 
             BoardID = device << 16;
             BoardID += vendor;

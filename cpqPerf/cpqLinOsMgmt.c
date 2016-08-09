@@ -9,7 +9,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include "cpqLinOsMgmt.h"
-#include "hpHelper.h"
+#include "amsHelper.h"
 #include "cpqLinOsDiskTable.h"
 #include "cpqLinOsNetworkInterfaceTable.h"
 #include "cpqLinOsProcessorTable.h"

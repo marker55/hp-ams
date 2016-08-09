@@ -4,6 +4,7 @@
 #include <net-snmp/agent/table_container.h>
 #include "cpqSePciSlotTable.h"
 #include "cpqSePciFunctTable.h"
+#include "cpqSePCIeDiskTable.h"
 
 void
 init_cpqStdPciTable(void)
@@ -14,5 +15,6 @@ init_cpqStdPciTable(void)
 
     initialize_table_cpqSePciSlotTable();
     initialize_table_cpqSePciFunctTable();
+    initialize_cpqSePCIeDisk();
 }
 

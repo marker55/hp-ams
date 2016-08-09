@@ -1,5 +1,5 @@
 //
-// (c) Copyright 2006 Hewlett-Packard Development Company, L.P.
+// (c) Copyright 2006-2015 Hewlett Packard Enterprise Development LP
 // All rights reserved
 //
 // $ Id: $
@@ -17,10 +17,15 @@
 //#include "common_structs.h"
 
 /// number of entries (rows) in table
-#define NIC_DB_ROWS 164
+#define NIC_DB_ROWS 167
 
 /// the hardware information table
 static nic_hw_db nic_hw[NIC_DB_ROWS] = {
+//{0x1077, 0x16A1, 0x1590, 0x00EC, "HP",  "764302-B21", "",           "",  "",  "",          43, "HPE FlexFabric 10Gb 4-port 536FLR-T Adapter", }, /* Gen9 Snap6 - Banjo */
+//{0x14E4, 0x168E, 0x103C, 0x193A, "HP",  "700759-B21", "701534-001", "",  "",  "",          42, "HP FlexFabric 10Gb 2-port 533FLR-T Adapter", }, /* Gen9Snap5 - Bryan2 -same info as Bryan1 */
+{0x10DF, 0x0720, 0x1590, 0x8153, "HP",  "N3U51A",     "",           "",  "",  "",          69, "HPE StoreFabric CN1200E 10GBASE-T Dual Port Converged Network Adapter", }, /* Gen9 Snap5 - Boxster5 */
+{0x14E4, 0x168E, 0x1590, 0x8148, "HP",  "N3U52A",     "",           "",  "",  "",          33, "HPE StoreFabric CN1100R-T Adapter", }, /* Gen9 Snap5 - Barracuda-T */
+{0x10DF, 0x0720, 0x103C, 0x8144, "HP",  "794525-B21", "",           "",  "",  "",          43, "HPE FlexFabric 10Gb 2-port 556FLR-T Adapter", }, /* Gen9 Snap5 - Earwig */
 {0x14E4, 0x165F, 0x103C, 0x22E8, "HP",  "N/A",        "",           "",  "",  "",          40, "HP Ethernet 1Gb 2-port 332i Adapter", }, /* Gen9 Snap4 - embedded in Sakura,Yehliu */
 {0x14E4, 0x16A2, 0x103C, 0x2231, "HP",  "777430-B21", "782833-001", "",  "",  "",          50, "HP Synergy 3820C 10/20Gb Converged Network Adapter", }, /* Bronco - Gen9 Snap4*/
 {0x10DF, 0x0720, 0x103C, 0x2343, "",    "777434-B21", "782834-001", "",  "",  "",          51, "HP Synergy 3520C 10/20Gb Converged Network  Adapter", },  /* Ember - Gen9 Snap4 */
@@ -37,7 +42,7 @@ static nic_hw_db nic_hw[NIC_DB_ROWS] = {
 {0x14E4, 0x16A2, 0x103C, 0x22FA, "HP",  "766490-B21", "768080-001", "",  "",  "",          40, "HP FlexFabric 10Gb 2-port 536FLB Adapter", }, /* Gen9Snap1 */
 {0x15B3, 0x1007, 0x103C, 0x22AC, "HP",  "N/A",        "",           "",  "",  "",          59, "HP XL230b InfiniBand FDR/Ethernet 40Gb 2-port 544+i Adapter", }, //Fury XL230b CX3 PRO LOM
 {0x15B3, 0x1007, 0x103C, 0x800F, "HP",  "N/A",        "",           "",  "",  "",          59, "HP XL230b InfiniBand FDR/Ethernet 40Gb 2-port 544+i Adapter", }, //Fury XL230b CX3 PRO LOM
-{0x10DF, 0x0720, 0x103C, 0x21D4, "",    "767078-001", "",           "",  "",  "",          64, "HP StoreFabric CN1200E 10Gb Converged Network Adapter", },
+{0x10DF, 0x0720, 0x103C, 0x21D4, "",    "767078-001", "",           "",  "",  "",          64, "HP StoreFabric CN1200E 10Gb Converged Network Adapter", }, /* Boxster4 */
 {0x15B3, 0x1007, 0x103C, 0x22F5, "",    "764286-B21", "764738-001", "",  "",  "",          51, "HP IB QDR/Ethernet 10Gb 2-port 544+FLR-QSFP Adapter",  }, /* Attitash M */
 {0x15B3, 0x1007, 0x103C, 0x22F4, "",    "764285-B21", "764737-001", "",  "",  "",          56, "HP IB FDR/Ethernet 10Gb/40Gb 2-port 544+FLR-QSFP Adapter", },
 {0x15B3, 0x1007, 0x103C, 0x22F3, "",    "764284-B21", "764736-001", "",  "",  "",          52, "HP IB FDR/Ethernet 10Gb/40Gb 2-port 544+QSFP Adapter", },
@@ -55,7 +60,7 @@ static nic_hw_db nic_hw[NIC_DB_ROWS] = {
 {0x14E4, 0x168E, 0x103C, 0x1931, "HP",  "701859-001", "",           "",  "",  "",          58, "HP StoreFabric CN1100R Dual Port Converged Network Adapter", },
 {0x14E4, 0x168E, 0x103C, 0x1933, "HP",  "700748-B21", "701530-001", "",  "",  "",          38, "HP FlexFabric 10Gb 2-port 534M Adapter", },  /* Gen8Snap5 */
 {0x14E4, 0x168E, 0x103C, 0x1930, "HP",  "700751-B21", "701531-001", "",  "",  "",          45, "HP FlexFabric 10Gb 2-port 534FLR-SFP+ Adapter", },  /* Gen8Snap5 */
-{0x14E4, 0x168E, 0x103C, 0x193A, "HP",  "700759-B21", "701534-001", "",  "",  "",          42, "HP FlexFabric 10Gb 2-port 533FLR-T Adapter", }, /* Gen8Snap5 */
+{0x14E4, 0x168E, 0x103C, 0x193A, "HP",  "700759-B21", "701534-001", "",  "",  "",          43, "HPE FlexFabric 10Gb 2-port 533FLR-T Adapter", }, /* Gen8Snap5 - Bryan */
 {0x8086, 0x1528, 0x103C, 0x192D, "HP",  "700699-B21", "701525-001", "",  "",  "",          40, "HP Ethernet 10Gb 2-port 561FLR-T Adapter", }, /* Gen8Snap5 */
 {0x8086, 0x1528, 0x103C, 0x211A, "HP",  "716591-B21", "717708-001", "",  "",  "",          36, "HP Ethernet 10Gb 2-port 561T Adapter", },  /* Gen8Snap5 */
 {0x8086, 0x10FB, 0x103C, 0x211B, "",    "716599-B21", "717709-001", "",  "",  "",          43, "HP Ethernet 10Gb 1-port 560FLR-SFP+ Adapter", },  /* Gen8Snap5  */

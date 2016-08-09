@@ -678,7 +678,7 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
     return disk;
 }
 
-static void cpqsas_add_sas_end_device(char *devpath, char *devname, void *data) 
+static void cpqsas_add_sas_end_device(char *devpath, char *devname, char *devtype, void *data) 
 {
     cpqSasPhyDrvTable_entry *disk;
 
@@ -723,7 +723,7 @@ static void cpqsas_add_sas_end_device(char *devpath, char *devname, void *data)
     }
 }
 
-static void cpqsas_remove_sas_end_device(char *devpath, char *devname, void *data)
+static void cpqsas_remove_sas_end_device(char *devpath, char *devname, char *devtype, void *data)
 {
     netsnmp_index tmp;
     oid oid_index[2];
@@ -818,6 +818,18 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
         strncpy(buffer, ScsiHostDir, sizeof(buffer) - 1);
         strncat(buffer, ScsiHostlist[i]->d_name,
                 sizeof(buffer) - strlen(buffer) - 1);
+
+        strncpy(attribute, buffer, sizeof(attribute) - 1);
+        strncat(attribute, sysfs_attr[CLASS_PROC_NAME],
+            sizeof(attribute) - strlen(attribute) - 1);
+        if ((value = get_sysfs_str(attribute)) != NULL) {
+            if (strncmp(value, "hp", 2) == 0) {
+                free(value);
+                free(ScsiHostlist[i]);
+                continue;
+            }
+            free(value);
+        }
 
         strncpy(attribute, buffer, sizeof(attribute) - 1);
         strncat(attribute, sysfs_attr[DEVICE_SUBSYSTEM_DEVICE], 
@@ -1121,8 +1133,8 @@ int netsnmp_arch_sasphydrv_container_load(netsnmp_container* container)
     cpqHoMibHealthStatusArray[CPQMIBHEALTHINDEX] = SasCondition;
 
     DEBUGMSGTL(("sasphydrv:container", "init\n"));
-    udev_register("bsg","add", cpqsas_add_sas_end_device, container);
-    udev_register("bsg","remove", cpqsas_remove_sas_end_device, container);
+    udev_register("bsg","add", NULL, cpqsas_add_sas_end_device, container);
+    udev_register("bsg","remove", NULL, cpqsas_remove_sas_end_device, container);
     return  1;
 }
 
@@ -1268,20 +1280,15 @@ void SendSasTrap(int trapID,
             (u_char *) disk->cpqSasPhyDrvSasAddress,
             disk->cpqSasPhyDrvSasAddress_len);
 
-    switch(trapID)
-    {
-        case SAS_TRAP_PHYSDRV_STATUS_CHANGE:
 
             send_enterprise_trap_vars(SNMP_TRAP_ENTERPRISESPECIFIC,
-                    SAS_TRAP_PHYSDRV_STATUS_CHANGE,
+                    trapID,
                     compaq,
                     compaq_len,
                     var_list);
 
-            break;
+    snmp_free_varbind(var_list);
 
-        default:
             return;
-    }
 }
 

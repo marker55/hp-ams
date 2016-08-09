@@ -143,7 +143,7 @@ initialize_table_cpqFcaHostCntlrTable(void)
         goto bail;
     }
 
-    udev_register("fc_transport", "add:remove", cpqfca_update_hba_status, container);
+    udev_register("fc_transport", "add:remove", NULL, cpqfca_update_hba_status, container);
 
     return;                     /* ok */
 

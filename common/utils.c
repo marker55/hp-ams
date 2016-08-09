@@ -164,12 +164,12 @@ int getPCIslot_str(char * pci)
     if (pci == NULL) 
         return 0;
 
-    if ((strchr(pci, '.') == NULL))
-        strcat(pci, ".0");
     strncpy(syspci, "/sys/bus/pci/devices/", remaining);
     remaining -=  strlen(syspci);
 
     strncat(syspci, pci, remaining);
+    if ((strchr(pci, '.') == NULL))
+        strcat(syspci, ".0");
     link_sz = readlink(syspci, pcilink, 1024);
     if (link_sz > 0) 
         pcilink[link_sz] = '\0';
@@ -178,7 +178,7 @@ int getPCIslot_str(char * pci)
     for (i = 0; i < link_sz; i++) {
         if (pcilink[i] == '/') {
             i++;
-            if (sscanf(&pci[i], "%4hx:%2hhx:%2hhx.%1hhx", &dom, &bus, &dev, &func) == 4) 
+            if (sscanf(&pcilink[i], "%4hx:%2hhx:%2hhx.%1hhx", &dom, &bus, &dev, &func) == 4) 
                 if ((slot = getPCIslot_bus(bus)) > 0) 
                     return slot;
         }
@@ -431,7 +431,7 @@ char * get_sysfs_str(char * sysfs_attr)
 {
     int fd;
     char *string;
-    size_t count;
+    ssize_t count;
     char *indx;
 
     if ((fd = open(sysfs_attr,O_RDONLY)) < 0) 
@@ -447,7 +447,7 @@ char * get_sysfs_str(char * sysfs_attr)
     } else 
         string = realloc(string, count + 1);
 
-    if (string == NULL) {
+    if ((string == NULL) || (*string == 0)){
         close(fd);
 	    return NULL;
     }

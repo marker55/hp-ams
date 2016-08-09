@@ -14,6 +14,10 @@ static void     _cache_free(netsnmp_cache * cache, void *magic);
 static int      _cache_load(netsnmp_cache * cache, void *vmagic);
 extern void    netsnmp_arch_pci_init();
 
+const oid       cpqSePciSlotTable_oid[] =
+        { 1, 3, 6, 1, 4, 1, 232, 1, 2, 13, 1 };
+const size_t    cpqSePciSlotTable_oid_len =
+        OID_LENGTH(cpqSePciSlotTable_oid);
 /** Initializes the cpqSePciSlotTable module */
 void
 init_cpqSePciSlotTable(void)
@@ -28,10 +32,6 @@ init_cpqSePciSlotTable(void)
 void
 initialize_table_cpqSePciSlotTable(void)
 {
-    const oid       cpqSePciSlotTable_oid[] =
-        { 1, 3, 6, 1, 4, 1, 232, 1, 2, 13, 1 };
-    const size_t    cpqSePciSlotTable_oid_len =
-        OID_LENGTH(cpqSePciSlotTable_oid);
     netsnmp_handler_registration *reg = NULL;
     netsnmp_mib_handler *handler = NULL;
     netsnmp_container *container = NULL;

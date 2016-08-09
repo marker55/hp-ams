@@ -1,6 +1,6 @@
 # Overridden during automated builds
 COMP_NAME    ?= hp-ams
-COMP_VER     ?= 2.3.0
+COMP_VER     ?= 2.4.0
 COMP_PKG_REV ?= 666
 
 NAME         ?= $(COMP_NAME)
@@ -43,13 +43,17 @@ MANDIR:=$(shell if [ -d $(PREFIX)/share/man ] ; then \
 DISTROLIBS ?= $(shell if [ -f /etc/redhat-release ] ; then \
                      echo "-lrpmio -lrpm -lpci -lm"; \
                   elif [ -f /etc/SuSE-release ] ; then \
-                     echo "-lrpmio -lrpm -lpci"; \
+                     echo "-lrpmio -lrpm"; \
                   elif [ -f /etc/lsb-release ] ; then \
                      echo "-lrt"; \
                   elif [ -f /etc/debian_version ] ; then \
                      echo "-lrt"; \
                   else \
                      echo ""; fi )
+SYSCONF ?= $(shell if [ -f /etc/debian_version ] ; then \
+                     echo "$(DESTDIR)$(PREFIX)/etc/default"; \
+                  else \
+                     echo "$(DESTDIR)$(PREFIX)/etc/sysconfig"; fi )
 
 export SHELL=/bin/bash
 
@@ -59,7 +63,7 @@ NETSNMPCONFIG = $(NETSNMP)/net-snmp-config
 export OS NETSNMP VERSION
 NETSNMPVERSIONMIN = $(shell echo $(NETSNMP)| cut -f2 -d\.  )
 MIBS="host agentx/subagent mibII hardware/memory"
-NOTMIBS="mibII/system_mib mibII/snmp_mib_5_5 mibII/vacm_vars mibII/vacm_conf mibII/snmp mibII/tcp mibII/udp mibII/at mibII/sysORTable mibII/icmp mibII/ipv6 mibII/setSerialNo ip-mib/inetNetToMediaTable host/hr_disk host/hr_network host/hr_other host/hr_partition host/hr_print target agent_mibs cd_snmp notification notification-log-mib disman/event disman/schedule snmpv3mibs mibII/vacm utilities/execute mibII/tcpTable ucd-snmp/dlmod" 
+NOTMIBS="mibII/system_mib mibII/snmp_mib_5_5 mibII/vacm_vars mibII/vacm_conf mibII/snmp mibII/at mibII/tcp mibII/udp mibII/sysORTable mibII/icmp mibII/ipv6 mibII/setSerialNo ip-mib/inetNetToMediaTable host/hr_disk host/hr_network host/hr_other host/hr_partition host/hr_print target agent_mibs cd_snmp notification notification-log-mib disman/event disman/schedule snmpv3mibs mibII/vacm utilities/execute mibII/tcpTable ucd-snmp/dlmod" 
 CONF_OPTIONS=--enable-read-only --disable-set-support --disable-agent --disable-privacy --without-openssl $(shell if [ $(SYSTEMD) = 1 ] ; then echo "--with-systemd" ; fi)
 LEVEL=./
 NETSNMPDIR=$(LEVEL)$(NETSNMP)
@@ -83,9 +87,9 @@ BUILDLIBS = $(BUILDNETSNMPDEPS) -lm $(DISTROLIBS)
 
 TARFILE=$(NAME)-$(VERSION).tar.gz
 
-OBJS=hpHelper.o 
+OBJS=amsHelper.o 
 
-TARGETS=hpHelper
+TARGETS=amsHelper
 
 AMSDIRS = cpqHost cpqNic cpqSe cpqFca cpqScsi cpqIde cpqPerf common recorder
 
@@ -93,7 +97,7 @@ SUBDIRS = $(NETSNMP) $(AMSDIRS)
  
 OBJS2=$(shell for d in $(AMSDIRS); do ${MAKE} -C $$d provides OS=$(OS) DIR=$$d/|grep -v ^make; done)
 
-all: subdirs hpHelper 
+all: subdirs amsHelper 
 
 net-snmp-patch: net-snmp-patch-stamp
 net-snmp-patch-stamp: net-snmp-untar-stamp
@@ -158,17 +162,17 @@ subdirs: $(SUBDIRS) net-snmp-configure-stamp
 		done \
 	fi
 
-test: hpHelper $(SUBDIRS) net-snmp-configure-stamp
+test: amsHelper $(SUBDIRS) net-snmp-configure-stamp
 	for d in $(AMSDIRS); do echo $$d ; if [ -d $$d ] ; then ${MAKE} -C $$d test DISTROLIBS=$(DISTROLIBS) NETSNMP=$(NETSNMP) OS=$(OS);fi; done
 
 testHelper: testHelper.o $(BUILDNETSNMPDEPS)
 	(CC) -o testHelper testHelper.o $(BUILDLIBS)
 
-hpHelper.o: hpHelper.c
-	$(CC) $(CFLAGS) $(CPPFLAGS) -o hpHelper.o -c hpHelper.c
+amsHelper.o: amsHelper.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -o amsHelper.o -c amsHelper.c
 
-hpHelper: $(OBJS) $(OBJS2) $(BUILDNETSNMPDEPS)
-	$(CC) -o hpHelper $(LDFLAGS) $(OBJS) $(OBJS2) $(BUILDLIBS)
+amsHelper: $(OBJS) $(OBJS2) $(BUILDNETSNMPDEPS)
+	$(CC) -o amsHelper $(LDFLAGS) $(OBJS) $(OBJS2) $(BUILDLIBS)
 
 clean:
 	rm -f $(TARGETS) $(OBJS) 
@@ -198,12 +202,12 @@ debian/changelog: debian/changelog.in
 	mv $<.tmp $@
 
 install: all
-	$(DIRINSTALL) -m 755 $(SBINDIR) $(ETCDIR)/sysconfig $(HPAMSDIR)
+	$(DIRINSTALL) -m 755 $(SBINDIR) $(SYSCONF) $(HPAMSDIR)
 	$(DIRINSTALL) -m 755 $(MANDIR)/man8
-	$(INSTALL) -m 755 ./hpHelper $(SBINDIR)
-	$(INSTALL) -m 644 ./doc/hpHelper.8 $(MANDIR)/man8
+	$(INSTALL) -m 755 ./amsHelper $(SBINDIR)
+	$(INSTALL) -m 644 ./doc/amsHelper.8 $(MANDIR)/man8
 	$(INSTALL) -m 644 ./hp-ams.license $(HPAMSDIR)
-	$(INSTALL) -m 644 ./hp-ams.config $(ETCDIR)/sysconfig/hp-ams 
+	$(INSTALL) -m 644 ./hp-ams.config $(SYSCONF)/hp-ams 
 	if [ $(SYSTEMD) = 1 ] ; then \
 		   echo UNITDIR=$(UNITDIR). ; \
 	       $(DIRINSTALL) -m 755 $(DESTDIR)/$(UNITDIR) ; \
@@ -213,7 +217,7 @@ install: all
 	       $(DIRINSTALL) -m 755 $(INITDIR) ; \
            $(INSTALL) -m 755 ./hp-ams.sh $(INITDIR)/hp-ams ; \
 	fi
-	gzip -f $(MANDIR)/man8/hpHelper.8
+	gzip -f $(MANDIR)/man8/amsHelper.8
 
 
 source_tarball: $(TARFILE)

@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <strings.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -46,7 +47,7 @@ typedef __u8 u8;
 #include "cpqNicIfLogMapTable.h"
 #include "cpqNicIfPhysAdapterTable.h"
 
-#include "hpHelper.h"
+#include "amsHelper.h"
 #include "cpqNic.h"
 #include "cpqnic.h"
 #include "nic_linux.h"
@@ -216,8 +217,10 @@ int get_ifrole(cpqNicIfPhysAdapterTable_entry* nic)
             if (strcmp(value, nic->devname) == 0) {
                 free(value);
                 return 2;
-            } else
+            } else {
+                free(value);
                 return 3;
+            }
         } else 
             return 4;
     }
@@ -302,15 +305,15 @@ int get_iftype(char *netdev)
     return 0;
 }
 
-int get_iftype_idx(int index)
+int get_iftype_idx(int indx)
 {
     char  ifname[IF_NAMESIZE];
     char *devname;
 
-    if (index < 0 )
+    if (indx < 0 )
         return NIC;
 
-    devname = if_indextoname((unsigned int) index, ifname);
+    devname = if_indextoname((unsigned int) indx, ifname);
 
     if (devname == NULL)
         return NIC;
@@ -402,14 +405,19 @@ int get_if_status(char *interface) {
         snprintf(attribute, 255, "/sys/class/net/%s/operstate", interface);
         if ((value = get_sysfs_str(attribute)) != NULL) {
             DEBUGMSGTL(("cpqnic:arch", "Operstate (%s) = %s\n", attribute, value));
-            if (strcmp(value, "up") == 0) 
+            if (strcmp(value, "up") == 0) {
+                free(value);
                 return ADAPTER_CONDITION_OK;
-            else if ((strcmp(value, "unknown") == 0) && (iff & IFF_LOOPBACK))
+            } else if ((strcmp(value, "unknown") == 0) && (iff & IFF_LOOPBACK)){
+                free(value);
                 return ADAPTER_CONDITION_OK;
-            else if (strcmp(value, "down") == 0) 
+            } else if (strcmp(value, "down") == 0) {
+                free(value);
                 return ADAPTER_CONDITION_FAILED;
-            else 
+            } else  {
+                free(value);
                 return ADAPTER_CONDITION_OTHER;
+            }
 
             free(value);
         }
@@ -621,7 +629,8 @@ static int SendNicTrap(int specific_type,
         /* Get SiServerSystemId from SmBIOS  */
         SmbGetRecordByType(SMBIOS_HPOEM_SYSID, 0, (void *)&pRecord);
         memset(ServerSystemId, 0, SYSTEM_ID_LEN + 14);
-        strncpy(ServerSystemId, (char *)SmbGetStringByNumber(pRecord, 1), 9);
+        strncpy(ServerSystemId, "CPQ", 3);
+        strncat(ServerSystemId, (char *)SmbGetStringByNumber(pRecord, 1) + 5, 4);
 
         /* get IPv4/6 address associated with this interface */
         strcpy(ipLinkAddr, "0.0.0.0");
@@ -792,7 +801,8 @@ void initcpqNicIfPhys_entry(cpqNicIfPhysAdapterTable_entry* entry)
     entry->cpqNicIfPhysAdapterMemAddr = 0;
     entry->cpqNicIfPhysAdapterAggregationGID = -1;
     entry->cpqNicIfPhysAdapterFWVersion[0] = '\0';
-    strcpy(entry->cpqNicIfPhysAdapterPartNumber, "UNKNOWN");
+    strcpy(entry->cpqNicIfPhysAdapterPartNumber, "");
+    entry->cpqNicIfPhysAdapterPartNumber_len = 0;
     /* default "empty" per mib */
     strcpy(entry->cpqNicIfPhysAdapterName, ""); 
     entry->cpqNicIfPhysAdapterName_len = 0; 
@@ -970,7 +980,7 @@ void cpqNicIfPhysAdapter_reload_entry(cpqNicIfPhysAdapterTable_entry *entry)
                 entry->devname));
 }
 
-cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container *container, oid index) 
+cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container *container, oid indx) 
 {
     char  ifname[IF_NAMESIZE];
     char *devname;
@@ -999,7 +1009,7 @@ cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container
     ssize_t devlink_sz;
     char *pcidevice;
 
-    devname = if_indextoname((unsigned int) index, ifname);
+    devname = if_indextoname((unsigned int) indx, ifname);
     if (devname == NULL)
         return NULL;
 
@@ -1015,7 +1025,7 @@ cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container
     linkBuf[link_sz] = 0;
 
     DEBUGMSGTL(("cpqnic:container:load", "Create new entry\n"));
-    oid_index[0] = index;
+    oid_index[0] = indx;
     tmp.len = 1;
     tmp.oids = &oid_index[0];
 
@@ -1024,7 +1034,7 @@ cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container
     if (entry == NULL) {
         pci_node* node = pci_root;
 
-        entry = cpqNicIfPhysAdapterTable_createEntry(container, index);
+        entry = cpqNicIfPhysAdapterTable_createEntry(container, indx);
         if (NULL == entry) {
             return NULL;
         }
@@ -1043,10 +1053,10 @@ cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container
      
         entry->cpqNicIfPhysAdapterSlot = -1;
     
-        entry->cpqNicIfPhysAdapterIfNumber[0] = (char)(index & 0xff);
-        entry->cpqNicIfPhysAdapterIfNumber[1] = (char)((index>>8)  & 0xff);
-        entry->cpqNicIfPhysAdapterIfNumber[2] = (char)((index>>16) & 0xff);
-        entry->cpqNicIfPhysAdapterIfNumber[3] = (char)((index>>24) & 0xff);
+        entry->cpqNicIfPhysAdapterIfNumber[0] = (char)(indx & 0xff);
+        entry->cpqNicIfPhysAdapterIfNumber[1] = (char)((indx>>8)  & 0xff);
+        entry->cpqNicIfPhysAdapterIfNumber[2] = (char)((indx>>16) & 0xff);
+        entry->cpqNicIfPhysAdapterIfNumber[3] = (char)((indx>>24) & 0xff);
     
         entry->cpqNicIfPhysAdapterIfNumber[4] = 0;
         entry->cpqNicIfPhysAdapterIfNumber[5] = 0;
@@ -1196,14 +1206,14 @@ cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container
                     node0 = node0->pci_next;
             } 
     
-            if ((node0->vpd_productname) && !strncmp((char *)node0->vpd_productname,"HP ", 3)) {
+            if ((node0->vpd_productname) && !strncmp((char *)node0->vpd_productname,"HP", 2)) {
                 DEBUGMSGTL(("cpqnic:data", "Using VPD PN\n"));
                 entry->cpqNicIfPhysAdapterName_len = snprintf(entry->cpqNicIfPhysAdapterName,
                         256, "%s", node0->vpd_productname);
             } else {
                 vpd_node* vnode = node0->vpd_data;
                 while (vnode != NULL){
-                    if ((vnode->data != NULL) && !strncmp((char *)vnode->data, "HP ", 3)) {
+                    if ((vnode->data != NULL) && !strncmp((char *)vnode->data, "HP", 2)) {
                         DEBUGMSGTL(("cpqnic:data", "Using VPD other\n"));
                         entry->cpqNicIfPhysAdapterName_len = snprintf(entry->cpqNicIfPhysAdapterName,
                             256, "%s", vnode->data);
@@ -1212,6 +1222,20 @@ cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container
                         vnode = vnode->next;
                 }
             }
+            if (node0->vendor_id == 0x19a2) {
+                char * comma;
+                if (node0->vpd_productname) {
+                    comma = index(node0->vpd_productname, ',');
+                    if (comma != NULL) {
+                        entry->cpqNicIfPhysAdapterPartNumber_len =
+                            (unsigned long)comma - (unsigned long)node0->vpd_productname;
+                        strncpy(entry->cpqNicIfPhysAdapterPartNumber,
+                                node0->vpd_productname,
+                                entry->cpqNicIfPhysAdapterPartNumber_len);
+                    }
+                }
+            }
+
             if (node0->vendor_id == 0x14e4) {
                 vpd_node* vnode = node0->vpd_data;
                 while (vnode != NULL){
@@ -1226,14 +1250,15 @@ cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container
             pnic_hw_db = get_nic_hw_info(node0->vendor_id, node0->device_id,
                     node0->subvendor_id, node0->subdevice_id);
         }
+        if (entry->cpqNicIfPhysAdapterPartNumber_len == 0) {
         DEBUGMSGTL(("cpqnic:data", "Using NIC DB\n"));
         if (pnic_hw_db != NULL) {
-            if (strlen(pnic_hw_db->pspares_part_number))
+                if (strlen(pnic_hw_db->ppca_part_number))
                 strcpy(entry->cpqNicIfPhysAdapterPartNumber, 
-                        pnic_hw_db->pspares_part_number);
+                            pnic_hw_db->ppca_part_number);
             else
                 strcpy(entry->cpqNicIfPhysAdapterPartNumber, 
-                        pnic_hw_db->ppca_part_number);
+                            pnic_hw_db->pspares_part_number);
             entry->cpqNicIfPhysAdapterPartNumber_len = 
                 strlen(entry->cpqNicIfPhysAdapterPartNumber);
             /* if product name is empty and we have an entry in the nic_db */
@@ -1243,6 +1268,7 @@ cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container
                     strlen(entry->cpqNicIfPhysAdapterName);
             }
         }
+    }
     }
     return entry;
 } 

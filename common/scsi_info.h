@@ -120,8 +120,16 @@ extern unsigned char*get_ScsiGeneric(unsigned char*);
 extern unsigned long long get_BlockSize(unsigned char*);
 extern int get_DiskType(char *);
 extern char * get_DiskModel(char *);
+extern char * get_ScsiDiskModel(char *);
 extern char * get_sas_DiskRev(char *);
+extern char * get_ScsiDiskRev(char *);
 extern char * get_DiskState(char *);
 
+extern unsigned char *inq_parse_vendor(char *Identify);
+extern unsigned char *inq_parse_prodID(char *Identify);
+extern unsigned char *inq_parse_rev(char *Identify, int len);
+extern char *get_identify_info(int fd);
+extern char *get_unit_sn(int fd) ;
+extern unsigned long long get_PciBlockSize(unsigned char * devlink);
 #endif // _SCSI_INFO_H_
 

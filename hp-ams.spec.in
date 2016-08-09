@@ -1,17 +1,17 @@
-summary         : Agentless Management Service for HP ProLiant Gen8 and Gen9 Systems
+summary         : Agentless Management Service
 name            : hp-ams
 Version         : %VERSION%
 Release         : %RELEASE%
 group           : System Environment/Daemons
 source          : %{tardir}.tar.gz
 license         : MIT and BSD
-packager        : Hewlett-Packard Company
-vendor          : Hewlett-Packard Company
-url             : http://www.hp.com/go/proliantlinux
+packager        : Hewlett-Packard Enterprise
+vendor          : Hewlett-Packard Enterprise
+url             : http://www.hpe.com/go/proliantlinux
 autoreqprov     : yes 
 Requires(post)  : coreutils, pciutils, bash, lsof
 buildroot       : %{_tmppath}/%{name}-%{version}-%{release}-%(%{__id} -un)
-BuildRequires   : glibc-devel, rpm-devel, pciutils-devel
+BuildRequires   : glibc-devel, rpm-devel
 ExclusiveArch   : x86_64 i586 i686
 %if 0%{?suse_version}
 %if %{suse_version} > 1300
@@ -245,7 +245,7 @@ fi
 %defattr(755,root,root)
 
 %defattr(755,root,root)
-/sbin/hpHelper
+/sbin/amsHelper
 /opt/hp/hp-ams
 /etc/sysconfig/hp-ams
 %if %{?_unitdir:1}%{!?mymacro:0}
@@ -255,8 +255,8 @@ fi
 %endif
 
 %defattr(644,root,root)
-/usr/share/man/man8/hpHelper.8.gz
+/usr/share/man/man8/amsHelper.8.gz
 
 %changelog
-* Wed Jul 28 2010 HP Linux Development <Linux_SWdeliverables@external.groups.hp.com> %VERSION%-%RELEASE%
+* Wed Jul 28 2010 HP Linux Development <Linux_SWdeliverables@external.groups.hpe.com> %VERSION%-%RELEASE%
 - ENHANCEMENTS

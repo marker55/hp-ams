@@ -30,7 +30,10 @@ typedef struct cpqIdeControllerTable_entry_s {
     char            cpqIdeControllerSerialNumber[81];
     size_t          cpqIdeControllerSerialNumber_len;
 
-    char            host[20];
+    unsigned short  domain;
+    unsigned char   bus;
+    unsigned char   dev;
+    unsigned char   func;
     int             valid;
 } cpqIdeControllerTable_entry;
 
