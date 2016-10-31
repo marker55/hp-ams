@@ -33,6 +33,8 @@ extern int header_generic(struct variable *, oid *, size_t *, int, size_t *,
 
 
 extern char *GenericData;
+extern char *GenericDataStr;
+extern char *GenericDataEnv;
 extern int testtrap_interval;
 distro_id_t *myDistro = NULL;
 #ifndef HELPER_VERSION
@@ -203,15 +205,17 @@ init_cpqHost(void)
 
     DEBUGMSGTL(("cpqHost", "Checkinging periodic test trap interval = %d\n", testtrap_interval));
     if (testtrap_interval >= 0)  {
+        if ((GenericDataStr = getenv(GenericDataEnv)) != (char *) 0)
+            GenericData = GenericDataStr;
         DEBUGMSGTL(("cpqHost", "Registering periodic test trap alarm\n"));
+        SendcpqHostGenericTrap();
         if (testtrap_interval > 0) {
         if (snmp_alarm_register(testtrap_interval, 
                              SA_REPEAT, 
                              (SNMPAlarmCallback *) &SendcpqHostGenericTrap, 
                              NULL) == 0 )
             DEBUGMSGTL(("cpqHost", "Alarm register failed\n"));
-    } else 
-        SendcpqHostGenericTrap();
+        } 
     }
 }
 
@@ -412,6 +416,8 @@ void SendcpqHostGenericTrap()
     static oid sysName[] = { 1, 3, 6, 1, 2, 1, 1, 5, 0 };
     static oid cpqHoTrapFlags[] = { 1, 3, 6, 1, 4, 1, 232, 11, 2, 11, 1, 0 };
     static oid cpqHoGenericData[] = { 1, 3, 6, 1, 4, 1, 232, 11, 2, 8, 1, 0 };
+    static oid cpqHoMibHealthStatus[] = { 1, 3, 6, 1, 4, 1, 232, 11, 2, 10, 7, 0};
+    static oid cpqHostMibStatus[] = { 1, 3, 6, 1, 4, 1, 232, 11, 2, 10, 1, 0};
 
     netsnmp_variable_list *var_list = NULL;
     struct utsname sys_name;
@@ -430,13 +436,22 @@ void SendcpqHostGenericTrap()
     snmp_varlist_add_variable(&var_list, cpqHoTrapFlags,
             sizeof(cpqHoTrapFlags) / sizeof(oid),
             ASN_INTEGER, &cpqHoTrapFlag,
-            sizeof(ASN_INTEGER));
+            sizeof(cpqHoTrapFlag));
 
     snmp_varlist_add_variable(&var_list, cpqHoGenericData,
             sizeof(cpqHoGenericData) / sizeof(oid),
             ASN_OCTET_STR, (u_char *) GenericData,
             strlen(GenericData));
 
+    snmp_varlist_add_variable(&var_list, cpqHoMibHealthStatus,
+            sizeof(cpqHoMibHealthStatus) / sizeof(oid),
+            ASN_OCTET_STR, (u_char *) cpqHoMibHealthStatusArray,
+            64);
+
+    snmp_varlist_add_variable(&var_list, cpqHostMibStatus,
+            sizeof(cpqHostMibStatus) / sizeof(oid),
+            ASN_OCTET_STR, (u_char *) cpqHostMibStatusArray,
+            20*sizeof(MibStatusEntry));
 
     send_enterprise_trap_vars(SNMP_TRAP_ENTERPRISESPECIFIC,
                     11003,

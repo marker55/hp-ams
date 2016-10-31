@@ -147,7 +147,10 @@ unsigned long long get_PciBlockSize(unsigned char * devlink)
 
     memset(attribute, 0, sizeof(attribute));
 
-    snprintf(attribute, 255, "/sys/devices/%s/size", devlink);
+    if (!strncmp(devlink, "../",3))
+        snprintf(attribute, 255, "/sys/devices/%s/size", devlink);
+    else
+        snprintf(attribute, 255, "/sys/devices/../%s/size", devlink);
 
     /* Size is in 512 block, need mbytes so left shift 11 bits */
     size = get_sysfs_ullong(attribute);

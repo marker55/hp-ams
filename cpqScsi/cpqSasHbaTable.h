@@ -32,6 +32,8 @@ typedef struct cpqSasHbaTable_entry_s {
     size_t          cpqSasHbaFwVersion_len;
     char            cpqSasHbaBiosVersion[17];
     size_t          cpqSasHbaBiosVersion_len;
+    char            cpqSasHbaPciLocation[128];
+    size_t          cpqSasHbaPciLocation_len;
 
     char            host[20];
     long            OldStatus;
@@ -63,4 +65,5 @@ Netsnmp_Node_Handler cpqSasHbaTable_handler;
 #define COLUMN_CPQSASHBASERIALNUMBER		7
 #define COLUMN_CPQSASHBAFWVERSION		8
 #define COLUMN_CPQSASHBABIOSVERSION		9
+#define COLUMN_CPQSASHBAPCILOCATION		10
 #endif                          /* CPQSASHBATABLE_H */

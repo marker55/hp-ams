@@ -29,11 +29,11 @@ typedef struct cpqIdeControllerTable_entry_s {
     long            cpqIdeControllerCondition;
     char            cpqIdeControllerSerialNumber[81];
     size_t          cpqIdeControllerSerialNumber_len;
+    char            cpqIdeControllerHwLocation[128];
+    size_t          cpqIdeControllerHwLocation_len;
+    char            cpqIdeControllerPciLocation[128];
+    size_t          cpqIdeControllerPciLocation_len;
 
-    unsigned short  domain;
-    unsigned char   bus;
-    unsigned char   dev;
-    unsigned char   func;
     int             valid;
 } cpqIdeControllerTable_entry;
 
@@ -58,4 +58,6 @@ Netsnmp_Node_Handler cpqIdeControllerTable_handler;
 #define COLUMN_CPQIDECONTROLLERSTATUS		6
 #define COLUMN_CPQIDECONTROLLERCONDITION		7
 #define COLUMN_CPQIDECONTROLLERSERIALNUMBER		8
+#define COLUMN_CPQIDECONTROLLERHWLOCATION		9
+#define COLUMN_CPQIDECONTROLLERPCILOCATION		10
 #endif                          /* CPQIDECONTROLLERTABLE_H */

@@ -1,14 +1,16 @@
 Source: hp-ams
 Section: admin
 Priority: optional
-Maintainer: mark rusk <mark.rusk@hpe.com>
+Maintainer: mark rusk <mark.rusk@hp.com>
 Build-Depends: debhelper (>= 7.0.50)
 Standards-Version: 3.9.2
-Homepage: http://linux.hpe.com
+Homepage: http://linux.hp.com
+#Vcs-Git: git://git.debian.org/collab-maint/hp-ams.git
+#Vcs-Browser: http://git.debian.org/?p=collab-maint/hp-ams.git;a=summary
 
 Package: hp-ams
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, lsof, psmisc
+Depends: ${shlibs:Depends}, ${misc:Depends}, lsof
 Description: Agentless Management Service for HP ProLiant servers with iLO4 
 
 Package: hp-ams-dbg

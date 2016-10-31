@@ -11,8 +11,8 @@
 ### BEGIN INIT INFO
 # Provides:            amsHelper
 # Default-Start:       2 3 4 5
-# Required-Start:       
-# Required-Stop:       
+# Required-Start:      $network
+# Required-Stop:       $network $syslog
 # Default-Stop:        0 1 6
 # Description:         starts OS helper for HP AMS
 # Short-Description:   HP AMS helper

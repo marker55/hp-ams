@@ -84,10 +84,11 @@ static int end_device_select(const struct dirent *entry)
 static int hba_select(const struct dirent *entry)
 {
     int      i = 0;
-    for (i = 0; i < NumSasHost; i++){
-        if (strncmp(entry->d_name,
+    for (i = 0; i < NumSasHost; i++) {
+        if ((strlen(entry->d_name) == strlen(SasHostlist[i]->d_name)) && 
+            (!strncmp(entry->d_name,
                     SasHostlist[i]->d_name,
-                    strlen(SasHostlist[i]->d_name)) == 0)
+                    strlen(SasHostlist[i]->d_name))))
             return(1);
     }
     return 0;
@@ -888,6 +889,37 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
                                 "Blade %d, Slot %d",
                                 (pciSlot>>8) & 0xF,
                                 (pciSlot>>16) & 0xFF);
+                else {
+                    entry->cpqSasHbaHwLocation_len =
+                        snprintf(entry->cpqSasHbaHwLocation,
+                                128, "Slot %d", pciSlot);
+                    DEBUGMSGTL(("sashba:container:load", "pcislot  = %s\n",
+                                    entry->cpqSasHbaHwLocation));
+               }
+
+            } else {
+                strcpy(entry->cpqSasHbaHwLocation, "Embedded");
+                entry->cpqSasHbaHwLocation_len =
+                    strlen(entry->cpqSasHbaHwLocation);
+            }
+
+            memset(attribute, 0, sizeof(attribute));
+            strncpy(attribute, buffer, sizeof(attribute) - 1);
+            strncat(attribute, "/device",
+                sizeof(attribute) - strlen(attribute) - 8);
+            if ((len = readlink(buffer, lbuffer, 253)) > 0) {
+                lbuffer[len]='\0'; /* Null terminate the string */
+                pbuffer = lbuffer;
+                while ((pbuffer = strstr(pbuffer, "/0000:")) != NULL) {
+                    entry->cpqSasHbaPciLocation_len = 12;
+
+                        strncpy(entry->cpqSasHbaPciLocation, pbuffer + 1,12);
+
+                    DEBUGMSGTL(("sashba:container:load", "pbuffer  = %s\n", pbuffer));
+                    DEBUGMSGTL(("sashba:container:load", "PciLocation  = %s\n", entry->cpqSasHbaPciLocation));
+
+                    pbuffer += 1;
+                }
             }
 
             switch (BoardID) {
@@ -1184,7 +1216,7 @@ void SendSasTrap(int trapID,
     snmp_varlist_add_variable(&var_list, cpqHoTrapFlags,
             sizeof(cpqHoTrapFlags) / sizeof(oid),
             ASN_INTEGER, (u_char *)&cpqHoTrapFlag,
-            sizeof(ASN_INTEGER));
+            sizeof(cpqHoTrapFlag));
 
     cpqSasHbaHwLocation[OID_LENGTH(cpqSasHbaHwLocation) - 1] = 
             disk->cpqSasPhyDrvHbaIndex;
@@ -1211,7 +1243,7 @@ void SendSasTrap(int trapID,
     snmp_varlist_add_variable(&var_list, cpqSasPhyDrvHbaIndex,
             sizeof(cpqSasPhyDrvHbaIndex) / sizeof(oid),
             ASN_INTEGER, (u_char *) &disk->cpqSasPhyDrvHbaIndex,
-            sizeof(ASN_INTEGER));
+            sizeof(disk->cpqSasPhyDrvHbaIndex));
 
     cpqSasPhyDrvIndex[OID_LENGTH(cpqSasPhyDrvIndex) - 2] =
             disk->cpqSasPhyDrvHbaIndex;
@@ -1220,7 +1252,7 @@ void SendSasTrap(int trapID,
     snmp_varlist_add_variable(&var_list, cpqSasPhyDrvIndex,
             sizeof(cpqSasPhyDrvIndex) / sizeof(oid),
             ASN_INTEGER, (u_char *)&disk->cpqSasPhyDrvIndex,
-            sizeof(ASN_INTEGER));
+            sizeof(disk->cpqSasPhyDrvIndex));
 
     cpqSasPhyDrvStatus[OID_LENGTH(cpqSasPhyDrvStatus) - 2] =
             disk->cpqSasPhyDrvHbaIndex;
@@ -1229,7 +1261,7 @@ void SendSasTrap(int trapID,
     snmp_varlist_add_variable(&var_list, cpqSasPhyDrvStatus,
             sizeof(cpqSasPhyDrvStatus) / sizeof(oid),
             ASN_INTEGER,(u_char *)&disk->cpqSasPhyDrvStatus,
-            sizeof(ASN_INTEGER));
+            sizeof(disk->cpqSasPhyDrvStatus));
 
     cpqSasPhyDrvType[OID_LENGTH(cpqSasPhyDrvType) - 2] =
             disk->cpqSasPhyDrvHbaIndex;
@@ -1238,7 +1270,7 @@ void SendSasTrap(int trapID,
     snmp_varlist_add_variable(&var_list, cpqSasPhyDrvType,
             sizeof(cpqSasPhyDrvType) / sizeof(oid),
             ASN_INTEGER,(u_char *)&disk->cpqSasPhyDrvType,
-            sizeof(ASN_INTEGER));
+            sizeof(disk->cpqSasPhyDrvType));
 
     cpqSasPhyDrvModel[OID_LENGTH(cpqSasPhyDrvModel) - 2] =
             disk->cpqSasPhyDrvHbaIndex;

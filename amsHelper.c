@@ -74,6 +74,9 @@ int            trap_fire = 0;
 char *vendor_tag = NULL;
 
 char *GenericData = "generic trap data";
+char *GenericDataEnv = "AMSGENERICTRAP";
+char *GenericDataStr = (char *) 0;
+
 struct pci_access *pacc = NULL;
 
 static          RETSIGTYPE
@@ -438,16 +441,15 @@ main(int argc, char **argv)
      * daemonize 
      */
     snmp_disable_log();
-    if (use_syslog)
-        snmp_enable_calllog();
-    else
-        snmp_enable_stderrlog();
 
     if (!dont_fork) {
-        int             rc = netsnmp_daemonize(1, !use_syslog);
+        snmp_enable_calllog();
+        int             rc = netsnmp_daemonize(1, use_syslog);
         if (rc)
             exit(-1);
-    }
+    } else
+        snmp_enable_stderrlog();
+
 
     /* Clear out Status array */
     memset(cpqHostMibStatusArray,0,sizeof(cpqHostMibStatusArray));

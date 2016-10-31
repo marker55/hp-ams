@@ -73,17 +73,8 @@ make ARCH=%{_arch} EFS_VER="$EFS_VER" OS="$OS" VERSION=%{version} all
 
 %install
 ##########################################################################
-
-#export some variables
-export FILELIST=$RPM_BUILD_DIR/%{tardir}/filelist-%{tardir}
-
 #master install step
 make  ARCH=%{_arch} PREFIX="/" install
-
-#distro specific step(s)
-touch $FILELIST
-# On SuSE systems add a convenience link
-echo %(%{__id} -un)
 
 
 ##########################################################################
@@ -241,7 +232,7 @@ if [ "$RPM_BUILD_ROOT" != "/" ]; then
 fi
 ##########################################################################
 
-%files -f filelist-%{tardir}
+%files 
 %defattr(755,root,root)
 
 %defattr(755,root,root)

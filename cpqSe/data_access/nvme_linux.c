@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #include <dirent.h>
 #include <sys/ioctl.h>
@@ -19,6 +20,10 @@
 #include "common/scsi_info.h"
 
 #define MAKE_CONDITION(total, new)  (new > total ? new : total)
+
+void SendNVMeTrap(int, cpqSePCIeDiskTable_entry *);
+
+extern int trap_fire;
 
 static struct dirent **NVMeDevicelist;
 static char * NVMeDeviceDir = "/sys/block/";
@@ -173,6 +178,7 @@ cpqSePCIeDiskTable_entry *nvme_add_disk(char *deviceLink,
         if (pci_cache == NULL) {
             return ;
         }
+        DEBUGMSGTL(("nvmedrv:container:load", "Found PciSlotTable\n"));
         pci_container = pci_cache->magic;
         it = CONTAINER_ITERATOR(pci_container);
         pci = ITERATOR_FIRST(it);
@@ -196,8 +202,12 @@ cpqSePCIeDiskTable_entry *nvme_add_disk(char *deviceLink,
         disk->cpqSePCIeDiskCondition = NVME_COND_OK;
 
         memset(disk->cpqSePCIeDiskOsName, 0, 256);
-        disk->cpqSePCIeDiskOsName_len =
-            snprintf(disk->cpqSePCIeDiskOsName, 255, "%s", devname);
+        if (!strncmp(devname, "/dev/", 5))
+            disk->cpqSePCIeDiskOsName_len =
+                snprintf(disk->cpqSePCIeDiskOsName, 255, "%s", devname);
+        else
+            disk->cpqSePCIeDiskOsName_len =
+                snprintf(disk->cpqSePCIeDiskOsName, 255, "/dev/%s", devname);
 
         disk_fd = open(disk->cpqSePCIeDiskOsName, O_RDWR | O_NONBLOCK);
         if (disk_fd >= 0) {
@@ -218,7 +228,7 @@ cpqSePCIeDiskTable_entry *nvme_add_disk(char *deviceLink,
                 memset(disk->cpqSePCIeDiskModel, ' ', 8);
                 Vendor = inq_parse_vendor(Identify);
                 ProductID = inq_parse_prodID(Identify);
-                Rev = inq_parse_rev(Identify, 8);
+                Rev = inq_parse_rev(Identify, 4);
                 if (Vendor != NULL) {
                     DEBUGMSGTL(("nvmedrv:container:load", "Vendor = %s\n", 
                                 Vendor));
@@ -250,7 +260,9 @@ cpqSePCIeDiskTable_entry *nvme_add_disk(char *deviceLink,
                 }
                 free(Identify);
             }
-        }
+        } else 
+            DEBUGMSGTL(("nvmedrv:container:load", "Could not open %s errno = %d\n",
+                                disk->cpqSePCIeDiskOsName, errno));
 
         disk->cpqSePCIeDiskCapacityMb = 
                         get_PciBlockSize((unsigned char *)deviceLink) >> 11;
@@ -321,17 +333,17 @@ cpqSePCIeDiskTable_entry *nvme_add_disk(char *deviceLink,
 
     /* send a trap if drive is failed or degraded on the first time
        through or it it changes from OK to degraded of failed */
-    /*
-       if ((old == NULL) || (disk->OldCondition == NVME_COND_OK)) {
-       switch (disk->cpqSePCIeDiskCondition) {
-       case NVME_COND_FAILED:
-       SendNvmeTrap(SAS_TRAP_PHYSDRV_STATUS_CHANGE, disk);
-       break;
-       default:
-       break;
-       }
-       }
-       */
+    
+    if ((old == NULL) || (disk->OldCondition == NVME_COND_OK)) {
+        switch (disk->cpqSePCIeDiskCondition) {
+            case NVME_COND_FAILED:
+
+                SendNVMeTrap(1017, disk);
+                break;
+            default:
+                break;
+        }
+    }
 
     return disk;
 }
@@ -348,12 +360,11 @@ void cpqnvme_add_disk(char *devpath, char *devname, char *devtype, void *data)
                     "\nNew disk inserted %s\n", devname));
         disk = nvme_add_disk(devpath, devname, devtype,
                 (netsnmp_container *)data);
-        /*
-           if (disk != NULL) {
-           disk->cpqSePCIeDiskCondition = NVME_COND_OK;
-           SendSasTrap(NVME_TRAP_DRV_STATUS_CHANGE, disk);
-           }
-           */
+        
+        if (disk != NULL) {
+            disk->cpqSePCIeDiskCondition = NVME_COND_OK;
+            SendNVMeTrap(1019, disk);
+        }
     }
 }
 
@@ -373,34 +384,11 @@ static void cpqnvme_remove_disk(char *devpath, char *devname, char *devtype, voi
     disk = CONTAINER_FIND((netsnmp_container *)data, &tmp);
 
     if (disk != NULL) {
-#ifdef NOTDEF
-        switch (disk->cpqSePCIeDiskCondition) {
-            case 2:  /* ok(2) */
-            case 3:  /* predictiveFailure(3) */
-            case 4:  /* offline(4) */
-            case 5:  /* failed(5) */
-                disk->cpqSePCIeDiskCondition += 4;/* add missing */
-                break;
-            case 10:  /* ssdWearOut(10) */
-                disk->cpqSePCIeDiskCondition =
-                    NVME_COND_MISSINGWASSSDWEAROUT;
-                break;
-            case 12:  /* notAuthenticated(12) */
-                disk->cpqSePCIeDiskCondition =
-                    NVME_COND_MISSINGWASNOTAUTHENTICATED;
-                break;
-            default:
-                break;
-        }
-        disk->cpqSePCIeDiskCondition = NVME_COND_FAILED;
-        SendNVMeTrap(SAS_TRAP_PHYSDRV_STATUS_CHANGE, disk);
 
-#endif
         CONTAINER_REMOVE((netsnmp_container *)data, disk);
+        SendNVMeTrap(1020, disk);
     }
 }
-
-
 
 int netsnmp_arch_nvmedrv_container_load(netsnmp_container* container)
 {
@@ -430,8 +418,7 @@ int netsnmp_arch_nvmedrv_container_load(netsnmp_container* container)
 
         lbuffer[len]='\0'; /* Null terminate the string */
         /* if it's not the controller we are working on, skip it */
-        if (token != NULL) {
-            token = strrchr(lbuffer, '/');
+        if ((token = strrchr(lbuffer, '/')) != NULL) {
             token += 1;
             devlen = strlen(token) + 6;
             devname = malloc(devlen);
@@ -451,10 +438,8 @@ int netsnmp_arch_nvmedrv_container_load(netsnmp_container* container)
             cpqSePCIeDiskTableCondition =
                 MAKE_CONDITION(cpqSePCIeDiskTableCondition,
                         disk->cpqSePCIeDiskCondition);
-#ifdef NOTDEF
             if (trap_fire)
-                SendNVMeTrap(SAS_TRAP_PHYSDRV_STATUS_CHANGE, disk);
-#endif
+                SendNVMeTrap(1018, disk);
         }
     }
     free(NVMeDevicelist);
@@ -463,6 +448,211 @@ int netsnmp_arch_nvmedrv_container_load(netsnmp_container* container)
     udev_register("block","add", "disk", cpqnvme_add_disk, container);
     udev_register("block","remove", "disk", cpqnvme_remove_disk, container);
     return  1;
+}
+
+
+void SendNVMeTrap(int TrapID, cpqSePCIeDiskTable_entry *disk)
+{
+    static oid compaq[] = { 1, 3, 6, 1, 4, 1, 232 };
+    static oid compaq_len = 7;
+    static oid sysName[] = { 1, 3, 6, 1, 2, 1, 1, 5, 0 };
+    static oid cpqHoTrapFlags[] = { 1, 3, 6, 1, 4, 1, 232, 11, 2, 11, 1, 0 };
+    static oid cpqSePciFunctBusNumberIndex[] =
+    { 1, 3, 6, 1, 4, 1, 232, 1, 2, 13, 2, 1, 1, 255, 255, 255 };
+    static oid cpqSePciFunctDeviceNumberIndex[] =
+    { 1, 3, 6, 1, 4, 1, 232, 1, 2, 13, 2, 1, 2, 255, 255, 255 };
+    static oid cpqSePciFunctIndex[] =
+    { 1, 3, 6, 1, 4, 1, 232, 1, 2, 13, 2, 1, 3, 255, 255, 255 };
+    static oid cpqSePCIeDiskPCIBusIndex[] =
+    { 1, 3, 6, 1, 4, 1, 232, 1, 2, 23, 1, 1, 1, 255, 255, 255 };
+    static oid cpqSePCIeDiskPCIDeviceIndex[] =
+    { 1, 3, 6, 1, 4, 1, 232, 1, 2, 23, 1, 1, 2, 255, 255, 255 };
+    static oid cpqSePCIeDiskPCIFunctionIndex[] =
+    { 1, 3, 6, 1, 4, 1, 232, 1, 2, 23, 1, 1, 3, 255, 255, 255 };
+    static oid cpqSePCIeDiskCondition[] =
+    { 1, 3, 6, 1, 4, 1, 232, 1, 2, 23, 1, 1, 8, 255, 255, 255 };
+    static oid cpqSePCIeDiskCurrentTemperature[] =
+    { 1, 3, 6, 1, 4, 1, 232, 1, 2, 23, 1, 1, 9, 255, 255, 255 };
+    static oid cpqSePCIeDiskThresholdTemperature[] =
+    { 1, 3, 6, 1, 4, 1, 232, 1, 2, 23, 1, 1, 10, 255, 255, 255 };
+    static oid cpqSePCIeDiskHwLocation[] =
+    { 1, 3, 6, 1, 4, 1, 232, 1, 2, 23, 1, 1, 11, 255, 255, 255 };
+    static oid cpqSePCIeDiskWearStatus[] =
+    { 1, 3, 6, 1, 4, 1, 232, 1, 2, 23, 1, 1, 13, 255, 255, 255 };
+
+    netsnmp_variable_list *var_list = NULL;
+
+    unsigned int cpqHoTrapFlag;
+    DEBUGMSGTL(("nvmedrv:container:load", "Trap:DiskCondition = %ld\n",
+                disk->cpqSePCIeDiskCondition));
+    cpqHoTrapFlag = disk->cpqSePCIeDiskCondition << 2;
+    if (trap_fire)
+        cpqHoTrapFlag = trap_fire << 2;
+
+    snmp_varlist_add_variable(&var_list, sysName,
+            sizeof(sysName) / sizeof(oid),
+            ASN_OCTET_STR,
+            (u_char *) "",
+            0);
+
+    snmp_varlist_add_variable(&var_list, cpqHoTrapFlags,
+            sizeof(cpqHoTrapFlags) / sizeof(oid),
+            ASN_INTEGER, (u_char *)&cpqHoTrapFlag,
+            sizeof(cpqHoTrapFlag));
+
+    if ((TrapID >= 1015) && (TrapID <= 1018)) {
+        cpqSePCIeDiskPCIBusIndex[OID_LENGTH(cpqSePCIeDiskPCIBusIndex) - 3] =
+            disk->cpqSePCIeDiskPCIBusIndex;
+        cpqSePCIeDiskPCIBusIndex[OID_LENGTH(cpqSePCIeDiskPCIBusIndex) - 2] =
+            disk->cpqSePCIeDiskPCIDeviceIndex;
+        cpqSePCIeDiskPCIBusIndex[OID_LENGTH(cpqSePCIeDiskPCIBusIndex) - 1] =
+            disk->cpqSePCIeDiskPCIFunctionIndex;
+
+        snmp_varlist_add_variable(&var_list, cpqSePCIeDiskPCIBusIndex,
+                sizeof(cpqSePCIeDiskPCIBusIndex) / sizeof(oid),
+                ASN_INTEGER, (u_char *) &disk->cpqSePCIeDiskPCIBusIndex,
+                sizeof(disk->cpqSePCIeDiskPCIBusIndex));
+
+        cpqSePCIeDiskPCIDeviceIndex[OID_LENGTH(cpqSePCIeDiskPCIDeviceIndex) - 3] =
+            disk->cpqSePCIeDiskPCIBusIndex;
+        cpqSePCIeDiskPCIDeviceIndex[OID_LENGTH(cpqSePCIeDiskPCIDeviceIndex) - 2] =
+            disk->cpqSePCIeDiskPCIDeviceIndex;
+        cpqSePCIeDiskPCIDeviceIndex[OID_LENGTH(cpqSePCIeDiskPCIDeviceIndex) - 1] =
+            disk->cpqSePCIeDiskPCIFunctionIndex;
+
+        snmp_varlist_add_variable(&var_list, cpqSePCIeDiskPCIDeviceIndex,
+                sizeof(cpqSePCIeDiskPCIDeviceIndex) / sizeof(oid),
+                ASN_INTEGER, (u_char *) &disk->cpqSePCIeDiskPCIDeviceIndex,
+                sizeof(disk->cpqSePCIeDiskPCIDeviceIndex));
+
+        cpqSePCIeDiskPCIFunctionIndex[OID_LENGTH(cpqSePCIeDiskPCIFunctionIndex) - 3] =
+            disk->cpqSePCIeDiskPCIBusIndex;
+        cpqSePCIeDiskPCIFunctionIndex[OID_LENGTH(cpqSePCIeDiskPCIFunctionIndex) - 2] =
+            disk->cpqSePCIeDiskPCIDeviceIndex;
+        cpqSePCIeDiskPCIFunctionIndex[OID_LENGTH(cpqSePCIeDiskPCIFunctionIndex) - 1] =
+            disk->cpqSePCIeDiskPCIFunctionIndex;
+
+        snmp_varlist_add_variable(&var_list, cpqSePCIeDiskPCIFunctionIndex,
+                sizeof(cpqSePCIeDiskPCIFunctionIndex) / sizeof(oid),
+                ASN_INTEGER, (u_char *) &disk->cpqSePCIeDiskPCIFunctionIndex,
+                sizeof(disk->cpqSePCIeDiskPCIFunctionIndex));
+    } else {
+
+        cpqSePciFunctBusNumberIndex[OID_LENGTH(cpqSePciFunctBusNumberIndex) - 3] =
+            disk->cpqSePCIeDiskPCIBusIndex;
+        cpqSePciFunctBusNumberIndex[OID_LENGTH(cpqSePciFunctBusNumberIndex) - 2] =
+            disk->cpqSePCIeDiskPCIDeviceIndex;
+        cpqSePciFunctBusNumberIndex[OID_LENGTH(cpqSePciFunctBusNumberIndex) - 1] =
+            disk->cpqSePCIeDiskPCIFunctionIndex;
+
+        snmp_varlist_add_variable(&var_list, cpqSePciFunctBusNumberIndex,
+                sizeof(cpqSePciFunctBusNumberIndex) / sizeof(oid),
+                ASN_INTEGER, (u_char *) &disk->cpqSePCIeDiskPCIBusIndex,
+                sizeof(disk->cpqSePCIeDiskPCIBusIndex));
+
+        cpqSePciFunctDeviceNumberIndex[OID_LENGTH(cpqSePciFunctDeviceNumberIndex) - 3] =
+            disk->cpqSePCIeDiskPCIBusIndex;
+        cpqSePciFunctDeviceNumberIndex[OID_LENGTH(cpqSePciFunctDeviceNumberIndex) - 2] =
+            disk->cpqSePCIeDiskPCIDeviceIndex;
+        cpqSePciFunctDeviceNumberIndex[OID_LENGTH(cpqSePciFunctDeviceNumberIndex) - 1] =
+            disk->cpqSePCIeDiskPCIFunctionIndex;
+
+        snmp_varlist_add_variable(&var_list, cpqSePciFunctDeviceNumberIndex,
+                sizeof(cpqSePciFunctDeviceNumberIndex) / sizeof(oid),
+                ASN_INTEGER, (u_char *) &disk->cpqSePCIeDiskPCIDeviceIndex,
+                sizeof(disk->cpqSePCIeDiskPCIDeviceIndex));
+
+        cpqSePciFunctIndex[OID_LENGTH(cpqSePciFunctIndex) - 3] =
+            disk->cpqSePCIeDiskPCIBusIndex;
+        cpqSePciFunctIndex[OID_LENGTH(cpqSePciFunctIndex) - 2] =
+            disk->cpqSePCIeDiskPCIDeviceIndex;
+        cpqSePciFunctIndex[OID_LENGTH(cpqSePciFunctIndex) - 1] =
+            disk->cpqSePCIeDiskPCIFunctionIndex;
+
+        snmp_varlist_add_variable(&var_list, cpqSePciFunctIndex,
+                sizeof(cpqSePciFunctIndex) / sizeof(oid),
+                ASN_INTEGER, (u_char *) &disk->cpqSePCIeDiskPCIFunctionIndex,
+                sizeof(disk->cpqSePCIeDiskPCIFunctionIndex));
+    }
+    if (TrapID == 1017) {
+        cpqSePCIeDiskCondition[OID_LENGTH(cpqSePCIeDiskCondition) - 3] =
+            disk->cpqSePCIeDiskPCIBusIndex;
+        cpqSePCIeDiskCondition[OID_LENGTH(cpqSePCIeDiskCondition) - 2] =
+            disk->cpqSePCIeDiskPCIDeviceIndex;
+        cpqSePCIeDiskCondition[OID_LENGTH(cpqSePCIeDiskCondition) - 1] =
+            disk->cpqSePCIeDiskPCIFunctionIndex;
+
+        snmp_varlist_add_variable(&var_list, cpqSePCIeDiskCondition,
+                sizeof(cpqSePCIeDiskCondition) / sizeof(oid),
+                ASN_INTEGER, (u_char *) &disk->cpqSePCIeDiskCondition,
+                sizeof(disk->cpqSePCIeDiskCondition));
+    }
+
+    if ((TrapID == 1015) || (TrapID == 1016)){
+        cpqSePCIeDiskCurrentTemperature[OID_LENGTH(cpqSePCIeDiskCurrentTemperature) - 3] =
+            disk->cpqSePCIeDiskPCIBusIndex;
+        cpqSePCIeDiskCurrentTemperature[OID_LENGTH(cpqSePCIeDiskCurrentTemperature) - 2] =
+            disk->cpqSePCIeDiskPCIDeviceIndex;
+        cpqSePCIeDiskCurrentTemperature[OID_LENGTH(cpqSePCIeDiskCurrentTemperature) - 1] =
+            disk->cpqSePCIeDiskPCIFunctionIndex;
+
+        snmp_varlist_add_variable(&var_list, cpqSePCIeDiskCurrentTemperature,
+                sizeof(cpqSePCIeDiskCurrentTemperature) / sizeof(oid),
+                ASN_INTEGER, (u_char *) &disk->cpqSePCIeDiskCurrentTemperature,
+                sizeof(disk->cpqSePCIeDiskCurrentTemperature));
+
+        cpqSePCIeDiskThresholdTemperature[OID_LENGTH(cpqSePCIeDiskThresholdTemperature) - 3] =
+            disk->cpqSePCIeDiskPCIBusIndex;
+        cpqSePCIeDiskThresholdTemperature[OID_LENGTH(cpqSePCIeDiskThresholdTemperature) - 2] =
+            disk->cpqSePCIeDiskPCIDeviceIndex;
+        cpqSePCIeDiskThresholdTemperature[OID_LENGTH(cpqSePCIeDiskThresholdTemperature) - 1] =
+            disk->cpqSePCIeDiskPCIFunctionIndex;
+
+        snmp_varlist_add_variable(&var_list, cpqSePCIeDiskThresholdTemperature,
+                sizeof(cpqSePCIeDiskThresholdTemperature) / sizeof(oid),
+                ASN_INTEGER, (u_char *) &disk->cpqSePCIeDiskThresholdTemperature,
+                sizeof(disk->cpqSePCIeDiskThresholdTemperature));
+    }
+
+    if (TrapID == 1018) {
+        cpqSePCIeDiskWearStatus[OID_LENGTH(cpqSePCIeDiskWearStatus) - 3] =
+            disk->cpqSePCIeDiskPCIBusIndex;
+        cpqSePCIeDiskWearStatus[OID_LENGTH(cpqSePCIeDiskWearStatus) - 2] =
+            disk->cpqSePCIeDiskPCIDeviceIndex;
+        cpqSePCIeDiskWearStatus[OID_LENGTH(cpqSePCIeDiskWearStatus) - 1] =
+            disk->cpqSePCIeDiskPCIFunctionIndex;
+
+        snmp_varlist_add_variable(&var_list, cpqSePCIeDiskWearStatus,
+                sizeof(cpqSePCIeDiskWearStatus) / sizeof(oid),
+                ASN_INTEGER, (u_char *) &disk->cpqSePCIeDiskWearStatus,
+                sizeof(disk->cpqSePCIeDiskWearStatus));
+    }
+
+    if ((TrapID >= 1015) && (TrapID <= 1018)) {
+        cpqSePCIeDiskHwLocation[OID_LENGTH(cpqSePCIeDiskHwLocation) - 3] =
+            disk->cpqSePCIeDiskPCIBusIndex;
+        cpqSePCIeDiskHwLocation[OID_LENGTH(cpqSePCIeDiskHwLocation) - 2] =
+            disk->cpqSePCIeDiskPCIDeviceIndex;
+        cpqSePCIeDiskHwLocation[OID_LENGTH(cpqSePCIeDiskHwLocation) - 1] =
+            disk->cpqSePCIeDiskPCIFunctionIndex;
+
+        snmp_varlist_add_variable(&var_list, cpqSePCIeDiskHwLocation,
+                sizeof(cpqSePCIeDiskHwLocation) / sizeof(oid),
+                ASN_OCTET_STR,
+                (u_char *) disk->cpqSePCIeDiskHwLocation,
+                disk->cpqSePCIeDiskHwLocation_len);
+    }
+
+    send_enterprise_trap_vars(SNMP_TRAP_ENTERPRISESPECIFIC,
+                    TrapID,
+                    compaq,
+                    compaq_len,
+                    var_list);
+
+    snmp_free_varbind(var_list);
+
+    DEBUGMSGTL(("nvmedrv:container:load", "Sendinng NVME trap %d\n", TrapID));
+    return;
 }
 
 

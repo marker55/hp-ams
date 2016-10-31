@@ -990,13 +990,15 @@ void add_cpqSePciFuncTable_entry(cpqSePciFunctTable_entry *entry,
     }
 
     entry->cpqSePciFunctIntLine =  node->irq;
-    entry->cpqSePciFunctDevStatus =  node->config[6] | (node->config[7] << 8);
-    entry->cpqSePciFunctRevID = node->config[8];
+    if (node->config != NULL) {
+        entry->cpqSePciFunctDevStatus =  node->config[6] | (node->config[7] << 8);
+        entry->cpqSePciFunctRevID = node->config[8];
 
-    if (node->config[4] & 0x03) 
-        entry->cpqSePciFunctDevStatus = PCI_DEVICE_ENABLED;
-    else
-        entry->cpqSePciFunctDevStatus = PCI_DEVICE_DISABLED;
+        if (node->config[4] & 0x03) 
+            entry->cpqSePciFunctDevStatus = PCI_DEVICE_ENABLED;
+        else
+            entry->cpqSePciFunctDevStatus = PCI_DEVICE_DISABLED;
+    }
 
     if ((get_pci_class(node->device_class) == 2) && 
             is_HP(node->subvendor_id)) {

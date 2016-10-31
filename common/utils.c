@@ -252,6 +252,17 @@ int get_pcislot(char *bus_info)
     return ret;
 }
 
+int enet_select(const struct dirent *entry)
+{
+    char buffer[256];
+    if ((strcmp(entry->d_name, ".") == 0) || (strcmp(entry->d_name, "..") == 0))
+        return (0);
+    snprintf(buffer, 255, "/sys/class/net/%s/addr_len", entry->d_name);
+    if (get_sysfs_int(buffer) != 6)
+        return (0);
+    return (1);
+}
+
 int file_select(const struct dirent *entry)
 {
    if ((strcmp(entry->d_name, ".") == 0) || (strcmp(entry->d_name, "..") == 0))

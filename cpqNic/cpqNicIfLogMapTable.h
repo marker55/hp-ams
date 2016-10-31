@@ -47,6 +47,10 @@ typedef struct cpqNicIfLogMapTable_entry_s {
     size_t          cpqNicIfLogMapIPV6Address_len;
     char            cpqNicIfLogMapLACNumber[256];
     size_t          cpqNicIfLogMapLACNumber_len;
+    long            cpqNicIfLogMapDHCP;
+    char            cpqNicIfLogMapPciLocation[256];
+    size_t          cpqNicIfLogMapPciLocation_len;
+
 
     long            cpqNicIfLogMapPrevCondition;
     long            cpqNicIfLogMapPrevStatus;
@@ -91,4 +95,6 @@ Netsnmp_Node_Handler cpqNicIfLogMapOverallCondition_handler;
 #define COLUMN_CPQNICIFLOGMAPSPEEDMBPS		19
 #define COLUMN_CPQNICIFLOGMAPIPV6ADDRESS		20
 #define COLUMN_CPQNICIFLOGMAPLACNUMBER		21
+#define COLUMN_CPQNICIFLOGMAPDHCP		22
+#define COLUMN_CPQNICIFLOGMAPPCILOCATION		23
 #endif                          /* CPQNICIFLOGMAPTABLE_H */

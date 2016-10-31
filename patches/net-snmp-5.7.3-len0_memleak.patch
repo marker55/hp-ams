@@ -1,0 +1,12 @@
+--- net-snmp-5.7.3.orig/snmplib/snmp_client.c 2015-12-02 13:40:32.000000000 -0600
++++ net-snmp-5.7.3/snmplib/snmp_client.c      2015-12-02 13:41:15.000000000 -0600
+@@ -296,6 +296,8 @@
+ {
+     *dstPtr = NULL;
+     if (srcPtr) {
++        if (!len)
++            return 0;
+         *dstPtr = malloc(len + 1);
+         if (!*dstPtr) {
+             return 1;
+

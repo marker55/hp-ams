@@ -229,8 +229,11 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
                             "%s", v);
             }
 
+        if (vendor != NULL) {
             strncpy(entry->vendor, vendor, sizeof(entry->vendor) - 1);
             entry->vendor_len = strlen(entry->vendor);
+        } else
+            entry->vendor_len = 0;
 
             entry->cpqHoSwVerLocation[0] = '\0';
             entry->cpqHoSwVerLocation_len = 0;

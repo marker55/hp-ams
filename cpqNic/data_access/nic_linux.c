@@ -408,9 +408,14 @@ int get_if_status(char *interface) {
             if (strcmp(value, "up") == 0) {
                 free(value);
                 return ADAPTER_CONDITION_OK;
-            } else if ((strcmp(value, "unknown") == 0) && (iff & IFF_LOOPBACK)){
+            } else if (strcmp(value, "unknown") == 0) {
+                if (iff & IFF_LOOPBACK) {
                 free(value);
                 return ADAPTER_CONDITION_OK;
+                } else {
+                    free(value);
+                    return ADAPTER_CONDITION_FAILED;
+                } 
             } else if (strcmp(value, "down") == 0) {
                 free(value);
                 return ADAPTER_CONDITION_FAILED;
@@ -713,17 +718,17 @@ static int SendNicTrap(int specific_type,
     snmp_varlist_add_variable(&var_list, cpqHoTrapFlags,
             sizeof(cpqHoTrapFlags) / sizeof(oid),
             ASN_INTEGER, &cpqHoTrapFlag,
-            sizeof(ASN_INTEGER));
+            sizeof(cpqHoTrapFlag));
 
     snmp_varlist_add_variable(&var_list, cpqNicIfPhysAdapterSlot,
             sizeof(cpqNicIfPhysAdapterSlot) / sizeof(oid),
             ASN_INTEGER, (u_char *) &nic->cpqNicIfPhysAdapterSlot,
-            sizeof(ASN_INTEGER));
+            sizeof(nic->cpqNicIfPhysAdapterSlot));
 
     snmp_varlist_add_variable(&var_list, cpqNicIfPhysAdapterPort,
             sizeof(cpqNicIfPhysAdapterPort) / sizeof(oid),
             ASN_INTEGER, (u_char *) &nic->cpqNicIfPhysAdapterPort,
-            sizeof(ASN_INTEGER));
+            sizeof(nic->cpqNicIfPhysAdapterPort));
 
     snmp_varlist_add_variable(&var_list, cpqSiServerSystemId,
             sizeof(cpqSiServerSystemId) / sizeof(oid),
@@ -734,7 +739,7 @@ static int SendNicTrap(int specific_type,
     snmp_varlist_add_variable(&var_list, cpqNicIfPhysAdapterStatus,
             sizeof(cpqNicIfPhysAdapterStatus) / sizeof(oid),
             ASN_INTEGER, (u_char *) &nic->cpqNicIfPhysAdapterStatus,
-            sizeof(ASN_INTEGER));
+            sizeof(nic->cpqNicIfPhysAdapterStatus));
 
     snmp_varlist_add_variable(&var_list, cpqSePciSlotBoardName,
             sizeof(cpqSePciSlotBoardName) / sizeof(oid),
@@ -752,7 +757,7 @@ static int SendNicTrap(int specific_type,
             sizeof(ipAdEntAddr) / sizeof(oid),
             ASN_IPADDRESS,
             (u_char *) ipAddr,
-            sizeof(ASN_IPADDRESS));
+            sizeof(ipAddr));
 
     snmp_varlist_add_variable(&var_list, cpqNicIfLogMapIPV6Address,
             sizeof(cpqNicIfLogMapIPV6Address) / sizeof(oid),
@@ -768,7 +773,7 @@ static int SendNicTrap(int specific_type,
                 sizeof(cpqNicIfLogMapAdapterOKCount) / sizeof(oid),
                 ASN_INTEGER,
                 &iflogmap_entry->cpqNicIfLogMapAdapterOKCount,
-                sizeof(ASN_INTEGER));
+                sizeof(iflogmap_entry->cpqNicIfLogMapAdapterOKCount));
     }
 
     DEBUGMSGTL(("cpqnic:trap","calling netsnmp_send_trap...\n"));
@@ -819,6 +824,9 @@ void initcpqNicIfPhys_entry(cpqNicIfPhysAdapterTable_entry* entry)
 
     entry->cpqNicIfPhysAdapterHwLocation[0] = '\0';
     entry->cpqNicIfPhysAdapterHwLocation_len = 0;
+
+    entry->cpqNicIfPhysAdapterPciLocation[0] = '\0';
+    entry->cpqNicIfPhysAdapterPciLocation_len = 0;
 
 }
 
@@ -1085,6 +1093,9 @@ cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container
             int nic_port;	
             DEBUGMSGTL(("cpqnic:container:load", "Got ethtool info for %s\n", 
                         devname));  
+            entry->cpqNicIfPhysAdapterPciLocation_len = 
+                snprintf(entry->cpqNicIfPhysAdapterPciLocation,
+                         256, "%s", einfo.bus_info);
  
             if ((nic_port = get_nic_port(devname)) > 0)
                 entry->cpqNicIfPhysAdapterPort = nic_port;
@@ -1096,6 +1107,15 @@ cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container
                 DEBUGMSGTL(("cpqnic:container:load", "Got pcislot info for %s = %u\n",
                             devname,
                             entry->cpqNicIfPhysAdapterSlot));
+                entry->cpqNicIfPhysAdapterHwLocation_len = 
+                    snprintf(entry->cpqNicIfPhysAdapterHwLocation, 
+                             255, "Slot %d", entry->cpqNicIfPhysAdapterSlot);
+            } else {
+                if (entry->cpqNicIfPhysAdapterSlot == 0) {
+                    strcpy(entry->cpqNicIfPhysAdapterHwLocation, "Embedded");
+                    entry->cpqNicIfPhysAdapterHwLocation_len = 
+                        strlen(entry->cpqNicIfPhysAdapterHwLocation);
+                }
             } 
  
             if ( einfo.firmware_version ) {
@@ -1116,6 +1136,10 @@ cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container
                 }
             }
             free_ethtool_info_members(&einfo);
+            entry->cpqNicIfPhysAdapterMACAddress_len =
+                setMACaddr(devname,
+                    (unsigned char *)entry->cpqNicIfPhysAdapterMACAddress);
+
         } else 
             DEBUGMSGTL(("cpqnic:container:load", "ethtool FAILED for %s\n",
                         devname));
@@ -1243,7 +1267,13 @@ cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container
                         entry->cpqNicIfPhysAdapterFWVersion_len = snprintf(entry->cpqNicIfPhysAdapterFWVersion,
                             256, "%s", vnode->data);
                         break;
-        } else 
+                    } 
+                    if (!strncmp((char *)vnode->tag, "V3", 2)) {
+                        entry->cpqNicIfPhysAdapterFWVersion_len = snprintf(entry->cpqNicIfPhysAdapterFWVersion,
+                            256, "%s", vnode->data);
+                        break;
+                    }
+                    else
                         vnode = vnode->next;
                 }
             }
@@ -1300,7 +1330,7 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
     DEBUGMSGTL(("cpqnic:arch", "netsnmp_arch_ifphys_container_load entry\n"));
 
     if ((devcount = scandir("/sys/class/net/",
-                    &devlist, file_select, alphasort)) <= 0) {
+                    &devlist, enet_select, alphasort)) <= 0) {
         cpqHoMibHealthStatusArray[CPQMIBHEALTHINDEX] = mibStatus;
         cpqHostMibStatusArray[CPQMIB].cond = mibStatus;
         return(0);
@@ -1621,6 +1651,8 @@ netsnmp_arch_iflogmap_entry_load(netsnmp_container *container, oid ifIndex)
         entry->cpqNicIfLogMapNumSwitchovers = 0;
         entry->cpqNicIfLogMapHwLocation[0] = '\0';
         entry->cpqNicIfLogMapHwLocation_len = 0;
+        entry->cpqNicIfLogMapPciLocation[0] = '\0';
+        entry->cpqNicIfLogMapPciLocation_len = 0;
         entry->cpqNicIfLogMapVlanCount = 0;
         entry->cpqNicIfLogMapVlans[0] = (char)0;
 
@@ -1659,7 +1691,7 @@ int netsnmp_arch_iflog_container_load(netsnmp_container *container)
     ifLogMapOverallStatus = STATUS_OK;
 
     if ((iCount = scandir("/sys/class/net", 
-                          &filelist, file_select, versionsort)) <= 0) {
+                          &filelist, enet_select, versionsort)) <= 0) {
         if (iCount == -1)
             DEBUGMSGTL(("cpqnic:arch","ERRNO = %d\n", errno));
         return(iCount);
