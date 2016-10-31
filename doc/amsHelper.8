@@ -1,15 +1,15 @@
 .\" /**************************************************************************
 .\"    Copyright 2011 Hewlett-Packard Development Company, L.P.
 .\" ***************************************************************************/
-.TH HPHELPER 1m "March 1 2011"
+.TH AMSHELPER 1m "Nov 1 2015"
 .UC 4
 .SH NAME
-hpHelper - HP Agentless Management Service daemon for ProLiant.
+amsHelper - Agentless Management Service daemon.
 .SH SYNOPSIS
-hpHelper [-f] [-D<string>] -I<interval> -P<interval> -L
+amsHelper [-f] [-D<string>] -I<interval> -P<interval> -L
 .SH DESCRIPTION
-The hpHelper enables the iLO4 Agentless Management Service (AMS) to respond to
-SNMP queries that it would otherwise not be able to, without hpHelper running.
+The amsHelper enables the iLO4 Agentless Management Service (AMS) to respond to
+SNMP queries that it would otherwise not be able to, without amsHelper running.
 .SH COMMAND LINE ARGUMENTS
 .IP "-f"
 Run in the foreground.  
@@ -35,5 +35,7 @@ The <interval> parameter specifies the number of seconds between RFC 2741 (Agent
 15 = PING Request packets are sent every 15 seconds (default)
 .IP "-L"
 Do not open a log file; print all messages to stderr.
+.IP "-V<string>"
+The : separated <string> parameter specifies the leading parts of the RPM Vendor to include in the cpqHoSwVerTable
 .PD 1
 

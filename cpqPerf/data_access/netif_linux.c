@@ -35,6 +35,7 @@ int netsnmp_arch_netif_container_load(netsnmp_container* container)
 
     read_line_t *netiflines = NULL;
 
+    gettimeofday(&prev_time, NULL);
     gettimeofday(&curr_time, NULL);
 
     DEBUGMSGTL(("linosnetif:container:load", "loading\n"));
@@ -81,7 +82,7 @@ int netsnmp_arch_netif_container_load(netsnmp_container* container)
                     entry->curr_txbytes - entry->prev_txbytes;
                 entry->cpqLinOsNetworkInterfaceTxPackets = 
                     entry->curr_txpkts - entry->prev_txpkts;
-                entry->cpqLinOsNetworkInterfaceRxBytes;
+                entry->cpqLinOsNetworkInterfaceRxBytes =
                     entry->curr_rxbytes - entry->prev_rxbytes;
                 entry->cpqLinOsNetworkInterfaceRxPackets = 
                     entry->curr_rxpkts - entry->prev_rxpkts;
@@ -95,18 +96,17 @@ int netsnmp_arch_netif_container_load(netsnmp_container* container)
                 if (interval) {
                     entry->cpqLinOsNetworkInterfaceTxBytesPerSec = 
                         entry->cpqLinOsNetworkInterfaceTxBytes/interval;
-                    entry->cpqLinOsNetworkInterfaceTxPacketsPerSec;
+                    entry->cpqLinOsNetworkInterfaceTxPacketsPerSec =
                         entry->cpqLinOsNetworkInterfaceTxPackets/interval;
                     entry->cpqLinOsNetworkInterfaceRxBytesPerSec =
                         entry->cpqLinOsNetworkInterfaceRxBytes/interval;
                     entry->cpqLinOsNetworkInterfaceRxPacketsPerSec =
                         entry->cpqLinOsNetworkInterfaceRxPackets/interval;
-    
                 }
             } else {
                 char * start;
                 entry = cpqLinOsNetworkInterfaceTable_createEntry(container, (oid)index);
-                if (start = strrchr(iface, ' '))
+                if ((start = strrchr(iface, ' ')) != (char *)NULL)
                     strncpy(entry->cpqLinOsNetworkInterfaceName, ++start,
                             sizeof(entry->cpqLinOsNetworkInterfaceName) - 1);
                 else 

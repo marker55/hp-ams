@@ -25,7 +25,7 @@ DLFLAGS=-fPIC -shared
 CFLAGS    ?= -fno-strict-aliasing $(OPT) -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux 
 CPPFLAGS = -I../.. -I. -I.. $(NETSNMPINC)
 
-OBJS=pci_$(OS).o
+OBJS=pci_$(OS).o nvme_$(OS).o
 
 #SUBDIRS := libcpqnic
 

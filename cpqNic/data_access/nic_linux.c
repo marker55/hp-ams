@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <strings.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -46,10 +47,11 @@ typedef __u8 u8;
 #include "cpqNicIfLogMapTable.h"
 #include "cpqNicIfPhysAdapterTable.h"
 
-#include "hpHelper.h"
+#include "amsHelper.h"
 #include "cpqNic.h"
 #include "cpqnic.h"
 #include "nic_linux.h"
+#include "pci_linux.h"
 //#include "nic_db.h"
 #include "utils.h"
 #include "smbios.h"
@@ -71,21 +73,13 @@ typedef __u8 u8;
 
 extern unsigned char cpqHoMibHealthStatusArray[];
 extern int trap_fire;
+extern pci_node *pci_root;
 
 static struct ifreq  ifr;
 char    ifLogMapOverallStatus = 2;
 
 #define SYSBUSPCISLOTS "/sys/bus/pci/slots/"
 #define PROCFILE "/proc/net/if_inet6"
-
-char *nic_names[] = {"eth",
-    "em",
-    "peth",
-    "vmnic",
-    "eno",
-    "enp",
-    "ens",
-    (char *) 0};
 
 /* below array corresponds to above _BOND defines*/
 char *(MapGroupType[]) = 
@@ -130,22 +124,7 @@ char *(MapNicType[]) =
 #define TLB_BOND            5
 #define ALB_BOND            6
 
-char* pch_nl;
-#define CLOBBER_NL(pstr)                        \
-{                                               \
-    pch_nl = strchr(pstr,'\n');                 \
-    if (pch_nl != (char*)0)                     \
-    *pch_nl = '\0';                         \
-}
-
-/* used as initial value of pchInterfaceName above so we don't have */
-/* to check for null ptr before strcmp                              */
-char *pchNoInterface = "-";
-#define NUM_IF_LAST_CHANGE_ENTRIES  10
-
-#define     LINES_TO_ALLOC   10    /* number of lines to alloc at a time */
 /* for reading procfs...              */
-extern int name2indx(char *name);
 extern int get_nic_port(char * name);
 extern int name2pindx(char *name);
 int32_t get_pcislot(char *);
@@ -238,8 +217,10 @@ int get_ifrole(cpqNicIfPhysAdapterTable_entry* nic)
             if (strcmp(value, nic->devname) == 0) {
                 free(value);
                 return 2;
-            } else
+            } else {
+                free(value);
                 return 3;
+            }
         } else 
             return 4;
     }
@@ -282,9 +263,14 @@ int get_iftype(char *netdev)
     struct dirent **filelist;
     struct stat sb;
     char buffer[256];
+    int ret;
 
     int count;
     int i = 0;
+
+    sprintf(buffer, "/sys/class/net/%s/device", netdev);
+    if (stat(buffer, &sb) == 0)
+        return NIC;
 
     if (!strcmp(netdev, "lo"))
         return LOOP;
@@ -292,60 +278,42 @@ int get_iftype(char *netdev)
     if (!strncmp(netdev, "sit", 3))
         return SIT;
 
-    while (nic_names[i] != (char *) 0) {
-        if (!strncmp(netdev, nic_names[i], strlen(nic_names[i]))) {
-            if (strchr(netdev, '.') == NULL)
-                return NIC;
-            else
+    if (strchr(netdev, '.') !=  (char *) NULL)
                 return VLAN;
-        }
-        i++;
-    }
+
     sprintf(buffer, "/sys/class/net/%s/bonding", netdev);
     if (stat(buffer, &sb) == 0)
         return BOND;
 
     sprintf(buffer, "/sys/class/net/%s/brport", netdev);
-    if (stat(buffer, &sb) == 0) {
-        sprintf(buffer, "/sys/class/net/%s/device", netdev);
-        if (stat(buffer, &sb) != 0) 
+    if (stat(buffer, &sb) == 0) 
             return VNIC;
-        else 
-            return NIC;
-    }
 
     sprintf(buffer, "/sys/class/net/%s/brif/", netdev);
     if (stat(buffer, &sb) == 0) {
         if ((count = scandir(buffer, &filelist, file_select, alphasort)) > 0 ) {
-            i = 0;
-            while (nic_names[i] != (char *) 0) {
-                if (!strncmp(filelist[0]->d_name, nic_names[i], 
-                            strlen(nic_names[i]))) {
-                    free(filelist[0]);
-                    free(filelist);
-                    return BRIDGE;
-                } else
-                    i++;
+            ret = BRIDGE;
+            for (i = 0; i < count; i++) {
+                if (get_iftype(filelist[i]->d_name) == VNIC)
+                    ret = VBRIDGE;
+                free(filelist[i]);
             }
-            free(filelist[0]);
             free(filelist);
-            return VBRIDGE;
+            return ret;
         }
-        else 
-            return VBRIDGE;
     }
     return 0;
 }
 
-int get_iftype_idx(int index)
+int get_iftype_idx(int indx)
 {
     char  ifname[IF_NAMESIZE];
     char *devname;
 
-    if (index < 0 )
+    if (indx < 0 )
         return NIC;
 
-    devname = if_indextoname((unsigned int) index, ifname);
+    devname = if_indextoname((unsigned int) indx, ifname);
 
     if (devname == NULL)
         return NIC;
@@ -363,11 +331,16 @@ int setMACaddr(char * name, unsigned char * MacAddr) {
     int len = 0;
     int j;
 
+    if (!strncmp(name, "lo", 2)) {
+        MacAddr[0] = '\0';
+        return 0;
+    }
+        
     sprintf(address, "/sys/class/net/%s/address", name);
     sprintf(address_len, "/sys/class/net/%s/addr_len", name);
 
     if ((buffer = get_sysfs_str(address)) != NULL )  {
-        DEBUGMSGTL(("cpqnic:arch","MAC length file = %s\n",address_len));
+        DEBUGMSGTL(("cpqnic:arch","MAC length file = %s\n", address_len));
 
         if ((len = get_sysfs_int(address_len)) == 4) 
             sscanf(buffer, "%x:%x:%x:%x", &MAC[0], &MAC[1], &MAC[2], &MAC[3]);
@@ -432,14 +405,24 @@ int get_if_status(char *interface) {
         snprintf(attribute, 255, "/sys/class/net/%s/operstate", interface);
         if ((value = get_sysfs_str(attribute)) != NULL) {
             DEBUGMSGTL(("cpqnic:arch", "Operstate (%s) = %s\n", attribute, value));
-            if (strcmp(value, "up") == 0) 
+            if (strcmp(value, "up") == 0) {
+                free(value);
                 return ADAPTER_CONDITION_OK;
-            else if ((strcmp(value, "unknown") == 0) && (iff & IFF_LOOPBACK))
+            } else if (strcmp(value, "unknown") == 0) {
+                if (iff & IFF_LOOPBACK) {
+                free(value);
                 return ADAPTER_CONDITION_OK;
-            else if (strcmp(value, "down") == 0) 
+                } else {
+                    free(value);
+                    return ADAPTER_CONDITION_FAILED;
+                } 
+            } else if (strcmp(value, "down") == 0) {
+                free(value);
                 return ADAPTER_CONDITION_FAILED;
-            else 
+            } else  {
+                free(value);
                 return ADAPTER_CONDITION_OTHER;
+            }
 
             free(value);
         }
@@ -651,7 +634,8 @@ static int SendNicTrap(int specific_type,
         /* Get SiServerSystemId from SmBIOS  */
         SmbGetRecordByType(SMBIOS_HPOEM_SYSID, 0, (void *)&pRecord);
         memset(ServerSystemId, 0, SYSTEM_ID_LEN + 14);
-        strncpy(ServerSystemId, (char *)SmbGetStringByNumber(pRecord, 1), 9);
+        strncpy(ServerSystemId, "CPQ", 3);
+        strncat(ServerSystemId, (char *)SmbGetStringByNumber(pRecord, 1) + 5, 4);
 
         /* get IPv4/6 address associated with this interface */
         strcpy(ipLinkAddr, "0.0.0.0");
@@ -734,17 +718,17 @@ static int SendNicTrap(int specific_type,
     snmp_varlist_add_variable(&var_list, cpqHoTrapFlags,
             sizeof(cpqHoTrapFlags) / sizeof(oid),
             ASN_INTEGER, &cpqHoTrapFlag,
-            sizeof(ASN_INTEGER));
+            sizeof(cpqHoTrapFlag));
 
     snmp_varlist_add_variable(&var_list, cpqNicIfPhysAdapterSlot,
             sizeof(cpqNicIfPhysAdapterSlot) / sizeof(oid),
             ASN_INTEGER, (u_char *) &nic->cpqNicIfPhysAdapterSlot,
-            sizeof(ASN_INTEGER));
+            sizeof(nic->cpqNicIfPhysAdapterSlot));
 
     snmp_varlist_add_variable(&var_list, cpqNicIfPhysAdapterPort,
             sizeof(cpqNicIfPhysAdapterPort) / sizeof(oid),
             ASN_INTEGER, (u_char *) &nic->cpqNicIfPhysAdapterPort,
-            sizeof(ASN_INTEGER));
+            sizeof(nic->cpqNicIfPhysAdapterPort));
 
     snmp_varlist_add_variable(&var_list, cpqSiServerSystemId,
             sizeof(cpqSiServerSystemId) / sizeof(oid),
@@ -755,7 +739,7 @@ static int SendNicTrap(int specific_type,
     snmp_varlist_add_variable(&var_list, cpqNicIfPhysAdapterStatus,
             sizeof(cpqNicIfPhysAdapterStatus) / sizeof(oid),
             ASN_INTEGER, (u_char *) &nic->cpqNicIfPhysAdapterStatus,
-            sizeof(ASN_INTEGER));
+            sizeof(nic->cpqNicIfPhysAdapterStatus));
 
     snmp_varlist_add_variable(&var_list, cpqSePciSlotBoardName,
             sizeof(cpqSePciSlotBoardName) / sizeof(oid),
@@ -773,7 +757,7 @@ static int SendNicTrap(int specific_type,
             sizeof(ipAdEntAddr) / sizeof(oid),
             ASN_IPADDRESS,
             (u_char *) ipAddr,
-            sizeof(ASN_IPADDRESS));
+            sizeof(ipAddr));
 
     snmp_varlist_add_variable(&var_list, cpqNicIfLogMapIPV6Address,
             sizeof(cpqNicIfLogMapIPV6Address) / sizeof(oid),
@@ -789,7 +773,7 @@ static int SendNicTrap(int specific_type,
                 sizeof(cpqNicIfLogMapAdapterOKCount) / sizeof(oid),
                 ASN_INTEGER,
                 &iflogmap_entry->cpqNicIfLogMapAdapterOKCount,
-                sizeof(ASN_INTEGER));
+                sizeof(iflogmap_entry->cpqNicIfLogMapAdapterOKCount));
     }
 
     DEBUGMSGTL(("cpqnic:trap","calling netsnmp_send_trap...\n"));
@@ -822,9 +806,11 @@ void initcpqNicIfPhys_entry(cpqNicIfPhysAdapterTable_entry* entry)
     entry->cpqNicIfPhysAdapterMemAddr = 0;
     entry->cpqNicIfPhysAdapterAggregationGID = -1;
     entry->cpqNicIfPhysAdapterFWVersion[0] = '\0';
-    strcpy(entry->cpqNicIfPhysAdapterPartNumber, "UNKNOWN");
+    strcpy(entry->cpqNicIfPhysAdapterPartNumber, "");
+    entry->cpqNicIfPhysAdapterPartNumber_len = 0;
     /* default "empty" per mib */
-    strcpy(entry->cpqNicIfPhysAdapterName, "EMPTY"); 
+    strcpy(entry->cpqNicIfPhysAdapterName, ""); 
+    entry->cpqNicIfPhysAdapterName_len = 0; 
 
     entry->cpqNicIfPhysAdapterRole = ADAPTER_ROLE_NOTAPPLICABLE;
 
@@ -838,6 +824,9 @@ void initcpqNicIfPhys_entry(cpqNicIfPhysAdapterTable_entry* entry)
 
     entry->cpqNicIfPhysAdapterHwLocation[0] = '\0';
     entry->cpqNicIfPhysAdapterHwLocation_len = 0;
+
+    entry->cpqNicIfPhysAdapterPciLocation[0] = '\0';
+    entry->cpqNicIfPhysAdapterPciLocation_len = 0;
 
 }
 
@@ -999,7 +988,7 @@ void cpqNicIfPhysAdapter_reload_entry(cpqNicIfPhysAdapterTable_entry *entry)
                 entry->devname));
 }
 
-cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container *container, oid index) 
+cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container *container, oid indx) 
 {
     char  ifname[IF_NAMESIZE];
     char *devname;
@@ -1026,8 +1015,9 @@ cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container
     ssize_t link_sz;
     char    devlinkBuf[1024];
     ssize_t devlink_sz;
+    char *pcidevice;
 
-    devname = if_indextoname((unsigned int) index, ifname);
+    devname = if_indextoname((unsigned int) indx, ifname);
     if (devname == NULL)
         return NULL;
 
@@ -1043,14 +1033,16 @@ cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container
     linkBuf[link_sz] = 0;
 
     DEBUGMSGTL(("cpqnic:container:load", "Create new entry\n"));
-    oid_index[0] = index;
+    oid_index[0] = indx;
     tmp.len = 1;
     tmp.oids = &oid_index[0];
 
 
     entry = CONTAINER_FIND(container, &tmp);
     if (entry == NULL) {
-        entry = cpqNicIfPhysAdapterTable_createEntry(container, index);
+        pci_node* node = pci_root;
+
+        entry = cpqNicIfPhysAdapterTable_createEntry(container, indx);
         if (NULL == entry) {
             return NULL;
         }
@@ -1059,19 +1051,20 @@ cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container
         initcpqNicIfPhys_entry(entry);
         strncpy(entry->devname, devname, 255);
 
-        sscanf(strrchr(&linkBuf[0],'/') + 1, "%x:%x:%x.%x",
-                &domain, &bus, &device, &function);
-        entry->PCI_Bus = bus;
-        entry->PCI_Slot = ((device & 0xFF) << 3) | (function & 0xFF);
-        /* init values to defaults in case they are not in procfs */
+        pcidevice = strrchr(&linkBuf[0],'/') + 1;
+        while (node != NULL) {
+            if (!strncmp((char *)node->sysdev, pcidevice, strlen(pcidevice)))
+                break;
+            else
+                node = node->pci_next;
+        }
+     
         entry->cpqNicIfPhysAdapterSlot = -1;
-        entry->cpqNicIfPhysAdapterPort = function + 1;
-        DEBUGMSGTL(("cpqnic:data", "PCI Function = %d\n", function));
     
-        entry->cpqNicIfPhysAdapterIfNumber[0] = (char)(index & 0xff);
-        entry->cpqNicIfPhysAdapterIfNumber[1] = (char)((index>>8)  & 0xff);
-        entry->cpqNicIfPhysAdapterIfNumber[2] = (char)((index>>16) & 0xff);
-        entry->cpqNicIfPhysAdapterIfNumber[3] = (char)((index>>24) & 0xff);
+        entry->cpqNicIfPhysAdapterIfNumber[0] = (char)(indx & 0xff);
+        entry->cpqNicIfPhysAdapterIfNumber[1] = (char)((indx>>8)  & 0xff);
+        entry->cpqNicIfPhysAdapterIfNumber[2] = (char)((indx>>16) & 0xff);
+        entry->cpqNicIfPhysAdapterIfNumber[3] = (char)((indx>>24) & 0xff);
     
         entry->cpqNicIfPhysAdapterIfNumber[4] = 0;
         entry->cpqNicIfPhysAdapterIfNumber[5] = 0;
@@ -1079,6 +1072,8 @@ cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container
         entry->cpqNicIfPhysAdapterIfNumber[7] = 0;
         entry->cpqNicIfPhysAdapterIfNumber_len = 8;
     
+        entry->cpqNicIfPhysAdapterPort = -1;
+   
         entry->cpqNicIfPhysAdapterMemAddr = (int) get_nic_memaddr(devname);
     
         if (sock < 0) 
@@ -1094,6 +1089,74 @@ cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container
             }
         }
     
+        if (get_ethtool_info(devname, &einfo) == 0) {
+            int nic_port;	
+            DEBUGMSGTL(("cpqnic:container:load", "Got ethtool info for %s\n", 
+                        devname));  
+            entry->cpqNicIfPhysAdapterPciLocation_len = 
+                snprintf(entry->cpqNicIfPhysAdapterPciLocation,
+                         256, "%s", einfo.bus_info);
+ 
+            if ((nic_port = get_nic_port(devname)) > 0)
+                entry->cpqNicIfPhysAdapterPort = nic_port;
+            DEBUGMSGTL(("cpqnic:data", "NIC port = %d\n", entry->cpqNicIfPhysAdapterPort));
+
+            entry->cpqNicIfPhysAdapterSlot = getPCIslot_str(einfo.bus_info);
+ 
+            if (entry->cpqNicIfPhysAdapterSlot > 0 ) {
+                DEBUGMSGTL(("cpqnic:container:load", "Got pcislot info for %s = %u\n",
+                            devname,
+                            entry->cpqNicIfPhysAdapterSlot));
+                entry->cpqNicIfPhysAdapterHwLocation_len = 
+                    snprintf(entry->cpqNicIfPhysAdapterHwLocation, 
+                             255, "Slot %d", entry->cpqNicIfPhysAdapterSlot);
+            } else {
+                if (entry->cpqNicIfPhysAdapterSlot == 0) {
+                    strcpy(entry->cpqNicIfPhysAdapterHwLocation, "Embedded");
+                    entry->cpqNicIfPhysAdapterHwLocation_len = 
+                        strlen(entry->cpqNicIfPhysAdapterHwLocation);
+                }
+            } 
+ 
+            if ( einfo.firmware_version ) {
+                strcpy(entry->cpqNicIfPhysAdapterFWVersion, 
+                        einfo.firmware_version);
+                entry->cpqNicIfPhysAdapterFWVersion_len = 
+                    strlen(entry->cpqNicIfPhysAdapterFWVersion);
+            }
+            for (iMacLoop = 0; iMacLoop<MAC_ADDRESS_BYTES; iMacLoop++) {
+            /* If einfo.perm_addr is all 0's, the ioctl must've failed*/
+                if (einfo.perm_addr[iMacLoop]) {
+                    memcpy(entry->cpqNicIfPhysAdapterMACAddress, 
+                            einfo.perm_addr, 
+                            sizeof(entry->cpqNicIfPhysAdapterMACAddress));
+                    entry->cpqNicIfPhysAdapterMACAddress_len = 
+                        MAC_ADDRESS_BYTES;
+                    break;
+                }
+            }
+            free_ethtool_info_members(&einfo);
+            entry->cpqNicIfPhysAdapterMACAddress_len =
+                setMACaddr(devname,
+                    (unsigned char *)entry->cpqNicIfPhysAdapterMACAddress);
+
+        } else 
+            DEBUGMSGTL(("cpqnic:container:load", "ethtool FAILED for %s\n",
+                        devname));
+
+        if (node == NULL) { 
+            sscanf(pcidevice, "%x:%x:%x.%x",
+                    &domain, &bus, &device, &function);
+
+            entry->PCI_Bus = bus;
+            entry->PCI_Slot = ((device & 0xFF) << 3) | (function & 0xFF);
+            /* init values to defaults in case they are not in procfs */
+            DEBUGMSGTL(("cpqnic:data", "Before NIC port = %d\n", entry->cpqNicIfPhysAdapterPort));
+            if (!entry->cpqNicIfPhysAdapterPort)
+                entry->cpqNicIfPhysAdapterPort = function + 1;
+            DEBUGMSGTL(("cpqnic:data", "PCI Function = %d\n", function));
+            DEBUGMSGTL(("cpqnic:data", "After NIC port = %d\n", entry->cpqNicIfPhysAdapterPort));
+
         strcpy(attribute, buffer);
         strcat(attribute, "/device");
         if ((devlink_sz = readlink(attribute, devlinkBuf, 1024)) < 0) {
@@ -1133,76 +1196,109 @@ cpqNicIfPhysAdapterTable_entry* netsnmp_arch_ifphys_entry_load(netsnmp_container
         /* get model name and part number from database created struct */
         pnic_hw_db = get_nic_hw_info(VendorID, DeviceID,
                 SubsysVendorID, SubsysDeviceID);
-        if (pnic_hw_db != NULL) {
-            /* over-ride info read from procfs/hpetfe */
-            strcpy(entry->cpqNicIfPhysAdapterName, pnic_hw_db->pname);
-            entry->cpqNicIfPhysAdapterName_len =
-                strlen(entry->cpqNicIfPhysAdapterName);
-            if (strlen(pnic_hw_db->pspares_part_number))
-                strcpy(entry->cpqNicIfPhysAdapterPartNumber, 
-                        pnic_hw_db->pspares_part_number);
-            else
-                strcpy(entry->cpqNicIfPhysAdapterPartNumber, 
-                        pnic_hw_db->ppca_part_number);
-            entry->cpqNicIfPhysAdapterPartNumber_len = 
-                strlen(entry->cpqNicIfPhysAdapterPartNumber);
-        }
     
         strcpy(attribute, buffer);
         strcat(attribute, "/device/irq");
         entry->cpqNicIfPhysAdapterIrq = get_sysfs_int(attribute);
     
-        if (get_ethtool_info(devname, &einfo) == 0) {
-            int nic_port;	
-            DEBUGMSGTL(("cpqnic:container:load", "Got ethtool info for %s\n", 
-                        devname));  
+        } else {    
+            pci_node* node0 = pci_root;
+            char sysdev0[16];
     
-            if ((nic_port = get_nic_port(devname)) > 0)
-                entry->cpqNicIfPhysAdapterPort = nic_port;
+            entry->PCI_Bus = node->bus;
+            entry->PCI_Slot = ((node->dev & 0xFF) << 3) | (node->func & 0xFF);
+            /* init values to defaults in case they are not in procfs */
+            DEBUGMSGTL(("cpqnic:data", "Before2 NIC port = %d\n", entry->cpqNicIfPhysAdapterPort));
+            if (!entry->cpqNicIfPhysAdapterPort)
+                entry->cpqNicIfPhysAdapterPort = node->func + 1;
+            DEBUGMSGTL(("cpqnic:data", "PCI Function = %d\n", node->func));
+            DEBUGMSGTL(("cpqnic:data", "After2 NIC port = %d\n", entry->cpqNicIfPhysAdapterPort));
+            entry->cpqNicIfPhysAdapterIrq = node->irq;
     
-            entry->cpqNicIfPhysAdapterSlot = getPCIslot_str(einfo.bus_info);
+            memset(sysdev0, 0 , 16);
+            strncpy(sysdev0, (char *)node->sysdev, 16);
+            /* get PCI device and subdevice from Function 0.
+             * some Devices have corrupted subsystem ID for
+             * functions other than 0
+             */
+            sysdev0[strlen(sysdev0) - 1] = '0';
     
-            if (entry->cpqNicIfPhysAdapterSlot > 0 ) {
-                DEBUGMSGTL(("cpqnic:container:load", "Got pcislot info for %s = %u\n",
-                            devname,
-                            entry->cpqNicIfPhysAdapterSlot));
-    
-                if (entry->cpqNicIfPhysAdapterSlot > 0x1000)
-                    entry->cpqNicIfPhysAdapterHwLocation_len =
-                        snprintf(entry->cpqNicIfPhysAdapterHwLocation,
-                                256,
-                                "Blade %u, Slot %u",
-                                (entry->cpqNicIfPhysAdapterSlot>>8) & 0xF,
-                                (entry->cpqNicIfPhysAdapterSlot>>16) & 0xFF);
+            while (node0 != NULL) {
+                if (!strncmp((char *)node0->sysdev, sysdev0, strlen(sysdev0)))
+                    break;
                 else
-                    entry->cpqNicIfPhysAdapterHwLocation_len =
-                        snprintf(entry->cpqNicIfPhysAdapterHwLocation,
-                                256,
-                                "Slot %u",
-                                entry->cpqNicIfPhysAdapterSlot);
+                    node0 = node0->pci_next;
             } 
     
-            if ( einfo.firmware_version ) {
-                strcpy(entry->cpqNicIfPhysAdapterFWVersion, 
-                        einfo.firmware_version);
-                entry->cpqNicIfPhysAdapterFWVersion_len = 
-                    strlen(entry->cpqNicIfPhysAdapterFWVersion);
-            }
-            for (iMacLoop = 0; iMacLoop<MAC_ADDRESS_BYTES; iMacLoop++) {
-            /* If einfo.perm_addr is all 0's, the ioctl must've failed*/
-                if (einfo.perm_addr[iMacLoop]) {
-                    memcpy(entry->cpqNicIfPhysAdapterMACAddress, 
-                            einfo.perm_addr, 
-                            sizeof(entry->cpqNicIfPhysAdapterMACAddress));
-                    entry->cpqNicIfPhysAdapterMACAddress_len = 
-                        MAC_ADDRESS_BYTES;
+            if ((node0->vpd_productname) && !strncmp((char *)node0->vpd_productname,"HP", 2)) {
+                DEBUGMSGTL(("cpqnic:data", "Using VPD PN\n"));
+                entry->cpqNicIfPhysAdapterName_len = snprintf(entry->cpqNicIfPhysAdapterName,
+                        256, "%s", node0->vpd_productname);
+            } else {
+                vpd_node* vnode = node0->vpd_data;
+                while (vnode != NULL){
+                    if ((vnode->data != NULL) && !strncmp((char *)vnode->data, "HP", 2)) {
+                        DEBUGMSGTL(("cpqnic:data", "Using VPD other\n"));
+                        entry->cpqNicIfPhysAdapterName_len = snprintf(entry->cpqNicIfPhysAdapterName,
+                            256, "%s", vnode->data);
                     break;
+                    } else
+                        vnode = vnode->next;
                 }
             }
-            free_ethtool_info_members(&einfo);
-        } else 
-            DEBUGMSGTL(("cpqnic:container:load", "ethtool FAILED for %s\n",
-                        devname));
+            if (node0->vendor_id == 0x19a2) {
+                char * comma;
+                if (node0->vpd_productname) {
+                    comma = index(node0->vpd_productname, ',');
+                    if (comma != NULL) {
+                        entry->cpqNicIfPhysAdapterPartNumber_len =
+                            (unsigned long)comma - (unsigned long)node0->vpd_productname;
+                        strncpy(entry->cpqNicIfPhysAdapterPartNumber,
+                                node0->vpd_productname,
+                                entry->cpqNicIfPhysAdapterPartNumber_len);
+                    }
+                }
+            }
+
+            if (node0->vendor_id == 0x14e4) {
+                vpd_node* vnode = node0->vpd_data;
+                while (vnode != NULL){
+                    if (!strncmp((char *)vnode->tag, "VA", 2)) {
+                        entry->cpqNicIfPhysAdapterFWVersion_len = snprintf(entry->cpqNicIfPhysAdapterFWVersion,
+                            256, "%s", vnode->data);
+                        break;
+                    } 
+                    if (!strncmp((char *)vnode->tag, "V3", 2)) {
+                        entry->cpqNicIfPhysAdapterFWVersion_len = snprintf(entry->cpqNicIfPhysAdapterFWVersion,
+                            256, "%s", vnode->data);
+                        break;
+                    }
+                    else
+                        vnode = vnode->next;
+                }
+            }
+            pnic_hw_db = get_nic_hw_info(node0->vendor_id, node0->device_id,
+                    node0->subvendor_id, node0->subdevice_id);
+        }
+        if (entry->cpqNicIfPhysAdapterPartNumber_len == 0) {
+        DEBUGMSGTL(("cpqnic:data", "Using NIC DB\n"));
+        if (pnic_hw_db != NULL) {
+                if (strlen(pnic_hw_db->ppca_part_number))
+                strcpy(entry->cpqNicIfPhysAdapterPartNumber, 
+                            pnic_hw_db->ppca_part_number);
+            else
+                strcpy(entry->cpqNicIfPhysAdapterPartNumber, 
+                            pnic_hw_db->pspares_part_number);
+            entry->cpqNicIfPhysAdapterPartNumber_len = 
+                strlen(entry->cpqNicIfPhysAdapterPartNumber);
+            /* if product name is empty and we have an entry in the nic_db */
+            if (strlen(entry->cpqNicIfPhysAdapterName) == 0) {
+                strcpy(entry->cpqNicIfPhysAdapterName, pnic_hw_db->pname);
+                entry->cpqNicIfPhysAdapterName_len =
+                    strlen(entry->cpqNicIfPhysAdapterName);
+            }
+        }
+    }
     }
     return entry;
 } 
@@ -1234,7 +1330,7 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
     DEBUGMSGTL(("cpqnic:arch", "netsnmp_arch_ifphys_container_load entry\n"));
 
     if ((devcount = scandir("/sys/class/net/",
-                    &devlist, file_select, alphasort)) <= 0) {
+                    &devlist, enet_select, alphasort)) <= 0) {
         cpqHoMibHealthStatusArray[CPQMIBHEALTHINDEX] = mibStatus;
         cpqHostMibStatusArray[CPQMIB].cond = mibStatus;
         return(0);
@@ -1250,7 +1346,6 @@ int netsnmp_arch_ifphys_container_load(netsnmp_container *container)
         tmp.oids = &oid_index[0];
 
         old = CONTAINER_FIND(container, &tmp);
-
         DEBUGMSGTL(("cpqnic:container:load", "Old nic=%p\n",old));
         if (old != NULL ) {
             DEBUGMSGTL(("cpqnic:container:load", "Re-Use old entry\n"));
@@ -1555,6 +1650,9 @@ netsnmp_arch_iflogmap_entry_load(netsnmp_container *container, oid ifIndex)
                     entry->cpqNicIfLogMapMACAddress_len));
         entry->cpqNicIfLogMapNumSwitchovers = 0;
         entry->cpqNicIfLogMapHwLocation[0] = '\0';
+        entry->cpqNicIfLogMapHwLocation_len = 0;
+        entry->cpqNicIfLogMapPciLocation[0] = '\0';
+        entry->cpqNicIfLogMapPciLocation_len = 0;
         entry->cpqNicIfLogMapVlanCount = 0;
         entry->cpqNicIfLogMapVlans[0] = (char)0;
 
@@ -1593,7 +1691,7 @@ int netsnmp_arch_iflog_container_load(netsnmp_container *container)
     ifLogMapOverallStatus = STATUS_OK;
 
     if ((iCount = scandir("/sys/class/net", 
-                          &filelist, file_select, versionsort)) <= 0) {
+                          &filelist, enet_select, versionsort)) <= 0) {
         if (iCount == -1)
             DEBUGMSGTL(("cpqnic:arch","ERRNO = %d\n", errno));
         return(iCount);

@@ -67,9 +67,18 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
 	strcpy(entry->cpqHoSwVerName, package);
         entry->cpqHoSwVerName_len = strlen(package);
 
-        entry->cpqHoSwVerType = (strcmp(essential, "yes") == 0)
-                        ? 2      /* operatingSystem */
-                        : 5;     /*  application    */
+        entry->cpqHoSwVerType = 5;     /*  application    */
+        if (strstr(package, "-firmware-"))
+            entry->cpqHoSwVerType = 7;  /* need to add new type */
+        if (!strncmp(package, "kmod-", 5) || strstr(package, "-kmp-"))
+            entry->cpqHoSwVerType = 2;
+        if (entry->cpqHoSwVerType == 5) {
+            if (strcasestr(description, "agent"))
+                 entry->cpqHoSwVerType = 3;
+            if (strcasestr(description, "tool") ||
+                strcasestr(description, "util"))
+                 entry->cpqHoSwVerType = 4;
+        }
 
         entry->cpqHoSwVerDescription_len = strlen(description);
         strcpy(entry->cpqHoSwVerDescription, description);
@@ -91,6 +100,7 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
         rc = CONTAINER_INSERT(container, entry);
 
     }
+    pclose(p);
 
     cpqHoSwVerNextIndex = (oid)CONTAINER_SIZE(container);
     DEBUGMSGTL(("cpqHoSwVerTable:load:arch", "loaded %d entries\n",

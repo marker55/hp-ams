@@ -99,7 +99,7 @@ initialize_table_cpqSePciFunctTable(void)
      *
      * inject cache helper
      */
-    cache = netsnmp_cache_create(1200,    /* timeout in seconds */
+    cache = netsnmp_cache_create(300,    /* timeout in seconds */
                                  _cache_load, _cache_free,
                                  cpqSePciFunctTable_oid,
                                  cpqSePciFunctTable_oid_len);
@@ -108,7 +108,12 @@ initialize_table_cpqSePciFunctTable(void)
         snmp_log(LOG_ERR, "error creating cache for cpqSePciFunctTable\n");
         goto bail;
     }
-    cache->flags = NETSNMP_CACHE_DONT_INVALIDATE_ON_SET;
+    cache->flags = NETSNMP_CACHE_PRELOAD |
+                   NETSNMP_CACHE_DONT_FREE_EXPIRED |
+                   NETSNMP_CACHE_DONT_AUTO_RELEASE |
+                   NETSNMP_CACHE_DONT_FREE_BEFORE_LOAD |
+                   NETSNMP_CACHE_DONT_INVALIDATE_ON_SET;
+
     cache->magic = container;
 
     handler = netsnmp_cache_handler_get(cache);
@@ -170,7 +175,18 @@ cpqSePciFunctTable_createEntry(netsnmp_container * container,
                                oid cpqSePciFunctDeviceNumberIndex,
                                oid cpqSePciFunctIndex)
 {
+    netsnmp_index tmp;
+    oid oid_index[3];
     cpqSePciFunctTable_entry *entry;
+
+    oid_index[0] = cpqSePciFunctBusNumberIndex;
+    oid_index[1] = cpqSePciFunctDeviceNumberIndex;
+    oid_index[2] = cpqSePciFunctIndex;
+    tmp.len = 3;
+    tmp.oids = &oid_index[0];
+
+    if ((entry = CONTAINER_FIND(container, &tmp)) != NULL)
+        return entry;
 
     entry = SNMP_MALLOC_TYPEDEF(cpqSePciFunctTable_entry);
     if (!entry)
@@ -181,6 +197,9 @@ cpqSePciFunctTable_createEntry(netsnmp_container * container,
     entry->cpqSePciFunctIndex = cpqSePciFunctIndex;
     entry->oid_index.len = 3;
     entry->oid_index.oids = (oid *) &entry->cpqSePciFunctBusNumberIndex;
+
+    CONTAINER_INSERT(container, entry);
+
     return entry;
 }
 

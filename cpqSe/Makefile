@@ -25,7 +25,7 @@ NETSNMPINC=$(shell if [ -f $(NETSNMPDIR)/net-snmp-config ] ; then \
 CFLAGS          ?= -fno-strict-aliasing $(OPT) -g -pipe -Werror -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux 
 CPPFLAGS = -I. -I.. $(NETSNMPINC)
 DLFLAGS=-fPIC -shared 
-OBJS=cpqStdPciTable.o cpqSePciSlotTable.o cpqSePciFunctTable.o 
+OBJS=cpqStdPciTable.o cpqSePciSlotTable.o cpqSePciFunctTable.o cpqSePCIeDiskTable.o
 PROVIDES=$(shell make provides)
 NETSNMPCONFIG = ../$(NETSNMP)/net-snmp-config
 BUILDAGENTLIBS = $(shell if [ -f $(NETSNMPCONFIG) ] ; then  $(NETSNMPCONFIG) --agent-libs ; fi)

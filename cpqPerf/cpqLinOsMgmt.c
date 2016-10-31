@@ -9,7 +9,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include "cpqLinOsMgmt.h"
-#include "hpHelper.h"
+#include "amsHelper.h"
 #include "cpqLinOsDiskTable.h"
 #include "cpqLinOsNetworkInterfaceTable.h"
 #include "cpqLinOsProcessorTable.h"
@@ -95,10 +95,6 @@ extern void     init_cpqLinOsMgmt();
 /** Initializes the cpqLinOsMgmt module */
 void init_cpqLinOsMib(void)
 {
-    netsnmp_mib_handler *handler = NULL;
-    netsnmp_cache  *cache = NULL;
-    netsnmp_handler_registration *reg;
-    int rc;
 
     netsnmp_register_scalar_group(
         netsnmp_create_handler_registration("cpqLinOsMib", 
@@ -117,7 +113,6 @@ init_cpqLinOsCommon(void)
     netsnmp_mib_handler *handler = NULL;
     netsnmp_cache  *cache = NULL;
     netsnmp_handler_registration *reg;
-    int rc;
 
     int reg_grp_ret = SNMPERR_SUCCESS;
 
@@ -178,8 +173,6 @@ init_cpqLinOsSys(void)
     netsnmp_mib_handler *handler = NULL;
     netsnmp_cache  *cache = NULL;
     netsnmp_handler_registration *reg;
-
-    int rc;
 
     int reg_grp_ret = SNMPERR_SUCCESS;
 

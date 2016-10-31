@@ -5,6 +5,9 @@
 #ifndef CPQSEPCISLOTTABLE_H
 #define CPQSEPCISLOTTABLE_H
 
+extern const oid       cpqSePciSlotTable_oid[];
+extern const size_t    cpqSePciSlotTable_oid_len;
+
 #define PCISLOT_BOARDNAME_SZ    256
 #define PCISLOT_HW_LOCATION_SZ  256
 #define PCISLOT_SUBSYS_SZ       8

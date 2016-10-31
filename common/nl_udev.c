@@ -30,11 +30,12 @@ static void udev_event_process(int fd, void *data) {
     char cred_msg[CMSG_SPACE(sizeof(struct ucred))];
  
     int                buflen, bufpos;
-    char               buf[1024];
+    char               buf[16384];
     char *action = NULL;
     char *subsystem = NULL;
     char *devpath = NULL;
     char *devname = NULL;
+    char *devtype = NULL;
 
     struct udev_callback_header *tmp_cb;
 
@@ -85,6 +86,8 @@ static void udev_event_process(int fd, void *data) {
         key = &buf[bufpos];
         if (!strncmp(key, "ACTION=", 7)) 
              action = key + 7;
+        else if (!strncmp(key, "DEVTYPE=", 8))
+             devtype = key + 8;
         else if (!strncmp(key, "DEVPATH=", 8))
              devpath = key + 8;
         else if (!strncmp(key, "DEVNAME=", 8))
@@ -97,15 +100,20 @@ static void udev_event_process(int fd, void *data) {
             break;
         bufpos += keylen + 1;
     }
+    DEBUGMSGTL(("netlink:udev", "ACTION = %s, DEVTYPE = %s, DEVPATH = %s, DEVNAME = %s, SUBSYSTEM=%s\n", action, devtype, devpath, devname, subsystem));
   
     tmp_cb = udev_cb;
     do {
         if (subsystem && (!strcmp(subsystem, tmp_cb->subsystem)))  {
             if (action && strstr(tmp_cb->action, action)) {
+                if ((tmp_cb->devtype == NULL) || 
+                    (*tmp_cb->devtype == 0) ||
+                    (devtype && strstr(tmp_cb->devtype, devtype))) {
                 DEBUGMSGTL(("netlink:udev", 
-                            "calling callback for %s on %s\n", 
-                            subsystem, devpath));
-                tmp_cb->ss_callback(devpath, devname, tmp_cb->ss_container);
+                                "calling %s callback for %s on %s for %s\n", 
+                                action, subsystem, devpath, devtype));
+                    tmp_cb->ss_callback(devpath, devname, devtype, tmp_cb->ss_container);
+                } 
             }
         }
         tmp_cb = tmp_cb->hdr_next;
@@ -147,7 +155,8 @@ static int udev_netlink_init(__u32 nlgroup)
 
 int udev_register(char *subsystem, 
                   char *action, 
-                  void (*func) (char *, char*, void *), 
+                  char *devtype,
+                  void (*func) (char *, char*, char *, void *), 
                   void *container) 
 {
     struct udev_callback_header *my_cb;
@@ -166,6 +175,8 @@ int udev_register(char *subsystem,
     strncpy(my_cb->subsystem, subsystem, SUBSYSTEM_SZ - 1);
     if (action != NULL)
         strncpy(my_cb->action, action, ACTION_SZ - 1);
+    if (devtype != NULL)
+        strncpy(my_cb->devtype, devtype, DEVTYPE_SZ - 1);
     if (udev_cb == NULL) 
         udev_cb = my_cb;
     else {

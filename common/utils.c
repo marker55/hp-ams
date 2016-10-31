@@ -51,6 +51,24 @@ int get_etime(struct timeval the_time[]) {
     return (e_time.tv_sec*1000 + e_time.tv_usec/1000);
 }
 
+int get_uetime(struct timeval the_time[]) {
+    struct timeval *curr_time = &the_time[0];
+    struct timeval *prev_time = &the_time[1];
+    struct timeval e_time;
+
+    //fprintf(stderr, "the_time[0] = %p, the_time[1] = %p\n",&the_time[0],  &the_time[1]);
+    gettimeofday(curr_time, NULL);
+    
+    //fprintf(stderr, "curr_time->tv_sec = %ld, curr_time->tv_usec= %ld, prev_time->tv_sec = %ld, prev_time->tv_usec = %ld\n",
+    //                curr_time->tv_sec, curr_time->tv_usec, prev_time->tv_sec, prev_time->tv_usec);
+    timersub(curr_time, prev_time, &e_time);
+    //fprintf(stderr, "e_time->tv_sec = %ld, e_time->tv_usec= %ld\n",
+    //                e_time.tv_sec, e_time.tv_usec);
+    prev_time->tv_sec = curr_time->tv_sec;
+    prev_time->tv_usec = curr_time->tv_usec;
+    return (e_time.tv_sec*1000000 + e_time.tv_usec);
+}
+
 int get_nic_port(char * name)
 {
     int pc = 0;
@@ -63,7 +81,7 @@ int get_nic_port(char * name)
 
     memset(buffer, 0, 256);
     snprintf(buffer, 255, "/sys/class/net/%s/device/net", name);
-    if (pc = scandir(buffer, &filelist, file_select, alphasort) > 0) {
+    if ((pc = scandir(buffer, &filelist, file_select, alphasort)) > 0) {
         for (i = 0; i < pc; i++) {
             if (!strcmp(name, filelist[i]->d_name)) 
                 port = i + 1;
@@ -146,12 +164,12 @@ int getPCIslot_str(char * pci)
     if (pci == NULL) 
         return 0;
 
-    if ((strchr(pci, '.') == NULL))
-        strcat(pci, ".0");
     strncpy(syspci, "/sys/bus/pci/devices/", remaining);
     remaining -=  strlen(syspci);
 
     strncat(syspci, pci, remaining);
+    if ((strchr(pci, '.') == NULL))
+        strcat(syspci, ".0");
     link_sz = readlink(syspci, pcilink, 1024);
     if (link_sz > 0) 
         pcilink[link_sz] = '\0';
@@ -160,7 +178,7 @@ int getPCIslot_str(char * pci)
     for (i = 0; i < link_sz; i++) {
         if (pcilink[i] == '/') {
             i++;
-            if (sscanf(&pci[i], "%4hx:%2hhx:%2hhx.%1hhx", &dom, &bus, &dev, &func) == 4) 
+            if (sscanf(&pcilink[i], "%4hx:%2hhx:%2hhx.%1hhx", &dom, &bus, &dev, &func) == 4) 
                 if ((slot = getPCIslot_bus(bus)) > 0) 
                     return slot;
         }
@@ -232,6 +250,17 @@ int get_pcislot(char *bus_info)
         free(filelist);
     }
     return ret;
+}
+
+int enet_select(const struct dirent *entry)
+{
+    char buffer[256];
+    if ((strcmp(entry->d_name, ".") == 0) || (strcmp(entry->d_name, "..") == 0))
+        return (0);
+    snprintf(buffer, 255, "/sys/class/net/%s/addr_len", entry->d_name);
+    if (get_sysfs_int(buffer) != 6)
+        return (0);
+    return (1);
 }
 
 int file_select(const struct dirent *entry)
@@ -413,7 +442,7 @@ char * get_sysfs_str(char * sysfs_attr)
 {
     int fd;
     char *string;
-    size_t count;
+    ssize_t count;
     char *indx;
 
     if ((fd = open(sysfs_attr,O_RDONLY)) < 0) 
@@ -429,7 +458,7 @@ char * get_sysfs_str(char * sysfs_attr)
     } else 
         string = realloc(string, count + 1);
 
-    if (string == NULL) {
+    if ((string == NULL) || (*string == 0)){
         close(fd);
 	    return NULL;
     }
@@ -441,89 +470,106 @@ char * get_sysfs_str(char * sysfs_attr)
     return string;
 }
 
-void _get_sysfs_numeric(char * sysfs_attr, char *fmt, void *value)
+int _get_sysfs_numeric(char * sysfs_attr, char *fmt, void *value)
 {
     char *string;
 
     if ((string = get_sysfs_str(sysfs_attr)) == NULL)
-        return ;
+        return -1;
     errno = 0;
     sscanf(string, fmt, value);
     free(string);
-    return;
+    return 0;
 }
  
 unsigned long long get_sysfs_llhex(char * sysfs_attr)
 {
     unsigned long  long number;
     
-    _get_sysfs_numeric(sysfs_attr, "%llx", &number);
+    if (_get_sysfs_numeric(sysfs_attr, "%llx", &number) == 0)
     return number;
+    else 
+        return ((unsigned long long) -1);
 }
 
 unsigned long get_sysfs_lhex(char * sysfs_attr)
 {
     unsigned long  number;
     
-    _get_sysfs_numeric(sysfs_attr, "%lx", &number);
+    if (_get_sysfs_numeric(sysfs_attr, "%lx", &number) == 0)
     return number;
+    else 
+        return ((unsigned long) -1);
 }
 
 unsigned int get_sysfs_ihex(char * sysfs_attr)
 {
     unsigned int  number;
     
-    _get_sysfs_numeric(sysfs_attr, "%x", &number);
+    if (_get_sysfs_numeric(sysfs_attr, "%x", &number) == 0)
     return number;
+    else 
+        return ((unsigned int) -1);
 }
 
 unsigned short get_sysfs_shex(char * sysfs_attr)
 {
     unsigned short  number;
     
-    _get_sysfs_numeric(sysfs_attr, "%hx", &number);
+    if (_get_sysfs_numeric(sysfs_attr, "%hx", &number) == 0)
     return number;
+    else 
+        return ((unsigned short) -1);
 }
 
 unsigned char get_sysfs_chex(char * sysfs_attr)
 {
     unsigned char  number;
     
-    _get_sysfs_numeric(sysfs_attr, "%hhx", &number);
+    if (_get_sysfs_numeric(sysfs_attr, "%hhx", &number) == 0)
     return number;
+    else 
+        return ((unsigned char) -1);
 }
 
 unsigned int get_sysfs_uint(char * sysfs_attr)
 {
     unsigned int number;
 
-    _get_sysfs_numeric(sysfs_attr, "%u", &number);
+    if (_get_sysfs_numeric(sysfs_attr, "%u", &number) == 0)
     return number;
+    else 
+        return ((unsigned int) -1);
 }
 
 unsigned long long get_sysfs_ullong(char * sysfs_attr)
 {
     unsigned long long number;
 
-    _get_sysfs_numeric(sysfs_attr, "%llu", &number);
+    if (_get_sysfs_numeric(sysfs_attr, "%llu", &number) == 0)
     return number;
+    else 
+        return ((unsigned long long) -1);
 }
 
 int get_sysfs_int(char * sysfs_attr)
 {
     int number = -1;
 
-    _get_sysfs_numeric(sysfs_attr, "%d", &number);
+    if (_get_sysfs_numeric(sysfs_attr, "%d", &number) == 0)
     return number;
+    else 
+        return ((int) -1);
 }
 
 long long get_sysfs_llong(char * sysfs_attr)
 {
     long long number;
 
-    _get_sysfs_numeric(sysfs_attr, "%ld", &number);
-
+    if (_get_sysfs_numeric(sysfs_attr, "%ld", &number) == 0)
     return number;
+    else 
+        return ((long long) -1);
 }
 
 #ifdef UTEST

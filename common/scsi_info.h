@@ -99,6 +99,37 @@ typedef struct _sas_connector_info_buf {
 sashba_config_buf * SasGetHbaConfig (int, char *);
 sas_connector_info_buf * SasGetHbaConnector (int, char *);
 
+extern int get_sata_health(int);
+extern int get_sata_pwron(int);
+extern int get_sata_ssd_wear(int);
+extern char *get_sata_temp(int);
+extern int sata_parse_current(char *);
+extern int sata_parse_mcot(char *);
+extern char *get_sata_DiskRev(int);
 
+extern int get_sas_health(int);
+extern int get_sas_pwron(int);
+extern int get_sas_ssd_wear(int);
+extern char *get_sas_temp(int);
+extern int sas_parse_current(char *);
+extern int sas_parse_mcot(char *);
+
+extern int get_unit_temp(int);
+extern int is_unit_ssd(int);
+extern unsigned char*get_ScsiGeneric(unsigned char*);
+extern unsigned long long get_BlockSize(unsigned char*);
+extern int get_DiskType(char *);
+extern char * get_DiskModel(char *);
+extern char * get_ScsiDiskModel(char *);
+extern char * get_sas_DiskRev(char *);
+extern char * get_ScsiDiskRev(char *);
+extern char * get_DiskState(char *);
+
+extern unsigned char *inq_parse_vendor(char *Identify);
+extern unsigned char *inq_parse_prodID(char *Identify);
+extern unsigned char *inq_parse_rev(char *Identify, int len);
+extern char *get_identify_info(int fd);
+extern char *get_unit_sn(int fd) ;
+extern unsigned long long get_PciBlockSize(unsigned char * devlink);
 #endif // _SCSI_INFO_H_
 

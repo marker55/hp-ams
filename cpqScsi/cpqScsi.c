@@ -10,7 +10,7 @@
 #include "common/scsi_info.h"
 #include "cpqSasHbaTable.h"
 #include "cpqSasPhyDrvTable.h"
-#include "hpHelper.h"
+#include "amsHelper.h"
 
 /*
  * cpqScsiMib_oid:

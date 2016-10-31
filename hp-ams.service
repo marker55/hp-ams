@@ -7,7 +7,7 @@ Type=notify
 LimitCORE=infinity
 Environment=HPAMS_OPTIONS=
 EnvironmentFile=/etc/sysconfig/hp-ams
-ExecStart=/sbin/hpHelper -f $HPAMS_OPTIONS
+ExecStart=/sbin/amsHelper -f $HPAMS_OPTIONS
 StandardError=null
 Restart=on-abort
 

@@ -2,9 +2,11 @@
 
 #define MAC_ADDRESS_BYTES      6
 
+long uptime();
 void init_etime(struct timeval the_time[]);
 int get_etime(struct timeval the_time[]);
 
+int enet_select(const struct dirent *);
 int file_select(const struct dirent *);
 int proc_select(const struct dirent *);
 int pci_select(const struct dirent *);

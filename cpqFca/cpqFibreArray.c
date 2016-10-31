@@ -8,7 +8,7 @@
 #include <net-snmp/agent/net-snmp-agent-includes.h>
 #include "cpqFibreArray.h"
 //#include "cpqFcahcTable.h"
-#include "hpHelper.h"
+#include "amsHelper.h"
 
 #define CPQMIB              16
 #define CPQMIBREVMAJOR      1
@@ -22,6 +22,7 @@ size_t    cpqFcaMib_oid_len =  OID_LENGTH(cpqFcaMib_oid);
 #define CPQFCAMIBCONDITION     3
 
 extern void init_cpqFcaHostCntlrTable(void);
+extern int FcaCondition;
 
 /** Initializes the cpqFibreArray module */
 void
@@ -32,7 +33,9 @@ init_cpqFibreArray(void)
 
     cpqHostMibStatusArray[CPQMIB].major = CPQMIBREVMAJOR;
     cpqHostMibStatusArray[CPQMIB].minor = CPQMIBREVMINOR;
-    cpqHoMibHealthStatusArray[CPQMIBHEALTHINDEX] = MIB_CONDITION_OK;
+
+    cpqHoMibHealthStatusArray[CPQMIBHEALTHINDEX] = FcaCondition;
+    cpqHostMibStatusArray[CPQMIB].cond = FcaCondition;
 
     /*
      * register ourselves with the agent to handle our mib tree

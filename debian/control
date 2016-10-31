@@ -11,7 +11,7 @@ Homepage: http://linux.hp.com
 Package: hp-ams
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, lsof
-Description:  Agentless Monitoring Service for HP ProLiant Gen8 Systems 
+Description: Agentless Management Service for HP ProLiant servers with iLO4 
 
 Package: hp-ams-dbg
 Architecture: any

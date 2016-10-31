@@ -17,6 +17,8 @@
 #include <sys/utsname.h>
 #include <linux/version.h>
 
+#include "amsHelper.h"
+#include "cpqFibreArray.h"
 #include "cpqFcaHostCntlrTable.h"
 
 #include "fcahc.h"
@@ -30,11 +32,14 @@
 extern unsigned char     cpqHoMibHealthStatusArray[];
 extern int trap_fire;
 
+
+int FcaCondition = FC_HBA_CONDITION_OK;
+
 extern int file_select(const struct dirent *);
 extern int pcislot_scsi_host(char * buffer);
 void SendFcaTrap(int, cpqFcaHostCntlrTable_entry *);
 void netsnmp_arch_fcahc_init(void); 
-int  getFcaHostCntlrModel( int BoardID, char *pHPModelName, int *pFCoE );
+int  getFcaHostCntlrModel(unsigned long BoardID, char *pHPModelName, int *pFCoE );
 
 extern  int alphasort();
 
@@ -50,9 +55,7 @@ static int fca_select(const struct dirent *entry)
 {
     int      i = 0;
     for (i = 0; i < NumFcaHost; i++){
-        if (strncmp(entry->d_name,
-                    FcaHostlist[i]->d_name,
-                    strlen(FcaHostlist[i]->d_name)) == 0)
+        if (!strcmp(entry->d_name, FcaHostlist[i]->d_name))
             return(1);
     }
     return 0;
@@ -67,7 +70,7 @@ static int fca_select(const struct dirent *entry)
 /*    Also returns info if device is fcoe or not   */
 /*                                                                         */
 /***************************************************************************/
-int getFcaHostCntlrModel( int BoardID, char *pHPModelName, int *pFCoE )
+int getFcaHostCntlrModel(unsigned long BoardID, char *pHPModelName, int *pFCoE )
 {
    int fcaModel = 0, i, fcoe = 0;
 
@@ -228,7 +231,7 @@ long cpqfca_update_status( char * value, long status)
     return FC_HBA_STATUS_OTHER;
 }
 
-void cpqfca_update_hba_status(char *devpath, char *devname, void *data)
+void cpqfca_update_hba_status(char *devpath, char *devname, char* devtype, void *data)
 {
     cpqFcaHostCntlrTable_entry *entry;
     cpqFcaHostCntlrTable_entry *old;
@@ -286,6 +289,9 @@ void cpqfca_update_hba_status(char *devpath, char *devname, void *data)
             entry->cpqFcaHostCntlrCondition = 
                 cpqfca_update_condition(entry->cpqFcaHostCntlrStatus);
 
+            entry->cpqFcaHostCntlrOverallCondition =
+                                        entry->cpqFcaHostCntlrCondition;
+
             if ((entry->cpqFcaHostCntlrStatus != entry->oldStatus) &&
                 (entry->oldStatus != FC_HBA_STATUS_OTHER))  {
                 DEBUGMSGTL(("fcahc:container:load", 
@@ -297,8 +303,11 @@ void cpqfca_update_hba_status(char *devpath, char *devname, void *data)
             if (trap_fire)
                 SendFcaTrap( FCA_TRAP_HOST_CNTLR_STATUS_CHANGE, entry );
 
-            if (FcaCondition < entry->cpqFcaHostCntlrCondition)
+            if (FcaCondition < entry->cpqFcaHostCntlrCondition) {
                 FcaCondition = entry->cpqFcaHostCntlrCondition;
+                cpqHoMibHealthStatusArray[CPQMIBHEALTHINDEX] = FcaCondition;
+                cpqHostMibStatusArray[CPQMIB].cond = FcaCondition;
+            }
             DEBUGMSGTL(("fcahc:", "FcaCondition = %d\n", FcaCondition));
 
             free(Hostlist[0]);
@@ -320,22 +329,24 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
     int FcaIndex, Host;
     char hpModelName[128];
     int is_fcoe;
-    char buffer[256];
+    char buffer[256], lbuffer[256], *pbuffer;
+
     char attribute[256];
     char *value;
     long  rc = 0;
-    int i;
+    int i, len;
 
     DEBUGMSGTL(("fcahc:container:load", "loading\n"));
 
     DEBUGMSGTL(("fcahc:container:load", "Container=%p\n",container));
 
-    FcaCondition = FC_HBA_CONDITION_OK;
-
     /* Find all FC HB's */
     if ((NumFcaHost = 
-                scandir(FcaHostDir, &FcaHostlist, file_select, alphasort)) <= 0)
-        return -1;
+                scandir(FcaHostDir, &FcaHostlist, file_select, alphasort)) <= 0) {
+        cpqHoMibHealthStatusArray[CPQMIBHEALTHINDEX] = FcaCondition;
+        cpqHostMibStatusArray[CPQMIB].cond = FcaCondition;
+        return(0);
+    }
 
     /* Now chack for those HBA's in  the SCSI hosts */
     NumScsiHost = scandir(ScsiHostDir, &ScsiHostlist, fca_select, alphasort);
@@ -349,7 +360,8 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
         return -1;
 
     for (i=0; i < NumScsiHost; i++) {
-        unsigned int vendor, device, BoardID = 0;
+        unsigned int vendor, device;
+        unsigned long BoardID = 0;
 
         /*  We will need the host name later on */
         sscanf(ScsiHostlist[i]->d_name, "host%d", &Host); 
@@ -390,6 +402,8 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
             strcpy(attribute, buffer);
             entry->cpqFcaHostCntlrSlot = pcislot_scsi_host(attribute);
 
+            entry->cpqFcaHostCntlrHwLocation_len = 0;
+            entry->cpqFcaHostCntlrHwLocation[0] = '\0';
             if (entry->cpqFcaHostCntlrSlot > 0 ) {
                 DEBUGMSGTL(("fcahc:container:load", "Got pcislot info for %s = %u\n",
                             buffer,
@@ -402,14 +416,34 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
                                 "Blade %u, Slot %u",
                                 (entry->cpqFcaHostCntlrSlot>>8) & 0xF,
                                 (entry->cpqFcaHostCntlrSlot>>16) & 0xFF);
-                else
+               else {
                     entry->cpqFcaHostCntlrHwLocation_len =
                         snprintf(entry->cpqFcaHostCntlrHwLocation,
-                                256,
-                                "Slot %u",
-                                entry->cpqFcaHostCntlrSlot);
+                                128, "Slot %d", entry->cpqFcaHostCntlrSlot);
+                    DEBUGMSGTL(("fcahc:container:load", "pcislot  = %s\n",
+                                    entry->cpqFcaHostCntlrHwLocation));
+                }
+
+            } else {
+                strcpy(entry->cpqFcaHostCntlrHwLocation, "Embedded");
+                entry->cpqFcaHostCntlrHwLocation_len =
+                    strlen(entry->cpqFcaHostCntlrHwLocation);
             }
-    
+
+            memset(attribute, 0, sizeof(attribute));
+            strncpy(attribute, buffer, sizeof(attribute) - 1);
+            strncat(attribute, "/device",
+                sizeof(attribute) - strlen(attribute) - 8);
+            if ((len = readlink(buffer, lbuffer, 253)) > 0) {
+                lbuffer[len]='\0'; /* Null terminate the string */
+                pbuffer = lbuffer;
+                while ((pbuffer = strstr(pbuffer, "/0000:")) != NULL) {
+                    entry->cpqFcaHostCntlrPciLocation_len = 12;
+                    strncpy(entry->cpqFcaHostCntlrPciLocation, pbuffer + 1, 12);
+                    pbuffer += 1;
+                }
+            }
+
             strcpy(attribute, buffer);
             strncat(attribute, sysfs_attr[DEVICE_SUBSYSTEM_DEVICE], 
                     sizeof(attribute) - strlen(attribute) - 1);
@@ -539,6 +573,9 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
         entry->cpqFcaHostCntlrCondition = 
                     cpqfca_update_condition(entry->cpqFcaHostCntlrStatus);
 
+        entry->cpqFcaHostCntlrOverallCondition = 
+                                        entry->cpqFcaHostCntlrCondition;
+
         if ((entry->cpqFcaHostCntlrStatus != entry->oldStatus) &&
             (entry->oldStatus != FC_HBA_STATUS_OTHER))  {
              DEBUGMSGTL(("fcahc:container:load", 
@@ -550,8 +587,11 @@ int netsnmp_arch_fcahc_container_load(netsnmp_container* container)
         if (trap_fire)
             SendFcaTrap( FCA_TRAP_HOST_CNTLR_STATUS_CHANGE, entry );
 
-        if (FcaCondition < entry->cpqFcaHostCntlrCondition)
+        if (FcaCondition < entry->cpqFcaHostCntlrCondition) {
             FcaCondition = entry->cpqFcaHostCntlrCondition;
+            cpqHoMibHealthStatusArray[CPQMIBHEALTHINDEX] = FcaCondition;
+            cpqHostMibStatusArray[CPQMIB].cond = FcaCondition;
+        }
         DEBUGMSGTL(("fcahc:", "FcaCondition = %d\n", FcaCondition));
 
         free(ScsiHostlist[i]);
@@ -604,7 +644,7 @@ void SendFcaTrap(int trapID,
     snmp_varlist_add_variable(&var_list, cpqHoTrapFlags,
             sizeof(cpqHoTrapFlags) / sizeof(oid),
             ASN_INTEGER, &cpqHoTrapFlag,
-            sizeof(ASN_INTEGER));
+            sizeof(cpqHoTrapFlag));
 
     snmp_varlist_add_variable(&var_list, cpqFcaHostCntlrHwLocation,
             sizeof(cpqFcaHostCntlrHwLocation) / sizeof(oid),
@@ -615,17 +655,17 @@ void SendFcaTrap(int trapID,
     snmp_varlist_add_variable(&var_list, cpqFcaHostCntlrIndex,
             sizeof(cpqFcaHostCntlrIndex) / sizeof(oid),
             ASN_INTEGER, (u_char *)&fca->cpqFcaHostCntlrIndex,
-            sizeof(ASN_INTEGER));
+            sizeof(fca->cpqFcaHostCntlrIndex));
 
     snmp_varlist_add_variable(&var_list, cpqFcaHostCntlrStatus,
             sizeof(cpqFcaHostCntlrStatus) / sizeof(oid),
             ASN_INTEGER,(u_char *)&fca->cpqFcaHostCntlrStatus,
-            sizeof(ASN_INTEGER));
+            sizeof(fca->cpqFcaHostCntlrStatus));
 
     snmp_varlist_add_variable(&var_list, cpqFcaHostCntlrModel,
             sizeof(cpqFcaHostCntlrModel) / sizeof(oid),
             ASN_INTEGER,(u_char *)&fca->cpqFcaHostCntlrModel,
-            sizeof(ASN_INTEGER));
+            sizeof(fca->cpqFcaHostCntlrModel));
 
    snmp_varlist_add_variable(&var_list, cpqFcaHostCntlrSerialNumber,
             sizeof(cpqFcaHostCntlrSerialNumber) / sizeof(oid),

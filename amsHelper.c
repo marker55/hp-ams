@@ -20,7 +20,7 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <dirent.h>
-#include "hpHelper.h"
+#include "amsHelper.h"
 
 #ifndef NETSNMP_NO_SYSTEMD
 #include <net-snmp/library/sd-daemon.h>
@@ -68,11 +68,15 @@ unsigned char cpqHoMibHealthStatusArray[CPQHO_MIBHEALTHSTATUSARRAY_LEN];
 static int      ams_running;
 static int      interval2ping = 15;
 int             log_interval   = 0;
-int             testtrap_interval = 0;
+int             testtrap_interval = -1;
 int             gen8_only     = 1;
 int            trap_fire = 0;
+char *vendor_tag = NULL;
 
 char *GenericData = "generic trap data";
+char *GenericDataEnv = "AMSGENERICTRAP";
+char *GenericDataStr = (char *) 0;
+
 struct pci_access *pacc = NULL;
 
 static          RETSIGTYPE
@@ -85,7 +89,7 @@ static void
 usage(void)
 {
     printf
-        ("usage: hpHelper [-f] [-L] [-D<tokens>] [-I<interval>] [-P<interval>]\n"
+        ("usage: amsHelper [-f] [-L] [-D<tokens>] [-I<interval>] [-P<interval>]\n"
          "\t\t[-M<MIB list>] [-T<interval>] [-G<generic data>]\n"
          "\t-f      Do not fork() from the calling shell.\n"
          "\t-L\tDo not open a log file; print all messages to stderr.\n"
@@ -116,10 +120,16 @@ usage(void)
          "\t-T<interval>\n"
          "\t\tThe <interval> parameter indicates how often test trap will be\n"
          "\t\tsent.  If no <interval> is specified, then the trap will be \n"
-         "\t\tsent once at start up\n"
+         "\t\tsent once at start up. The <interval> can be specified with a \n"
+         "\t\tsuffix of 'D, d, H, h, M, m, S, s' or no suffix to specify the\n"
+         "\t\tinterval in days, hours, minutes or seconds.  The range of \n"
+         "\t\tvalues is 10 seconds to 7 days.\n"
          "\t-G<generic data>\n"
          "\t\tThe value for cpqHoGenericData sent with cpqHoGenericTrap\n"
          "\t\t'generic trap data' = default\n"
+         "\t-V<string>\n"
+         "\t\tThe : separated <string> parameter specifies the leading parts\n"
+         "\t\tof the RPM Vendor to include in the cpqHoSwVerTable\n"
          "");
     exit(0);
 }
@@ -208,6 +218,7 @@ main(int argc, char **argv)
     int            do_se = 1;
     int            do_fca = 1;
     int            do_mibII = 1;
+    int scale = 1;
     char *argarg;
     int             prepared_sockets = 0;
     struct stat     st;
@@ -237,7 +248,7 @@ main(int argc, char **argv)
 
     snmp_disable_log();
 
-    while ((ch = getopt(argc, argv, "D:fG:kLM::OI:P:t:T::x:")) != EOF)
+    while ((ch = getopt(argc, argv, "D:fG:kLM::OI:P:t:T::x:V:")) != EOF)
         switch (ch) {
         case 'D':
             debug_register_tokens(optarg);
@@ -342,8 +353,30 @@ main(int argc, char **argv)
             break;
         case 'T':
             if (optarg != (char *) 0) {
-                testtrap_interval = atoi(optarg);
-                if ((testtrap_interval < 0) || (testtrap_interval > 1440)) {
+                switch (optarg[strlen(optarg)-1]) {
+                    case 'd':
+                    case 'D':
+                        optarg[strlen(optarg)-1] = (char )0;
+                        scale = 60*60*24;
+                        break;
+                    case 'h':
+                    case 'H':
+                        optarg[strlen(optarg)-1] = (char )0;
+                        scale = 60*60;
+                        break;
+                    case 'm':
+                    case 'M':
+                        optarg[strlen(optarg)-1] = (char )0;
+                        scale = 60;
+                        break;
+                    case 'S':
+                    case 's':
+                        optarg[strlen(optarg)-1] = (char )0;
+                    default:
+                        break;
+                }
+                testtrap_interval = atoi(optarg) * scale;
+                if ((testtrap_interval < 10) || (testtrap_interval > (7*24*60*60))) {
                     usage();
                     exit(0);
                 }
@@ -352,6 +385,13 @@ main(int argc, char **argv)
         case 'x':
             if (optarg != NULL) {
                 transport = optarg;
+            } else {
+                usage();
+            }
+            break;
+        case 'V':
+            if (optarg != NULL) {
+                vendor_tag = optarg;
             } else {
                 usage();
             }
@@ -400,23 +440,27 @@ main(int argc, char **argv)
     /*
      * daemonize 
      */
+    snmp_disable_log();
+
     if (!dont_fork) {
         snmp_enable_calllog();
-        int             rc = netsnmp_daemonize(1, !use_syslog);
+        int             rc = netsnmp_daemonize(1, use_syslog);
         if (rc)
             exit(-1);
-    }
+    } else
+        snmp_enable_stderrlog();
+
 
     /* Clear out Status array */
     memset(cpqHostMibStatusArray,0,sizeof(cpqHostMibStatusArray));
     memset(cpqHoMibHealthStatusArray, 0, sizeof(cpqHoMibHealthStatusArray));
 
-    DEBUGMSG(("hpHelper:timer", "interval for StartUp %dms\n", get_etime(&the_time[0])));
+    DEBUGMSG(("amsHelper:timer", "interval for StartUp %dms\n", get_etime(&the_time[0])));
 
     if (do_ahs) {
         LOG_PROCESS_CRASHES();
 
-        DEBUGMSG(("hpHelper:timer", "interval for Log Crashes %dms\n", get_etime(&the_time[0])));
+        DEBUGMSG(("amsHelper:timer", "interval for Log Crashes %dms\n", get_etime(&the_time[0])));
 
         if (kdump_only) {
             return 0;
@@ -424,14 +468,14 @@ main(int argc, char **argv)
 
         LOG_OS_BOOT();
 
-        DEBUGMSG(("hpHelper:timer", "interval for Log Boot %dms\n", get_etime(&the_time[0])));
+        DEBUGMSG(("amsHelper:timer", "interval for Log Boot %dms\n", get_etime(&the_time[0])));
 
     }
     openlog("hp-ams",  LOG_CONS | LOG_PID, LOG_DAEMON);
     /*
      * initialize the agent library 
      */
-    init_agent("hpHelper");
+    init_agent("amsHelper");
 
     netsnmp_ds_set_int(NETSNMP_DS_LIBRARY_ID,
                        NETSNMP_DS_HPILODOMAIN_IML, 4);
@@ -449,69 +493,69 @@ main(int argc, char **argv)
     /* if the ilo starts dropping packets retry a couple of times */
     netsnmp_ds_set_int(NETSNMP_DS_LIBRARY_ID, NETSNMP_DS_LIB_RETRIES, 5);
 
-    init_snmp("hpHelper");
+    init_snmp("amsHelper");
 
-    DEBUGMSG(("hpHelper:timer", "interval for SNMP startup %dms\n", get_etime(&the_time[0])));
+    DEBUGMSG(("amsHelper:timer", "interval for SNMP startup %dms\n", get_etime(&the_time[0])));
 
     if (do_mibII) {
         init_mib_modules();
-        DEBUGMSG(("hpHelper:timer", "interval for init MIB-2 %dms\n", get_etime(&the_time[0])));
+        DEBUGMSG(("amsHelper:timer", "interval for init MIB-2 %dms\n", get_etime(&the_time[0])));
     }
 
     if (do_host) {
         init_cpqHost();
-        DEBUGMSG(("hpHelper:timer", "interval for cpqHost %dms\n", get_etime(&the_time[0])));
+        DEBUGMSG(("amsHelper:timer", "interval for cpqHost %dms\n", get_etime(&the_time[0])));
     }
 
     if (do_ahs) {
         LOG_OS_INFORMATION();
-        DEBUGMSG(("hpHelper:timer", "interval for LOG OS %dms\n", get_etime(&the_time[0])));
+        DEBUGMSG(("amsHelper:timer", "interval for LOG OS %dms\n", get_etime(&the_time[0])));
 
         LOG_DRIVERS();
-        DEBUGMSG(("hpHelper:timer", "interval for Log drivers %dms\n", get_etime(&the_time[0])));
+        DEBUGMSG(("amsHelper:timer", "interval for Log drivers %dms\n", get_etime(&the_time[0])));
 
         LOG_SERVICE();
-        DEBUGMSG(("hpHelper:timer", "interval for Log services %dms\n", get_etime(&the_time[0])));
+        DEBUGMSG(("amsHelper:timer", "interval for Log services %dms\n", get_etime(&the_time[0])));
 
         LOG_PACKAGE();
-        DEBUGMSG(("hpHelper:timer", "interval for Log packages %dms\n", get_etime(&the_time[0])));
+        DEBUGMSG(("amsHelper:timer", "interval for Log packages %dms\n", get_etime(&the_time[0])));
     }
 
     if (do_se) {
         init_cpqStdPciTable();
-        DEBUGMSG(("hpHelper:timer", "interval for cpqSe %dms\n", get_etime(&the_time[0])));
+        DEBUGMSG(("amsHelper:timer", "interval for cpqSe %dms\n", get_etime(&the_time[0])));
     }
 
     if (do_scsi) {
         init_cpqScsi();
-        DEBUGMSG(("hpHelper:timer", "interval for cpqScsi %dms\n", get_etime(&the_time[0])));
+        DEBUGMSG(("amsHelper:timer", "interval for cpqScsi %dms\n", get_etime(&the_time[0])));
     }
 
     if (do_ide) {
         init_cpqIde();
-        DEBUGMSG(("hpHelper:timer", "interval for cpqIde %dms\n", get_etime(&the_time[0])));
+        DEBUGMSG(("amsHelper:timer", "interval for cpqIde %dms\n", get_etime(&the_time[0])));
     }
 
     if (do_fca) {
         init_cpqFibreArray();
-        DEBUGMSG(("hpHelper:timer", "interval for cpqFca %dms\n", get_etime(&the_time[0])));
+        DEBUGMSG(("amsHelper:timer", "interval for cpqFca %dms\n", get_etime(&the_time[0])));
     }
 
     if (do_nic) {
         init_cpqNic();
-        DEBUGMSG(("hpHelper:timer", "interval for cpqNic %dms\n", get_etime(&the_time[0])));
+        DEBUGMSG(("amsHelper:timer", "interval for cpqNic %dms\n", get_etime(&the_time[0])));
     }
 
     if (do_pmp) {
         init_cpqLinOsMgmt();
-        DEBUGMSG(("hpHelper:timer", "interval for cpqLinOsMgmt %dms\n", get_etime(&the_time[0])));
+        DEBUGMSG(("amsHelper:timer", "interval for cpqLinOsMgmt %dms\n", get_etime(&the_time[0])));
     }
 
     /*
      * Send coldstart trap if possible.
      */
     send_easy_trap(0, 0);
-    syslog(LOG_NOTICE, "hpHelper Started . . "); 
+    syslog(LOG_NOTICE, "amsHelper Started . . "); 
     /*
      * Let systemd know we're up.
      */
@@ -527,13 +571,13 @@ main(int argc, char **argv)
 
     if (do_ahs) {
         LOG_OS_USAGE();
-        DEBUGMSG(("hpHelper:timer", "interval for LOG OS Usage%dms\n", get_etime(&the_time[0])));
+        DEBUGMSG(("amsHelper:timer", "interval for LOG OS Usage%dms\n", get_etime(&the_time[0])));
 
         LOG_PROCESSOR_USAGE();
-        DEBUGMSG(("hpHelper:timer", "interval for LOG Processor Usage %dms\n", get_etime(&the_time[0])));
+        DEBUGMSG(("amsHelper:timer", "interval for LOG Processor Usage %dms\n", get_etime(&the_time[0])));
 
         LOG_MEMORY_USAGE();
-        DEBUGMSG(("hpHelper:timer", "interval for LOG Memory Usage %dms\n", get_etime(&the_time[0])));
+        DEBUGMSG(("amsHelper:timer", "interval for LOG Memory Usage %dms\n", get_etime(&the_time[0])));
     }
 
     /*
@@ -543,17 +587,16 @@ main(int argc, char **argv)
     signal(SIGTERM, stop_server);
     signal(SIGINT, stop_server);
 
-
     DEBUGMSGTL(("snmpd/main", "We're up.  Starting to process data.\n"));
     if (!netsnmp_ds_get_boolean(NETSNMP_DS_APPLICATION_ID,
                 NETSNMP_DS_AGENT_QUIT_IMMEDIATELY))
         receive();
 
-    snmp_shutdown("hpHelper");
+    snmp_shutdown("amsHelper");
 
     LOG_OS_SHUTDOWN();
 
-    syslog(LOG_NOTICE, "hpHelper Stopped . . "); 
+    syslog(LOG_NOTICE, "amsHelper Stopped . . "); 
     exit(0);
 }
 /*******************************************************************-o-******
@@ -604,7 +647,9 @@ receive(void)
         NETSNMP_LARGE_FD_ZERO(&writefds);
         NETSNMP_LARGE_FD_ZERO(&exceptfds);
         block = 0;
-        snmp_select_info2(&numfds, &readfds, tvp, &block);
+        snmp_sess_select_info2_flags(0, &numfds, &readfds, tvp, &block, 
+                                     NETSNMP_SELECT_NOFLAGS);
+
         if (block == 1) {
             tvp = NULL;         /* block without timeout */
 	}

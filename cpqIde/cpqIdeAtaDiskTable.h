@@ -48,6 +48,7 @@ typedef struct cpqIdeAtaDiskTable_entry_s {
 
 
     int             OldStatus;
+    int             OldSSDWearStatus;
     int             valid;
 } cpqIdeAtaDiskTable_entry;
 

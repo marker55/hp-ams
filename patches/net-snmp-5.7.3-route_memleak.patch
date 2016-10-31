@@ -1,0 +1,14 @@
+--- net-snmp-5.7.3.orig/agent/mibgroup/ip-forward-mib/data_access/route_common.c	2015-12-02 14:39:02.000000000 -0600
++++ net-snmp-5.7.3/agent/mibgroup/ip-forward-mib/data_access/route_common.c	2015-12-02 14:46:07.000000000 -0600
+@@ -83,6 +83,11 @@
+         CONTAINER_CLEAR(container,
+                         (netsnmp_container_obj_func*)_access_route_entry_release,
+                         NULL);
++    } else {
++    /*
++     * free the CONTAINER's sl_nodes, but not their data
++     */
++        CONTAINER_CLEAR(container, NULL, NULL); 
+     }
+ 
+     if(! (free_flags & NETSNMP_ACCESS_ROUTE_FREE_KEEP_CONTAINER))

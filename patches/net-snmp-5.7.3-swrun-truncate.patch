@@ -1,0 +1,54 @@
+--- ../hp-ams-2.3.0/net-snmp-5.7.3/agent/mibgroup/host/data_access/swrun_procfs_status.c	2014-12-08 14:23:22.000000000 -0600
++++ net-snmp-5.7.3/agent/mibgroup/host/data_access/swrun_procfs_status.c	2015-07-21 16:27:37.000000000 -0500
+@@ -83,6 +83,19 @@
+          *   from the various /proc{PID}/ interface files
+          */
+ 
++        /* use proc/%d/exe to get entry->hrSWRunPath and entry->hrSWRunName */
++        memset(buf, 0, sizeof(buf));
++        snprintf(buf2, BUFSIZ, "/proc/%d/exe", pid );
++        i = readlink(buf2, buf, BUFSIZ - 1);
++        if (i > 0) {
++            buf[i] = 0;
++            if ((cp1 = strrchr(buf, '/')) != NULL) {
++                entry->hrSWRunName_len = snprintf(entry->hrSWRunName,
++                                sizeof(entry->hrSWRunName)-1, "%s", ++cp1);
++                entry->hrSWRunPath_len = snprintf(entry->hrSWRunPath,
++                                 sizeof(entry->hrSWRunPath)-1, "%s", buf);
++            }
++        } else {
+         /*
+          *   Name:  process name
+          */
+@@ -110,6 +123,7 @@
+             entry->hrSWRunName[ entry->hrSWRunName_len-1 ] = '\0';
+             entry->hrSWRunName_len--;           /* Stamp on trailing newline */
+         }
++        }
+ 
+         /*
+          *  Command Line:
+@@ -129,12 +143,13 @@
+             /*
+              *     argv[0]   is hrSWRunPath
+              */ 
++            if (entry->hrSWRunPath_len <= 0)
+             entry->hrSWRunPath_len = snprintf(entry->hrSWRunPath,
+                                        sizeof(entry->hrSWRunPath)-1, "%s", buf);
+             /*
+              * Stitch together argv[1..] to construct hrSWRunParameters
+              */
+-            cp = buf + entry->hrSWRunPath_len+1;
++            cp = buf + strlen(buf)+1;
+             while ( 1 ) {
+                 while (*cp)
+                     cp++;
+@@ -145,7 +160,7 @@
+             entry->hrSWRunParameters_len
+                 = sprintf(entry->hrSWRunParameters, "%.*s",
+                           (int)sizeof(entry->hrSWRunParameters) - 1,
+-                          buf + entry->hrSWRunPath_len + 1);
++                             buf + strlen(buf) + 1);
+         } else {
+             /* empty /proc/PID/cmdline, it's probably a kernel thread */
+             entry->hrSWRunPath_len = 0;

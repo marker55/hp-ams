@@ -27,7 +27,6 @@ int netsnmp_arch_linosdiskio_container_load(netsnmp_container* container)
     long  rc = 0;
     int i;
     struct timeval curr_time;
-    struct timeval prev_time;
     struct timeval e_time;
     int interval;
 

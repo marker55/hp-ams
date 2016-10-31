@@ -31,7 +31,6 @@ int cpqLinOsCommon_load(netsnmp_cache * cache, void *vmagic)
     static struct timeval the_time[2];
     struct timeval *curr_time = &the_time[0];
     struct timeval *prev_time = &the_time[1];
-    struct timeval e_time;
     unsigned long long PollInt = 0;
 
     common.PollFreq = 0;
@@ -69,10 +68,7 @@ int cpqLinOsSys_load(netsnmp_cache * cache, void *vmagic)
     struct dirent **proclist;
 
     unsigned long long PollInt = 0;
-
-    long ret_value = -1;
     char *uptime;
-    int count;
     int i;
     read_line_t *statlines = NULL;
 
@@ -131,7 +127,6 @@ int cpqLinOsMem_load(netsnmp_cache * cache, void *vmagic)
 {
     read_line_t *memlines = NULL;
     int i;
-    long ret_value = -1;
 
     if ((memlines = ReadFileLines("/proc/meminfo")) != NULL) {
         for (i = 0; strncmp(memlines->line[i], "MemTotal:", 9); i++) { }
@@ -175,7 +170,6 @@ int cpqLinOsSwap_load(netsnmp_cache * cache, void *vmagic)
     read_line_t *vmlines = NULL;
     int i;
     unsigned long long  PollInt = 0;
-    long ret_value = -1;
 
     gettimeofday(curr_time, NULL);
     if (prev_time->tv_sec > 0) {

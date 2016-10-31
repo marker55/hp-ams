@@ -35,6 +35,7 @@
  */
 extern char pkg_directory[];
 
+extern char *vendor_tag;
 void
 netsnmp_cpqHoSwVer_arch_init(void)
 {
@@ -53,10 +54,11 @@ netsnmp_cpqHoSwVer_arch_shutdown(void)
 int
 cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
 {
+    char *packager_tag = "HP:Hewlett";
     rpmts                 ts;
     rpmdbMatchIterator    mi;
     Header                h;
-    const char           *n, *v, *r, *g, *vendor, *description;
+    const char           *n, *v, *r, *vendor, *packager, *description;
     uint32_t              *t;
     int                   rc = 0, i = 0;
     struct tm            *td;
@@ -69,7 +71,15 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
     if (mi == NULL)
         NETSNMP_LOGONCE((LOG_ERR, "rpmdbOpen() failed\n"));
 
+    if (vendor_tag == NULL)
+        vendor_tag = packager_tag;
+
+    DEBUGMSGTL(("cpqHoSwVerTable:load:arch", "tags = %s %s\n",
+            vendor_tag, packager_tag));
+
     while (NULL != (h = rpmdbNextIterator( mi ))) {
+        char *c;
+        entry = NULL;
 
 #ifdef NEWRPM
         struct rpmtd_s tag_data;
@@ -79,13 +89,44 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
         headerGet(h, RPMTAG_VENDOR, &tag_data, HEADERGET_DEFAULT);
         vendor = rpmtdGetString(&tag_data);
         rpmtdFreeData(&tag_data);
+
+        headerGet(h, RPMTAG_PACKAGER, &tag_data, HEADERGET_DEFAULT);
+        packager = rpmtdGetString(&tag_data);
+        rpmtdFreeData(&tag_data);
 #else
         headerGetEntry(h, RPMTAG_VENDOR, NULL, (void **) &vendor, NULL);
+        headerGetEntry(h, RPMTAG_PACKAGER, NULL, (void **) &packager, NULL);
 #endif
-        if ((vendor != NULL) &&
-                ((strncmp(vendor, "Hewlett", 7) == 0) || 
-                 (strcmp(vendor, "HP") == 0))) {
-            entry = cpqHoSwVerTable_createEntry( container,(oid) i++ );
+        if (vendor != NULL) {
+            char *next = vendor_tag;
+            while ((c = index(next, ':')) != NULL) {
+                if (!strncmp(vendor, next, (c - next) )) {
+                    entry = cpqHoSwVerTable_createEntry(container, (oid) i++ );
+                    break;
+                }
+                next = ++c;
+            }
+            if (entry == NULL) {
+                if (!strncmp(vendor, next, strlen(next))) 
+                    entry = cpqHoSwVerTable_createEntry(container, (oid) i++ );
+            }
+        }
+            
+        if ((entry == NULL) && (packager != NULL)) {
+            char *next = packager_tag;
+            while ((c = index(next, ':')) != NULL) {
+                if (!strncmp(packager, next, (c - next))) {
+                    entry = cpqHoSwVerTable_createEntry(container, (oid) i++ );
+                    break;
+                }
+                next = ++c;
+            }
+            if (entry == NULL) {
+                if (!strncmp(packager, next, strlen(next))) 
+                    entry = cpqHoSwVerTable_createEntry(container, (oid) i++ );
+            }
+        }
+            
             if (NULL == entry) {
 #ifdef NEWRPM
                 rpmtdFreeData(&tag_data);
@@ -107,10 +148,6 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
             r = rpmtdGetString(&tag_data);
             rpmtdFreeData(&tag_data);
 
-            headerGet(h, RPMTAG_GROUP,       &tag_data, HEADERGET_DEFAULT);
-            g = rpmtdGetString(&tag_data);
-            rpmtdFreeData(&tag_data);
-
             headerGet(h, RPMTAG_SUMMARY,     &tag_data, HEADERGET_DEFAULT);
             description = rpmtdGetString(&tag_data);
             rpmtdFreeData(&tag_data);
@@ -122,7 +159,6 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
             headerGetEntry( h, RPMTAG_NAME,        NULL, (void**)&n, NULL);
             headerGetEntry( h, RPMTAG_VERSION,     NULL, (void**)&v, NULL);
             headerGetEntry( h, RPMTAG_RELEASE,     NULL, (void**)&r, NULL);
-            headerGetEntry( h, RPMTAG_GROUP,       NULL, (void**)&g, NULL);
             headerGetEntry( h, RPMTAG_INSTALLTIME, NULL, (void**)&t, NULL);
             headerGetEntry( h, RPMTAG_SUMMARY,     NULL,
                     (void **) &description, NULL);
@@ -130,9 +166,21 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
 
             strncpy(entry->cpqHoSwVerName, n, sizeof(entry->cpqHoSwVerName) - 1);
             entry->cpqHoSwVerName_len = strlen(entry->cpqHoSwVerName);
-            entry->cpqHoSwVerType = (NULL != strstr( g, "System Environment"))
-                ? 2 /* operatingSystem */
-                : 5;     /*  application    */
+
+            entry->cpqHoSwVerType = 5;     /*  application    */
+            if (strstr(n, "-firmware-"))
+                entry->cpqHoSwVerType = 7;  /* need to add new type */
+        if (strncmp(n, "kmod-", 5) == 0)
+            entry->cpqHoSwVerType = 2; 
+        if (strstr(n, "-kmp-") != NULL)
+                entry->cpqHoSwVerType = 2; 
+            if (entry->cpqHoSwVerType == 5) {
+                if (strcasestr(description, "agent"))
+                     entry->cpqHoSwVerType = 3;
+                if (strcasestr(description, "tool") || 
+                    strcasestr(description, "util"))
+                     entry->cpqHoSwVerType = 4;
+            }
 
             if (description != NULL ) {
                 DEBUGMSGTL(("cpqHoSwVerTable:load:arch", "description = %s\n",
@@ -181,8 +229,11 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
                             "%s", v);
             }
 
+        if (vendor != NULL) {
             strncpy(entry->vendor, vendor, sizeof(entry->vendor) - 1);
             entry->vendor_len = strlen(entry->vendor);
+        } else
+            entry->vendor_len = 0;
 
             entry->cpqHoSwVerLocation[0] = '\0';
             entry->cpqHoSwVerLocation_len = 0;
@@ -190,7 +241,6 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
             entry->cpqHoSwVerStatus = 2; /* OK */
             rc = CONTAINER_INSERT(container, entry);
 
-        }
         headerFree( h );
     }
     rpmdbFreeIterator( mi );

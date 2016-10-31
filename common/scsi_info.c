@@ -95,7 +95,7 @@ static int generic_select(const struct dirent *entry)
     return 0;
 }
 
-unsigned long long get_BlockSize(char * scsi)
+unsigned long long get_BlockSize(unsigned char * scsi)
 {
     struct dirent **BlockDisklist;
     int NumBlockDisk;
@@ -105,28 +105,33 @@ unsigned long long get_BlockSize(char * scsi)
     memset(attribute, 0, sizeof(attribute));
 
 #if RHEL_MAJOR == 5
-    sprintf(attribute, "/sys/class/scsi_device/%s/device/", scsi);
+    snprintf(attribute, 255, "/sys/class/scsi_device/%s/device/", scsi);
 #else
-    sprintf(attribute, "/sys/class/scsi_device/%s/device/block/", scsi);
+    snprintf(attribute, 255, "/sys/class/scsi_device/%s/device/block/", scsi);
 #endif
 
     if ((NumBlockDisk = scandir(attribute, &BlockDisklist,
                                 sd_select, alphasort)) > 0) {
-        strcat(attribute, BlockDisklist[0]->d_name);
-        strcat(attribute,"/size");
+        size_t remaining = 255 - strlen(attribute);
+        strncat(attribute, BlockDisklist[0]->d_name, remaining - 5);
+        remaining = 255 - strlen(attribute);
+        strncat(attribute, "/size", remaining);
         /* Size is in 512 block, need mmbytes so left shift 11 bits */
         size = get_sysfs_ullong(attribute);
         free(BlockDisklist[0]);
         free(BlockDisklist);
     } else {
-        strcat(attribute, "/block/");
+        size_t remaining = 255 - strlen(attribute);
+        strncat(attribute, "/block/", remaining);
+        remaining = 255 - strlen(attribute);
 
         /* Look for block:sd? */
         if ((NumBlockDisk = scandir(attribute, &BlockDisklist,
                                     sd_select, alphasort)) > 0) {
 
-            strcat(attribute,BlockDisklist[0]->d_name);
-            strcat(attribute,  "/size");
+            strncat(attribute,BlockDisklist[0]->d_name, remaining);
+            remaining = 255 - strlen(attribute);
+            strncat(attribute,  "/size", remaining);
             size = get_sysfs_ullong(attribute);
             free(BlockDisklist[0]);
             free(BlockDisklist);
@@ -135,7 +140,24 @@ unsigned long long get_BlockSize(char * scsi)
     return size;
 }
 
-unsigned char *get_ScsiGeneric(char *scsi)
+unsigned long long get_PciBlockSize(unsigned char * devlink)
+{
+    char attribute[256];
+    unsigned long long size = 0;
+
+    memset(attribute, 0, sizeof(attribute));
+
+    if (!strncmp(devlink, "../",3))
+        snprintf(attribute, 255, "/sys/devices/%s/size", devlink);
+    else
+        snprintf(attribute, 255, "/sys/devices/../%s/size", devlink);
+
+    /* Size is in 512 block, need mbytes so left shift 11 bits */
+    size = get_sysfs_ullong(attribute);
+    return size;
+} 
+
+unsigned char *get_ScsiGeneric(unsigned char *scsi)
 {
     char attribute[256];
     char *generic = NULL;
@@ -144,7 +166,7 @@ unsigned char *get_ScsiGeneric(char *scsi)
     char buffer[256], lbuffer[256], *pbuffer;
 
     memset(attribute, 0, sizeof(attribute));
-    sprintf(attribute, "/sys/class/scsi_device/%s/device/generic", scsi);
+    snprintf(attribute, sizeof(attribute) - 1, "/sys/class/scsi_device/%s/device/generic", scsi);
     if ((len = readlink(attribute, lbuffer, 253)) > 0) {
         lbuffer[len]='\0'; /* Null terminate the string */
         pbuffer = basename(lbuffer);
@@ -164,7 +186,6 @@ unsigned char *get_ScsiGeneric(char *scsi)
                                 generic_select, alphasort);
     if (NumGenericDisk  > 0) {
         size_t gd_sz = strlen(GenericDisklist[0]->d_name);
-
         if ((generic = malloc(gd_sz + 1)) != NULL){
             memset(generic, 0, gd_sz + 1);
             strncpy(generic, GenericDisklist[0]->d_name, gd_sz);
@@ -323,7 +344,7 @@ int sata_parse_mcot(char *Temperature)
         return 0;
 }
 
-unsigned char * get_sata_log(int fd, int log)
+char * get_sata_log(int fd, int log)
 {
     int scsiCmdLen = 16;
     unsigned char scsiCmd[16] = 
@@ -335,7 +356,7 @@ unsigned char * get_sata_log(int fd, int log)
     unsigned char sense_buf[32];
     unsigned char response[512];
     int resp_size = 512;
-    unsigned char *statlog = NULL;
+    char *statlog = NULL;
 
     memset(&sense_buf, 0, sizeof(sense_buf));
     memset(&sgiob, 0, sizeof(sgiob));
@@ -364,7 +385,7 @@ unsigned char * get_sata_log(int fd, int log)
     return statlog;
 }
 
-unsigned char * get_sata_DiskRev(int fd)
+char * get_sata_DiskRev(int fd)
 {
     int scsiCmdLen = 16;
     unsigned char scsiCmd[16] =
@@ -408,10 +429,10 @@ unsigned char * get_sata_DiskRev(int fd)
     sct_fwrev[6] = response[53];
     sct_fwrev[7] = response[52];
     sct_fwrev[8] = 0;
-    return (unsigned char *)sct_fwrev;
+    return sct_fwrev;
 }
 
-unsigned char * get_sata_sct_stat(int fd)
+char * get_sata_sct_stat(int fd)
 {
     int scsiCmdLen = 16;
     unsigned char scsiCmd[16] = 
@@ -447,27 +468,27 @@ unsigned char * get_sata_sct_stat(int fd)
     }
     sct_stat = malloc(512);
     memcpy(sct_stat, &response[0], 512);
-    return (unsigned char *)sct_stat;
+    return sct_stat;
 }
 
-unsigned char * get_sata_statlog(int fd)
+char * get_sata_statlog(int fd)
 {
     return (get_sata_log(fd, GEN_STAT_PAGE));
 }
 
-unsigned char * get_sata_ssdlog(int fd)
+char * get_sata_ssdlog(int fd)
 {
     return (get_sata_log(fd, SSD_STAT_PAGE));
 }
     
-unsigned char * get_sata_temp(int fd)
+char * get_sata_temp(int fd)
 {
     return (get_sata_log(fd, TEMP_STAT_PAGE));
 }
 
 int get_sata_ssd_wear(int fd) 
 {
-    unsigned char *ssdlog = NULL;
+    char *ssdlog = NULL;
     int wear = 255;
     
     ssdlog = get_sata_ssdlog(fd);
@@ -492,7 +513,7 @@ int get_sata_ssd_wear(int fd)
 int get_sata_pwron(int fd) 
 {
     int poweron = -1;
-    unsigned char *statlog = NULL;
+    char *statlog = NULL;
 
     statlog = get_sata_statlog(fd);
 #ifdef UTTEST_SATA_DBG
@@ -632,9 +653,9 @@ char *get_identify_info(int fd)
     }
 #endif
     len = response[ 4 ] + 4;
-    ident = malloc(len);
-    memset(ident, 0, len );
-    memcpy(ident, &response[0], len);
+    ident = malloc(len + 1);
+    memset(ident, 0, len + 1);
+    memcpy(ident, &response[0], len + 1);
     return ident;
 }
 
@@ -713,7 +734,7 @@ unsigned long long  get_disk_capacity(int fd)
     }
 }
 
-int get_defect_data_size(int fd)
+int get_defect_data_size(int fd, unsigned char format)
 {
     int scsiCmdLen = 10;
     unsigned char scsiCmd[10] = {READ_DEFECT_DATA, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -728,7 +749,7 @@ int get_defect_data_size(int fd)
     memset(&sgiob, 0, sizeof(sgiob));
     memset(&response, 0, sizeof(response));
 
-    scsiCmd[2] = (unsigned char) 0x0d;
+    scsiCmd[2] = (unsigned char) 0x08 | format;
     scsiCmd[7] = (unsigned char)((resp_size >> 8) & 0xff);
     scsiCmd[8] = (unsigned char)(resp_size & 0xff);
 
@@ -1225,11 +1246,10 @@ unsigned char *inq_parse_prodID(char *Identify)
     return NULL;
 }
 
-unsigned char *inq_parse_rev(char *Identify)
+unsigned char *inq_parse_rev(char *Identify, int len)
 {
     int start = 32;
-    int len = 4;
-    int end = 35;
+    int end = start + len - 1;
     char * buffer = (char *) 0;
     if (Identify != (char *) 0) {
         while (Identify[start] == ' ') {
@@ -1261,7 +1281,7 @@ int get_DiskType(char *scsi)
 
     memset(attribute, 0, sizeof(attribute));
 
-    sprintf(attribute, "/sys/class/scsi_device/%s/device/type", scsi);
+    snprintf(attribute, sizeof(attribute) - 1, "/sys/class/scsi_device/%s/device/type", scsi);
     return(get_sysfs_uint(attribute));
 }
 
@@ -1271,7 +1291,7 @@ char * get_DiskModel(char *scsi)
 
     memset(attribute, 0, sizeof(attribute));
 
-    sprintf(attribute, "/sys/class/scsi_device/%s/device/model", scsi);
+    snprintf(attribute, sizeof(attribute) - 1, "/sys/class/scsi_device/%s/device/model", scsi);
     return(get_sysfs_str(attribute));
 }
 
@@ -1281,7 +1301,7 @@ char * get_sas_DiskRev(char *scsi)
 
     memset(attribute, 0, sizeof(attribute));
 
-    sprintf(attribute, "/sys/class/scsi_device/%s/device/rev", scsi);
+    snprintf(attribute, sizeof(attribute) - 1, "/sys/class/scsi_device/%s/device/rev", scsi);
     return(get_sysfs_str(attribute));
 }
 
@@ -1291,7 +1311,7 @@ char * get_DiskState(char *scsi)
 
     memset(attribute, 0, sizeof(attribute));
 
-    sprintf(attribute, "/sys/class/scsi_device/%s/device/state", scsi);
+    snprintf(attribute,  sizeof(attribute) - 1, "/sys/class/scsi_device/%s/device/state", scsi);
     return(get_sysfs_str(attribute));
 }
 
@@ -1317,7 +1337,7 @@ int main(int argc, char **argv)
                     generic_select, alphasort))  > 0) {
         for (j = 0; j < NumScsiGeneric; j++) {
             memset(disk_name, 0, 256);
-            sprintf(disk_name, "/dev/%s",ScsiGenericlist[j]->d_name);
+            snprintf(disk_name, sizeof(disk_name) - 1, "/dev/%s",ScsiGenericlist[j]->d_name);
             free(ScsiGenericlist[j]);
             if ((disk_fd = open(disk_name, O_RDWR | O_NONBLOCK)) < 0 )
             continue;
@@ -1340,7 +1360,7 @@ int main(int argc, char **argv)
                     fprintf(stderr," Product ID=%s", ProductID);
                     free(ProductID);
                 }
-                if ((Rev = inq_parse_rev(Identify)) != NULL) {
+                if ((Rev = inq_parse_rev(Identify, 4)) != NULL) {
                     fprintf(stderr," FW rev=%s\n", Rev);
                     free(Rev);
                }

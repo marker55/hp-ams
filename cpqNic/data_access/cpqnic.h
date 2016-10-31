@@ -95,7 +95,6 @@ typedef struct _cpqNicIfLogical_t
    int  MapCondition;
    int  MapStatus;
    int  MapNumSwitchovers;
-   char MapHwLocation[OCTET_STRING_LEN+1];
    unsigned int MapSpeedMbps; /* mapped from AdapterMapSpeedMbps */
    unsigned int VlanCount; /* number of vlans associated with this interface */
    char MapVlans[OCTET_STRING_LEN+1];
@@ -148,7 +147,6 @@ typedef struct _cpqNicIfPhysical_t
    unsigned int AdapterCarrierSenseErrors;
    unsigned int AdapterFrameTooLongs;
    unsigned int AdapterInternalMacReceiveErrors;
-   char AdapterHwLocation[OCTET_STRING_LEN+1];
    unsigned int AdapterMapSpeedMbps; /* we need speed here becuase we only map procfs */
                          /* to phys struct members                         */
    char AdapterPartNumber[OCTET_STRING_LEN+1];
