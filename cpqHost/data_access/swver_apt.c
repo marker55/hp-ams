@@ -100,6 +100,7 @@ cpqhost_arch_cpqHoSwVer_container_load( netsnmp_container *container)
         rc = CONTAINER_INSERT(container, entry);
 
     }
+    pclose(p);
 
     cpqHoSwVerNextIndex = (oid)CONTAINER_SIZE(container);
     DEBUGMSGTL(("cpqHoSwVerTable:load:arch", "loaded %d entries\n",

@@ -587,7 +587,6 @@ main(int argc, char **argv)
     signal(SIGTERM, stop_server);
     signal(SIGINT, stop_server);
 
-
     DEBUGMSGTL(("snmpd/main", "We're up.  Starting to process data.\n"));
     if (!netsnmp_ds_get_boolean(NETSNMP_DS_APPLICATION_ID,
                 NETSNMP_DS_AGENT_QUIT_IMMEDIATELY))
@@ -648,7 +647,9 @@ receive(void)
         NETSNMP_LARGE_FD_ZERO(&writefds);
         NETSNMP_LARGE_FD_ZERO(&exceptfds);
         block = 0;
-        snmp_select_info2(&numfds, &readfds, tvp, &block);
+        snmp_sess_select_info2_flags(0, &numfds, &readfds, tvp, &block, 
+                                     NETSNMP_SELECT_NOFLAGS);
+
         if (block == 1) {
             tvp = NULL;         /* block without timeout */
 	}
