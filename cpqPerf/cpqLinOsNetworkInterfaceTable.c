@@ -216,7 +216,6 @@ cpqLinOsNetworkInterfaceTable_handler(netsnmp_mib_handler *handler,
 
     netsnmp_request_info *request;
     netsnmp_table_request_info *table_info;
-    netsnmp_container *container;
     cpqLinOsNetworkInterfaceTable_entry *table_entry;
 
     DEBUGMSGTL(("cpqLinOsNetworkInterfaceTable:handler",
@@ -387,24 +386,11 @@ _cache_load(netsnmp_cache * cache, void *vmagic)
 }                               /* _cache_load */
 
 /**
- * @Internal
- */
-/** remove a row from the table */
-static void
-cpqLinOsNetworkInterfaceTable_freeEntry_cb
-    (cpqLinOsNetworkInterfaceTable_entry * entry, void *magic)
-{
-
-    cpqLinOsNetworkInterfaceTable_freeEntry(entry);
-}
-
-/**
  * @internal
  */
 static void
 _cache_free(netsnmp_cache * cache, void *magic)
 {
-    netsnmp_container *container;
 
     DEBUGMSGTL(("internal:cpqLinOsNetworkInterfaceTable:_cache_free",
                 "called\n"));

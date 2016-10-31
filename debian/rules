@@ -19,7 +19,7 @@ else
   LINUX32 = "linux32"
 endif
 
-HPAMS_MANPAGES = ./doc/hpHelper.8 
+HPAMS_MANPAGES = ./doc/amsHelper.8 
 
 export DEBUGFLAGS
 

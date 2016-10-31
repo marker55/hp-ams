@@ -42,6 +42,8 @@ typedef struct cpqFcaHostCntlrTable_entry_s {
     size_t          cpqFcaHostCntlrFirmwareVersion_len;
     char            cpqFcaHostCntlrOptionRomVersion[256];
     size_t          cpqFcaHostCntlrOptionRomVersion_len;
+    char            cpqFcaHostCntlrPciLocation[256];
+    size_t          cpqFcaHostCntlrPciLocation_len;
 
     long            oldStatus;
     char            host[20];
@@ -79,4 +81,5 @@ Netsnmp_Node_Handler cpqFcaHostCntlrTable_handler;
 #define COLUMN_CPQFCAHOSTCNTLRWORLDWIDEPORTNAME		12
 #define COLUMN_CPQFCAHOSTCNTLRFIRMWAREVERSION		13
 #define COLUMN_CPQFCAHOSTCNTLROPTIONROMVERSION		14
+#define COLUMN_CPQFCAHOSTCNTLRPCILOCATION		15
 #endif                          /* CPQFCAHOSTCNTLRTABLE_H */

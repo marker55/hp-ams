@@ -1,7 +1,7 @@
 OS ?= linux
 NETSNMP ?= net-snmp-5.7.2
 
-CPQ_INCLUDES = -I../../$(NETSNMP)/include -I../../common
+CPQ_INCLUDES = -I../../$(NETSNMP)/include -I../../common -I../../cpqSe/data_access
 
 OPT ?= -O2
 LEVEL=../../
@@ -12,7 +12,7 @@ NETSNMPINC=$(shell if [ -f $(NETSNMPDIR)/net-snmp-config ] ; then \
 
 
 CFLAGS   ?= -fno-strict-aliasing $(OPT) -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux 
-CPPFLAGS = -I../.. -I. -I.. $(NETSNMPINC) -I$(LEVEL)common -I$(LEVEL)cpqHost -D_GNU_SOURCE
+CPPFLAGS = -I../.. -I. -I.. $(NETSNMPINC) -I$(LEVEL)common -I$(LEVEL)cpqHost -I$(LEVEL)cpqSe/data_access -D_GNU_SOURCE
 
 #OBJS = common_utilities.o port_map.o 
 OBJS = cpqnic.o nic_$(OS).o nic_util_$(OS).o

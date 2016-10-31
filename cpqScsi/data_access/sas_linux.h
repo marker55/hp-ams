@@ -4,7 +4,7 @@
 char *get_unit_sn(int);
 int get_unit_speed(int);
 int get_unit_health(int);
-int get_defect_data_size(int);
+int get_defect_data_size(int, unsigned char);
 
 enum {
     DEVICE_SUBSYSTEM_DEVICE,
@@ -15,6 +15,7 @@ enum {
     CLASS_VERSION_BIOS,
     CLASS_MODEL,
     CLASS_STATE,
+    CLASS_PROC_NAME,
     MAX_VALUE_FILES
 };
 
@@ -27,6 +28,7 @@ static const char *sysfs_attr[MAX_VALUE_FILES] = {
     [CLASS_VERSION_BIOS] = "/version_bios",
     [CLASS_MODEL] = "/model",
     [CLASS_STATE] = "/state",
+    [CLASS_PROC_NAME] = "/proc_name"
 };
 
 #define MAKE_CONDITION(total, new)  (new > total ? new : total)

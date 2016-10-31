@@ -32,15 +32,12 @@ int netsnmp_arch_processor_container_load(netsnmp_container* container)
     read_line_t *intrlines = NULL;
     char *b;
     long  rc = 0;
-    int i, len;
     static int   num_cpuline_elem = 0;
     int num_cpus = 0;
     unsigned long long *bigArray = NULL;
     int bigArray_sz;
     int cnt, item;
-    char *addrp = NULL;
     struct timeval curr_time;
-    struct timeval prev_time;
     char * numbers;
 
     gettimeofday(&curr_time, NULL);

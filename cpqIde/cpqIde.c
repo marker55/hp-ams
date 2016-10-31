@@ -9,7 +9,7 @@
 #include "cpqIde.h"
 #include "cpqIdeControllerTable.h"
 #include "cpqIdeAtaDiskTable.h"
-#include "hpHelper.h"
+#include "amsHelper.h"
 
 /*
  * cpqIdeMib_oid:

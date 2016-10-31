@@ -10,9 +10,8 @@
 #include <net-snmp/agent/table_container.h>
 
 #include "cpqFcaHostCntlrTable.h"
+#include "common/nl_udev.h"
 
-int FcaCondition;
-static  netsnmp_container *gContainer = NULL;
 #define STATUS_POLL_TIME 600
 
 extern void cpqfca_update_hba_status(char *devpath, char *devname, void *data);
@@ -78,7 +77,7 @@ initialize_table_cpqFcaHostCntlrTable(void)
     netsnmp_table_helper_add_indexes(table_info, ASN_INTEGER,   /* index: cpqFcaHostCntlrIndex */
                                      0);
     table_info->min_column = COLUMN_CPQFCAHOSTCNTLRINDEX;
-    table_info->max_column = COLUMN_CPQFCAHOSTCNTLROPTIONROMVERSION;
+    table_info->max_column = COLUMN_CPQFCAHOSTCNTLRPCILOCATION;
 
     /*************************************************
      *
@@ -111,10 +110,11 @@ initialize_table_cpqFcaHostCntlrTable(void)
         snmp_log(LOG_ERR, "error creating cache for cpqFcaHostCntlrTable\n");
         goto bail;
     }
-    cache->flags = NETSNMP_CACHE_DONT_FREE_EXPIRED |
-                   NETSNMP_CACHE_DONT_AUTO_RELEASE |
-                   NETSNMP_CACHE_AUTO_RELOAD |
+
+    cache->flags = NETSNMP_CACHE_PRELOAD |
                    NETSNMP_CACHE_DONT_FREE_BEFORE_LOAD |
+                   NETSNMP_CACHE_DONT_FREE_EXPIRED |
+                   NETSNMP_CACHE_DONT_AUTO_RELEASE |
                    NETSNMP_CACHE_DONT_INVALIDATE_ON_SET;
 
     cache->magic = container;
@@ -143,7 +143,7 @@ initialize_table_cpqFcaHostCntlrTable(void)
         goto bail;
     }
 
-    udev_register("fc_transport", "add:remove", cpqfca_update_hba_status, container);
+    udev_register("fc_transport", "add:remove", NULL, cpqfca_update_hba_status, container);
 
     return;                     /* ok */
 
@@ -219,7 +219,6 @@ cpqFcaHostCntlrTable_handler(netsnmp_mib_handler *handler,
 
     netsnmp_request_info *request;
     netsnmp_table_request_info *table_info;
-    netsnmp_container *container;
     cpqFcaHostCntlrTable_entry *table_entry;
 
     DEBUGMSGTL(("cpqFcaHostCntlrTable:handler",
@@ -400,6 +399,18 @@ cpqFcaHostCntlrTable_handler(netsnmp_mib_handler *handler,
                                          cpqFcaHostCntlrOptionRomVersion,
                                          table_entry->
                                          cpqFcaHostCntlrOptionRomVersion_len);
+                break;
+            case COLUMN_CPQFCAHOSTCNTLRPCILOCATION:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_value(request->requestvb, ASN_OCTET_STR,
+                                         (u_char *) table_entry->
+                                         cpqFcaHostCntlrPciLocation,
+                                         table_entry->
+                                         cpqFcaHostCntlrPciLocation_len);
                 break;
             default:
                 netsnmp_set_request_error(reqinfo, request,

@@ -33,7 +33,10 @@ static const char *sysfs_attr[MAX_VALUE_FILES] = {
 #define TYPE_ENCLOSURE	    0x0d    /* Enclosure Services Device */
 #define TYPE_NO_LUN         0x7f
 
+#define IDE_TRAP_DISK_DEGRADED               14001
+#define IDE_TRAP_DISK_OK                     14002
 #define IDE_TRAP_DISK_STATUS_CHANGE          14004
+#define IDE_TRAP_DISK_SSD_WEAR_STATUS_CHANGE 14006
 
 // **************************************************************************
 //  FUNCTION PROTOTYPES                                                    **

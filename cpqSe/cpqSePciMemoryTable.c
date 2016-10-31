@@ -109,7 +109,11 @@ initialize_table_cpqSePciMemoryTable(void)
                  "error creating cache for cpqSePciMemoryTable\n");
         goto bail;
     }
-    cache->flags = NETSNMP_CACHE_DONT_INVALIDATE_ON_SET;
+    cache->flags = NETSNMP_CACHE_PRELOAD |
+                   NETSNMP_CACHE_DONT_FREE_EXPIRED |
+                   NETSNMP_CACHE_DONT_AUTO_RELEASE |
+                   NETSNMP_CACHE_DONT_FREE_BEFORE_LOAD |
+                   NETSNMP_CACHE_DONT_INVALIDATE_ON_SET;
     cache->magic = container;
 
     handler = netsnmp_cache_handler_get(cache);

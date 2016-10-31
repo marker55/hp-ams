@@ -68,6 +68,8 @@ typedef struct cpqNicIfPhysAdapterTable_entry_s {
     char            cpqNicIfPhysAdapterFWVersion[256];
     size_t          cpqNicIfPhysAdapterFWVersion_len;
     long            cpqNicIfPhysAdapterVirtualPortNumber;
+    char            cpqNicIfPhysAdapterPciLocation[256];
+    size_t          cpqNicIfPhysAdapterPciLocation_len;
 
     int             AdapterAutoNegotiate;
     oid             cpqHoFwVerIndex;
@@ -133,4 +135,5 @@ Netsnmp_Node_Handler cpqNicIfPhysAdapterTable_handler;
 #define COLUMN_CPQNICIFPHYSADAPTERIOBAYNO		40
 #define COLUMN_CPQNICIFPHYSADAPTERFWVERSION		41
 #define COLUMN_CPQNICIFPHYSADAPTERVIRTUALPORTNUMBER		42
+#define COLUMN_CPQNICIFPHYSADAPTERPCILOCATION		43
 #endif                          /* CPQNICIFPHYSADAPTERTABLE_H */

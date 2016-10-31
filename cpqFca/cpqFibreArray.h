@@ -12,6 +12,7 @@ void            init_cpqFibreArray(void);
 Netsnmp_Node_Handler cpqFibreArray_handler;
 
 #define CPQMIBHEALTHINDEX       13
+#define CPQMIB                  16
 #define CPQ_REG_OTHER            1
 #define CPQ_REG_OK               2
 #define CPQ_REG_DEGRADED         3

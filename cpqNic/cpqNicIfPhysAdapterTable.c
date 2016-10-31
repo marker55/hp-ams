@@ -14,6 +14,7 @@
 #define SUPPORT_PREFIX_FLAGS 1
 
 extern void     netsnmp_arch_ifphys_container_load(netsnmp_container *);
+extern void cpqNicIfPhysAdapter_reload_entry(cpqNicIfPhysAdapterTable_entry *);
 static void     _cache_free(netsnmp_cache * cache, void *magic);
 static int      _cache_load(netsnmp_cache * cache, void *vmagic);
 
@@ -211,7 +212,7 @@ initialize_table_cpqNicIfPhysAdapterTable(void)
     netsnmp_table_helper_add_indexes(table_info, ASN_INTEGER,   /* index: cpqNicIfPhysAdapterIndex */
                                      0);
     table_info->min_column = COLUMN_CPQNICIFPHYSADAPTERINDEX;
-    table_info->max_column = COLUMN_CPQNICIFPHYSADAPTERVIRTUALPORTNUMBER;
+    table_info->max_column = COLUMN_CPQNICIFPHYSADAPTERPCILOCATION;
 
     /*************************************************
      *
@@ -811,6 +812,18 @@ cpqNicIfPhysAdapterTable_handler(netsnmp_mib_handler *handler,
                 snmp_set_var_typed_integer(request->requestvb, ASN_INTEGER,
                                            table_entry->
                                            cpqNicIfPhysAdapterVirtualPortNumber);
+                break;
+            case COLUMN_CPQNICIFPHYSADAPTERPCILOCATION:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_value(request->requestvb, ASN_OCTET_STR,
+                                         table_entry->
+                                         cpqNicIfPhysAdapterPciLocation,
+                                         table_entry->
+                                         cpqNicIfPhysAdapterPciLocation_len);
                 break;
             default:
                 netsnmp_set_request_error(reqinfo, request,

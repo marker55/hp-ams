@@ -458,10 +458,9 @@ int SmbGetSysGen() {
         }
         return 0;
     } else {
-        if (!strncasecmp(SmbGetStringByNumber(sysInfo, sysInfo->byManufacturer), 
-                         "H3C", 3))
+        if (!strncasecmp((char *)SmbGetStringByNumber(sysInfo, sysInfo->byManufacturer), "H3C", 3)) 
             if (SmbGetRecordByType(SMBIOS_HPOEM_SYSID, 0, (void *)&ServSysId))
-                if (!strncasecmp(SmbGetStringByNumber(ServSysId, 1), "$0E11", 5))
+                if (!strncasecmp((char *)SmbGetStringByNumber(ServSysId, 1), "$0E11", 5))
                     return (9);
 
     }

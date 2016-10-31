@@ -25,7 +25,7 @@ NETSNMPINC=$(shell if [ -f $(NETSNMPDIR)/net-snmp-config ] ; then \
 				   fi)
 CFLAGS          ?= -fno-strict-aliasing $(OPT) -g -pipe -Werror -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -mtune=generic -DNETSNMP_NO_INLINE -Ulinux -Dlinux=linux 
 CPPFLAGS = -I. -I.. -I../cpqNic -I../cpqScsi -I../cpqIde $(NETSNMPINC) -DHELPER_VERSION=\"$(VERSION)\"
-OBJS=cpqHost.o cpqHostMemory.o cpqHoSWRunningTable.o cpqHoSwVerTable.o cpqHoFileSysTable.o cpqHoFwVerTable.o
+OBJS=cpqHost.o cpqHostMemory.o cpqHoSWRunningTable.o cpqHoSwVerTable.o cpqHoFileSysTable.o
 TARGETS=cpqHost.o 
 NETSNMPVERSIONMAJ = $(shell if [ -f ../$(NETSNMP)/net-snmp-config ] ; then  ../$(NETSNMP)/net-snmp-config --version | cut -f1 -d\. ; fi  )
 NETSNMPVERSIONMIN = $(shell if [ -f ../$(NETSNMP)/net-snmp-config ] ; then  ../$(NETSNMP)/net-snmp-config --version | cut -f2 -d\. ; fi  )

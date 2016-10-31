@@ -11,6 +11,7 @@
 #include "cpqNicIfLogMapTable.h"
 
 extern void     netsnmp_arch_iflog_container_load(netsnmp_container*);
+extern void     cpqNicIfLogMap_reload_entry(cpqNicIfLogMapTable_entry *);
 static void     _cache_free(netsnmp_cache * cache, void *magic);
 static int      _cache_load(netsnmp_cache * cache, void *vmagic);
 
@@ -19,8 +20,6 @@ const oid       cpqNicIfLogMapTable_oid[] =
 const size_t    cpqNicIfLogMapTable_oid_len =
         OID_LENGTH(cpqNicIfLogMapTable_oid);
 extern long     get_cpqNicIfLogMapOverallCondition(void);
-
-static  netsnmp_container *gContainer = NULL;
 
 #define CPQNICIFLOGMAPOVERALLCONDITION            2
 
@@ -143,7 +142,7 @@ initialize_table_cpqNicIfLogMapTable(void)
     netsnmp_table_helper_add_indexes(table_info, ASN_INTEGER,   /* index: cpqNicIfLogMapIndex */
                                      0);
     table_info->min_column = COLUMN_CPQNICIFLOGMAPINDEX;
-    table_info->max_column = COLUMN_CPQNICIFLOGMAPLACNUMBER;
+    table_info->max_column = COLUMN_CPQNICIFLOGMAPPCILOCATION;
 
     /*************************************************
      *
@@ -534,6 +533,18 @@ cpqNicIfLogMapTable_handler(netsnmp_mib_handler *handler,
                                          cpqNicIfLogMapLACNumber,
                                          table_entry->
                                          cpqNicIfLogMapLACNumber_len);
+                break;
+            case COLUMN_CPQNICIFLOGMAPPCILOCATION:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_value(request->requestvb, ASN_OCTET_STR,
+                                         table_entry->
+                                         cpqNicIfLogMapPciLocation,
+                                         table_entry->
+                                         cpqNicIfLogMapPciLocation_len);
                 break;
             default:
                 netsnmp_set_request_error(reqinfo, request,

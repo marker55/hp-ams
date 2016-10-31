@@ -11,6 +11,7 @@
 
 extern int cpqhost_arch_swinst_container_load(netsnmp_container*);
 extern int cpqhost_arch_cpqHoSwVer_container_load(netsnmp_container*);
+extern void netsnmp_cpqHoSwVer_arch_init(void);
 
 static void     _cache_free(netsnmp_cache * cache, void *magic);
 static int      _cache_load(netsnmp_cache * cache, void *vmagic);

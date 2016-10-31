@@ -36,12 +36,7 @@
 
 extern unsigned char     cpqHoMibHealthStatusArray[];
 extern int trap_fire;
-extern unsigned char*get_ScsiGeneric(unsigned char*);
-extern unsigned long long get_BlockSize(unsigned char*);
-extern int get_DiskType(char *);
-extern char * get_DiskModel(char *);
-extern char * get_sas_DiskRev(char *);
-extern char * get_DiskState(char *);
+extern int pcislot_scsi_host(char * buffer);
 
 extern int file_select(const struct dirent *);
 void SendSasTrap(int, 
@@ -89,10 +84,11 @@ static int end_device_select(const struct dirent *entry)
 static int hba_select(const struct dirent *entry)
 {
     int      i = 0;
-    for (i = 0; i < NumSasHost; i++){
-        if (strncmp(entry->d_name,
+    for (i = 0; i < NumSasHost; i++) {
+        if ((strlen(entry->d_name) == strlen(SasHostlist[i]->d_name)) && 
+            (!strncmp(entry->d_name,
                     SasHostlist[i]->d_name,
-                    strlen(SasHostlist[i]->d_name)) == 0)
+                    strlen(SasHostlist[i]->d_name))))
             return(1);
     }
     return 0;
@@ -370,7 +366,7 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
     int disk_fd;
     char *serialnum = NULL;
     int Health = 0, Speed = 0, Temp = -1, Mcot = -1, Wear = -1;
-    unsigned char *Temperature;
+    char *Temperature;
     //int j, k;
     //long  rc = 0;
 
@@ -447,7 +443,7 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
             disk->cpqSasPhyDrvPlacement = SAS_PHYS_DRV_PLACE_EXTERNAL;
         } else {
             /* Check to see if we were able to get CSMI connector info */
-            if (strlen(hba->Reference[PhyID].bConnector))
+            if (strlen((char *)hba->Reference[PhyID].bConnector))
                 disk->cpqSasPhyDrvLocationString_len =
                     sprintf(disk->cpqSasPhyDrvLocationString,
                             "Port %sBay %d",
@@ -492,9 +488,9 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
             free(value);
 	    }
 
-        disk->cpqSasPhyDrvSize = get_BlockSize(scsi) >> 11;
+        disk->cpqSasPhyDrvSize = get_BlockSize((unsigned char *)scsi) >> 11;
 
-        generic = get_ScsiGeneric(scsi);
+        generic = (char *)get_ScsiGeneric((unsigned char *)scsi);
         if (generic != NULL) {
             memset(disk->cpqSasPhyDrvOsName, 0, 256);
             disk->cpqSasPhyDrvOsName_len = 
@@ -602,8 +598,11 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
 
         }
         if ((disk->cpqSasPhyDrvType == 2) && 
-            (disk->cpqSasPhyDrvStatus != SAS_PHYS_STATUS_FAILED)){
-            disk->cpqSasPhyDrvUsedReallocs = get_defect_data_size(disk_fd);
+            (disk->cpqSasPhyDrvStatus != SAS_PHYS_STATUS_FAILED)) {
+            if (disk->cpqSasPhyDrvMediaType == PHYS_DRV_ROTATING_PLATTERS)
+                disk->cpqSasPhyDrvUsedReallocs = get_defect_data_size(disk_fd, 5);
+            if (disk->cpqSasPhyDrvMediaType == PHYS_DRV_SOLID_STATE)
+                disk->cpqSasPhyDrvUsedReallocs = get_defect_data_size(disk_fd, 6);
             if (disk->cpqSasPhyDrvUsedReallocs == -1) 
                 disk->cpqSasPhyDrvUsedReallocs = 0;
         } else
@@ -680,7 +679,7 @@ cpqSasPhyDrvTable_entry *sas_add_disk(char *deviceLink,
     return disk;
 }
 
-static void cpqsas_add_sas_end_device(char *devpath, char *devname, void *data) 
+static void cpqsas_add_sas_end_device(char *devpath, char *devname, char *devtype, void *data) 
 {
     cpqSasPhyDrvTable_entry *disk;
 
@@ -725,7 +724,7 @@ static void cpqsas_add_sas_end_device(char *devpath, char *devname, void *data)
     }
 }
 
-static void cpqsas_remove_sas_end_device(char *devpath, char *devname, void *data)
+static void cpqsas_remove_sas_end_device(char *devpath, char *devname, char *devtype, void *data)
 {
     netsnmp_index tmp;
     oid oid_index[2];
@@ -822,6 +821,18 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
                 sizeof(buffer) - strlen(buffer) - 1);
 
         strncpy(attribute, buffer, sizeof(attribute) - 1);
+        strncat(attribute, sysfs_attr[CLASS_PROC_NAME],
+            sizeof(attribute) - strlen(attribute) - 1);
+        if ((value = get_sysfs_str(attribute)) != NULL) {
+            if (strncmp(value, "hp", 2) == 0) {
+                free(value);
+                free(ScsiHostlist[i]);
+                continue;
+            }
+            free(value);
+        }
+
+        strncpy(attribute, buffer, sizeof(attribute) - 1);
         strncat(attribute, sysfs_attr[DEVICE_SUBSYSTEM_DEVICE], 
                 sizeof(attribute) - strlen(attribute) - 1);
         device = get_sysfs_shex(attribute);
@@ -864,6 +875,8 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
             strcpy(attribute, buffer);
             pciSlot = pcislot_scsi_host(attribute);
 
+            entry->cpqSasHbaHwLocation[0] ='\0';
+            entry->cpqSasHbaHwLocation_len = 0;
             if (pciSlot > 0 ) {
                 DEBUGMSGTL(("sashba:container:load", "Got pcislot info for %s = %d\n",
                             buffer,
@@ -876,12 +889,37 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
                                 "Blade %d, Slot %d",
                                 (pciSlot>>8) & 0xF,
                                 (pciSlot>>16) & 0xFF);
-                else
+                else {
                     entry->cpqSasHbaHwLocation_len =
                         snprintf(entry->cpqSasHbaHwLocation,
-                                128,
-                                "Slot %d",
-                                pciSlot);
+                                128, "Slot %d", pciSlot);
+                    DEBUGMSGTL(("sashba:container:load", "pcislot  = %s\n",
+                                    entry->cpqSasHbaHwLocation));
+               }
+
+            } else {
+                strcpy(entry->cpqSasHbaHwLocation, "Embedded");
+                entry->cpqSasHbaHwLocation_len =
+                    strlen(entry->cpqSasHbaHwLocation);
+            }
+
+            memset(attribute, 0, sizeof(attribute));
+            strncpy(attribute, buffer, sizeof(attribute) - 1);
+            strncat(attribute, "/device",
+                sizeof(attribute) - strlen(attribute) - 8);
+            if ((len = readlink(buffer, lbuffer, 253)) > 0) {
+                lbuffer[len]='\0'; /* Null terminate the string */
+                pbuffer = lbuffer;
+                while ((pbuffer = strstr(pbuffer, "/0000:")) != NULL) {
+                    entry->cpqSasHbaPciLocation_len = 12;
+
+                        strncpy(entry->cpqSasHbaPciLocation, pbuffer + 1,12);
+
+                    DEBUGMSGTL(("sashba:container:load", "pbuffer  = %s\n", pbuffer));
+                    DEBUGMSGTL(("sashba:container:load", "PciLocation  = %s\n", entry->cpqSasHbaPciLocation));
+
+                    pbuffer += 1;
+                }
             }
 
             switch (BoardID) {
@@ -1007,7 +1045,7 @@ int netsnmp_arch_sashba_container_load(netsnmp_container* container)
                        sizeof(sas_connector_info) * 32);
                 free(hbaConnector);
                 for (iii = 0; iii < 32; iii++) {
-                    int conlen = strlen(entry->Reference[iii].bConnector) - 1;
+                    int conlen = strlen((char *)entry->Reference[iii].bConnector) - 1;
                     if (entry->Reference[iii].bConnector[conlen] == 0x20 ) 
                         entry->Reference[iii].bConnector[conlen] = 0;
                     DEBUGMSGTL(("sashba:container:load", "Connector= %s\n",
@@ -1127,8 +1165,8 @@ int netsnmp_arch_sasphydrv_container_load(netsnmp_container* container)
     cpqHoMibHealthStatusArray[CPQMIBHEALTHINDEX] = SasCondition;
 
     DEBUGMSGTL(("sasphydrv:container", "init\n"));
-    udev_register("bsg","add", cpqsas_add_sas_end_device, container);
-    udev_register("bsg","remove", cpqsas_remove_sas_end_device, container);
+    udev_register("bsg","add", NULL, cpqsas_add_sas_end_device, container);
+    udev_register("bsg","remove", NULL, cpqsas_remove_sas_end_device, container);
     return  1;
 }
 
@@ -1161,7 +1199,6 @@ void SendSasTrap(int trapID,
     { 1, 3, 6, 1, 4, 1, 232, 5, 5, 2, 1, 1, 17, 255, 255 };
 
     netsnmp_variable_list *var_list = NULL;
-    int status, oldstatus;
 
     unsigned int cpqHoTrapFlag;
     DEBUGMSGTL(("sasphydrv:container:load", "Trap:DiskCondition = %ld\n",
@@ -1179,7 +1216,7 @@ void SendSasTrap(int trapID,
     snmp_varlist_add_variable(&var_list, cpqHoTrapFlags,
             sizeof(cpqHoTrapFlags) / sizeof(oid),
             ASN_INTEGER, (u_char *)&cpqHoTrapFlag,
-            sizeof(ASN_INTEGER));
+            sizeof(cpqHoTrapFlag));
 
     cpqSasHbaHwLocation[OID_LENGTH(cpqSasHbaHwLocation) - 1] = 
             disk->cpqSasPhyDrvHbaIndex;
@@ -1206,7 +1243,7 @@ void SendSasTrap(int trapID,
     snmp_varlist_add_variable(&var_list, cpqSasPhyDrvHbaIndex,
             sizeof(cpqSasPhyDrvHbaIndex) / sizeof(oid),
             ASN_INTEGER, (u_char *) &disk->cpqSasPhyDrvHbaIndex,
-            sizeof(ASN_INTEGER));
+            sizeof(disk->cpqSasPhyDrvHbaIndex));
 
     cpqSasPhyDrvIndex[OID_LENGTH(cpqSasPhyDrvIndex) - 2] =
             disk->cpqSasPhyDrvHbaIndex;
@@ -1215,7 +1252,7 @@ void SendSasTrap(int trapID,
     snmp_varlist_add_variable(&var_list, cpqSasPhyDrvIndex,
             sizeof(cpqSasPhyDrvIndex) / sizeof(oid),
             ASN_INTEGER, (u_char *)&disk->cpqSasPhyDrvIndex,
-            sizeof(ASN_INTEGER));
+            sizeof(disk->cpqSasPhyDrvIndex));
 
     cpqSasPhyDrvStatus[OID_LENGTH(cpqSasPhyDrvStatus) - 2] =
             disk->cpqSasPhyDrvHbaIndex;
@@ -1224,7 +1261,7 @@ void SendSasTrap(int trapID,
     snmp_varlist_add_variable(&var_list, cpqSasPhyDrvStatus,
             sizeof(cpqSasPhyDrvStatus) / sizeof(oid),
             ASN_INTEGER,(u_char *)&disk->cpqSasPhyDrvStatus,
-            sizeof(ASN_INTEGER));
+            sizeof(disk->cpqSasPhyDrvStatus));
 
     cpqSasPhyDrvType[OID_LENGTH(cpqSasPhyDrvType) - 2] =
             disk->cpqSasPhyDrvHbaIndex;
@@ -1233,7 +1270,7 @@ void SendSasTrap(int trapID,
     snmp_varlist_add_variable(&var_list, cpqSasPhyDrvType,
             sizeof(cpqSasPhyDrvType) / sizeof(oid),
             ASN_INTEGER,(u_char *)&disk->cpqSasPhyDrvType,
-            sizeof(ASN_INTEGER));
+            sizeof(disk->cpqSasPhyDrvType));
 
     cpqSasPhyDrvModel[OID_LENGTH(cpqSasPhyDrvModel) - 2] =
             disk->cpqSasPhyDrvHbaIndex;
@@ -1275,23 +1312,15 @@ void SendSasTrap(int trapID,
             (u_char *) disk->cpqSasPhyDrvSasAddress,
             disk->cpqSasPhyDrvSasAddress_len);
 
-    switch(trapID)
-    {
-        case SAS_TRAP_PHYSDRV_STATUS_CHANGE:
 
             send_enterprise_trap_vars(SNMP_TRAP_ENTERPRISESPECIFIC,
-                    SAS_TRAP_PHYSDRV_STATUS_CHANGE,
+                    trapID,
                     compaq,
                     compaq_len,
                     var_list);
-            status = disk->cpqSasPhyDrvStatus;
-            oldstatus = disk->OldStatus;
 
+    snmp_free_varbind(var_list);
 
-            break;
-
-        default:
             return;
-    }
 }
 

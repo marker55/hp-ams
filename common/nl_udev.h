@@ -6,17 +6,20 @@
 
 #define SUBSYSTEM_SZ 64
 #define ACTION_SZ 16
+#define DEVTYPE_SZ 48
 struct udev_callback_header {
     char subsystem[SUBSYSTEM_SZ];
     char action[ACTION_SZ];
-    void (* ss_callback)(char *, char*, void *);
+    char devtype[DEVTYPE_SZ];
+    void (* ss_callback)(char *, char*, char *, void *);
     void * ss_container;
     void *hdr_prev;
     void *hdr_next;
 };
 int udev_register(char *subsystem,
                   char *action,
-                  void (*func) (char *, char*, void *),
+                  char *devtype,
+                  void (*func) (char *, char*, char *, void *),
                   void *container);
 
 #endif

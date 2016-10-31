@@ -75,7 +75,7 @@ initialize_table_cpqSasHbaTable(void)
     netsnmp_table_helper_add_indexes(table_info, ASN_INTEGER,   /* index: cpqSasHbaIndex */
                                      0);
     table_info->min_column = COLUMN_CPQSASHBAINDEX;
-    table_info->max_column = COLUMN_CPQSASHBABIOSVERSION;
+    table_info->max_column = COLUMN_CPQSASHBAPCILOCATION;
 
     /*************************************************
      *
@@ -330,6 +330,17 @@ cpqSasHbaTable_handler(netsnmp_mib_handler *handler,
                                          table_entry->cpqSasHbaBiosVersion,
                                          table_entry->
                                          cpqSasHbaBiosVersion_len);
+                break;
+            case COLUMN_CPQSASHBAPCILOCATION:
+                if (!table_entry) {
+                    netsnmp_set_request_error(reqinfo, request,
+                                              SNMP_NOSUCHINSTANCE);
+                    continue;
+                }
+                snmp_set_var_typed_value(request->requestvb, ASN_OCTET_STR,
+                                         table_entry->cpqSasHbaPciLocation,
+                                         table_entry->
+                                         cpqSasHbaPciLocation_len);
                 break;
             default:
                 netsnmp_set_request_error(reqinfo, request,

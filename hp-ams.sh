@@ -9,25 +9,25 @@
 #
 # Following lines are in conformance with LSB 1.2 spec
 ### BEGIN INIT INFO
-# Provides:            hpHelper
+# Provides:            amsHelper
 # Default-Start:       2 3 4 5
-# Required-Start:       
-# Required-Stop:       
+# Required-Start:      $network
+# Required-Stop:       $network $syslog
 # Default-Stop:        0 1 6
 # Description:         starts OS helper for HP AMS
 # Short-Description:   HP AMS helper
 ### END INIT INFO
 
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
-NAME="HP Agentless Monitoring Service for ProLiant"
-SNAME="hpHelper"
+NAME="HP Agentless Management Service for ProLiant"
+SNAME="amsHelper"
 HPAMS_OPTIONS="-I0"
 
-if [ -e /etc/sysconfig/hp-ams ]; then
+if [ -f /etc/sysconfig/hp-ams ]; then
   . /etc/sysconfig/hp-ams
 fi
-if [ -e "/etc/init/hp-ams.conf" ]; then
-  . /etc/init/hp-ams.conf
+if [ -f "/etc/default/hp-ams" ]; then
+  . /etc/default/hp-ams
 fi
 
 case "$1" in
@@ -41,7 +41,7 @@ case "$1" in
          modprobe hpilo
       fi
       if [ "$ALLOW_CORE" = "y" ]; then 
-        mkdir -p /var/log/cores/hpHelper
+        mkdir -p /var/log/cores/amsHelper
         echo "/var/log/cores/%e/%p-%s-%t.core" > /proc/sys/kernel/core_pattern
         ulimit -c unlimited
       fi
